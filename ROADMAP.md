@@ -19,11 +19,12 @@
 - rag-evals: answer-faithfulness + answer-relevance eval (v0.3)
 - agentflow: tracing spans + supervisor/router agent (v0.2)
 - lora-lab: NumPy LoRA with manual backprop, merge/unmerge (v0.1)
+- tiny-transformer: warmup+cosine LR, AdamW decay, BPE wired into train CLI (v0.4)
 
 ## Next
 1. rag-evals: larger/harder benchmark (current corpus saturated at 1.0)
 2. llm-eval-harness: GitHub Action wrapper
-3. tiny-transformer follow-ups: LR schedule, wire BPE into train CLI
+3. tiny-transformer follow-ups: checkpoint tokenizer with model, eval perplexity
 4. agentflow follow-ups: shared memory
 5. lora-lab: LoRA on tiny-transformer attention, rank sweep
 6. logsentry follow-ups: per-template rates, streaming, Prometheus exporter

@@ -22,3 +22,6 @@ A 108k-parameter model drops from loss 3.63 to ~0.25 on the bundled corpus in ab
 
 ## Tests
 Gradient check on every parameter tensor, causality (future tokens never affect past logits), initial loss ≈ ln(vocab), overfitting a tiny corpus and generating it, checkpoint round trip.
+
+## Training upgrades (v0.4)
+`--warmup N` and cosine decay to 10% of peak LR (`tinygpt.warmup_cosine`), decoupled AdamW weight decay on weight matrices (`--weight-decay`), and `--tokenizer bpe --vocab 300` to train on the from-scratch BPE tokenizer.

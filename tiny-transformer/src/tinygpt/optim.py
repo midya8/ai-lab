@@ -3,8 +3,9 @@ import numpy as np
 
 
 class Adam:
-    def __init__(self, params, lr=3e-3, betas=(0.9, 0.99), eps=1e-8, clip=1.0):
+    def __init__(self, params, lr=3e-3, betas=(0.9, 0.99), eps=1e-8, clip=1.0, weight_decay=0.0):
         self.params, self.lr, self.betas, self.eps, self.clip = params, lr, betas, eps, clip
+        self.weight_decay = weight_decay  # decoupled (AdamW); applied to matrices only
         self.m = {k: np.zeros_like(v) for k, v in params.items()}
         self.v = {k: np.zeros_like(v) for k, v in params.items()}
         self.t = 0
@@ -20,5 +21,7 @@ class Adam:
             self.v[k] = b2 * self.v[k] + (1 - b2) * g * g
             mh = self.m[k] / (1 - b1 ** self.t)
             vh = self.v[k] / (1 - b2 ** self.t)
+            if self.weight_decay and p.ndim >= 2:
+                p -= self.lr * self.weight_decay * p
             p -= self.lr * mh / (np.sqrt(vh) + self.eps)
         return norm

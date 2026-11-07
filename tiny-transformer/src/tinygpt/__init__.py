@@ -5,3 +5,4 @@ from .optim import Adam
 __all__ = ["GPT", "GPTConfig", "CharTokenizer", "Adam"]
 from .kvcache import generate_cached  # noqa: F401
 from .bpe import BPETokenizer  # noqa: F401
+from .schedule import warmup_cosine  # noqa: F401
