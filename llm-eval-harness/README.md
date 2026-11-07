@@ -14,3 +14,6 @@ PYTHONPATH=src python -m evalharness.cli suites/basic.json --backend echo --base
 PYTHONPATH=src python -m evalharness.cli suites/basic.json --backend http --url http://localhost:11434/v1/chat/completions --model llama3
 python -m pytest
 ```
+
+## pass@k and LLM-as-judge
+`evalharness.pass_at_k(n, c, k)` is the unbiased estimator from the Codex paper; `evaluate_pass_at_k(backend, cases, scorer, n=5, ks=(1,5))` samples each prompt n times. `judge_scorer(judge_backend, rubric)` returns a scorer that has a second model grade 1-5, mapped to 0..1.

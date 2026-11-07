@@ -9,9 +9,11 @@
 - rag-evals: LSA dense retrieval + RRF hybrid + method comparison CLI (v0.2)
 - agentflow: agent loop, DAG orchestrator, parallelism, retries (v0.1)
 
+- llm-eval-harness: pass@k estimator + LLM-as-judge scorer (v0.2)
+
 ## Next
 1. rag-evals: answer-faithfulness eval, larger/harder benchmark (current corpus saturated at 1.0)
-2. llm-eval-harness follow-ups: LLM-as-judge scorer, pass@k sampling, GitHub Action wrapper
+2. llm-eval-harness: GitHub Action wrapper
 3. tiny-transformer follow-ups: BPE tokenizer, KV-cache generation, LR schedule
 4. agentflow follow-ups: shared memory, supervisor/router agent, tracing
 5. LoRA fine-tuning pipeline

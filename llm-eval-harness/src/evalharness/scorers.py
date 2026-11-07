@@ -51,3 +51,16 @@ def score(name, out, case):
     if name not in SCORERS:
         raise KeyError(f"unknown scorer {name!r}; have {sorted(SCORERS)}")
     return SCORERS[name](out, case)
+
+
+def judge_scorer(judge_backend, rubric="Is the answer correct and helpful?"):
+    """Build an LLM-as-judge scorer: the judge replies with a 1-5 rating, mapped to 0..1."""
+    import re
+
+    def _judge(output, case):
+        prompt = (f"{rubric}\nReference: {case.get('expected', '')}\nAnswer: {output}\n"
+                  "Reply with a single integer rating from 1 to 5.")
+        m = re.search(r"[1-5]", str(judge_backend.generate(prompt)))
+        return (int(m.group()) - 1) / 4 if m else 0.0
+
+    return _judge
