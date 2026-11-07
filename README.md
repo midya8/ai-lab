@@ -9,5 +9,6 @@ Midya's AI lab: small, tested, runnable AI projects.
 | [agentflow](agentflow) | Multi-agent orchestration framework: tool-using agents, task DAG, parallel runs, retries |
 | [logsentry](logsentry) | Log anomaly detection: template mining, robust volume spikes, error bursts, new-pattern alerts |
 | [ticket-triage](ticket-triage) | Support-ticket triage classifier from scratch: TF-IDF + softmax regression with confidence-based escalation |
+| [lora-lab](lora-lab) | LoRA low-rank adaptation from scratch in NumPy: manual backprop, gradcheck, merge/unmerge |
 
 See [ROADMAP.md](ROADMAP.md) for what's next.
