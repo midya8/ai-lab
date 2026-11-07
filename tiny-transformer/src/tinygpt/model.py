@@ -18,6 +18,7 @@ class GPTConfig:
     n_layer: int = 2
     n_head: int = 4
     n_embd: int = 64
+    dropout: float = 0.0  # applied to embeddings, attention probs and both residual branches (train only)
 
 
 # ---- primitives (each returns output + cache; *_bwd returns input grad) ----
@@ -55,6 +56,18 @@ def gelu_bwd(dy, cache):
     return dy * (0.5 * (1 + t) + 0.5 * x * (1 - t * t) * _C * (1 + 3 * 0.044715 * x * x))
 
 
+def drop_fwd(x, p, rng):
+    """Inverted dropout. Returns (y, mask); mask is None when inactive."""
+    if not p or rng is None:
+        return x, None
+    mask = (rng.random(x.shape) >= p).astype(x.dtype) / (1.0 - p)
+    return x * mask, mask
+
+
+def drop_bwd(dy, mask):
+    return dy if mask is None else dy * mask
+
+
 def softmax(x):
     e = np.exp(x - x.max(-1, keepdims=True))
     return e / e.sum(-1, keepdims=True)
@@ -85,7 +98,7 @@ class GPT:
         return int(sum(v.size for v in self.params.values()))
 
     # ---- attention ----
-    def _attn_fwd(self, x, i):
+    def _attn_fwd(self, x, i, rng=None):
         P, H = self.params, self.cfg.n_head
         B, T, C = x.shape
         D = C // H
@@ -94,19 +107,21 @@ class GPT:
         s = q @ k.transpose(0, 1, 3, 2) / np.sqrt(D)
         s = np.where(np.tril(np.ones((T, T), bool)), s, -1e30)
         a = softmax(s)
-        y = (a @ v).transpose(0, 2, 1, 3).reshape(B, T, C)
+        ad, ma = drop_fwd(a, self.cfg.dropout, rng)
+        y = (ad @ v).transpose(0, 2, 1, 3).reshape(B, T, C)
         out, yin = lin_fwd(y, P[f"h{i}.proj_W"], P[f"h{i}.proj_b"])
-        return out, (xin, q, k, v, a, yin)
+        return out, (xin, q, k, v, a, ad, ma, yin)
 
     def _attn_bwd(self, dout, cache, i, G):
         P, H = self.params, self.cfg.n_head
-        xin, q, k, v, a, yin = cache
+        xin, q, k, v, a, ad, ma, yin = cache
         B, T, C = xin.shape
         D = C // H
         dy, G[f"h{i}.proj_W"], G[f"h{i}.proj_b"] = lin_bwd(dout, yin, P[f"h{i}.proj_W"])
         do = dy.reshape(B, T, H, D).transpose(0, 2, 1, 3)
         da = do @ v.transpose(0, 1, 3, 2)
-        dv = a.transpose(0, 1, 3, 2) @ do
+        dv = ad.transpose(0, 1, 3, 2) @ do
+        da = drop_bwd(da, ma)
         ds = a * (da - (da * a).sum(-1, keepdims=True)) / np.sqrt(D)
         dq, dk = ds @ k, ds.transpose(0, 1, 3, 2) @ q
         m = lambda t: t.transpose(0, 2, 1, 3).reshape(B, T, C)
@@ -115,34 +130,40 @@ class GPT:
         return dx
 
     # ---- full model ----
-    def forward(self, idx, targets=None):
-        """idx: (B,T) ints. Returns logits, loss (None if no targets), cache."""
+    def forward(self, idx, targets=None, rng=None):
+        """idx: (B,T) ints. Returns logits, loss (None if no targets), cache.
+
+        Pass an `rng` to enable dropout (training); without one the pass is deterministic.
+        """
         P, cfg = self.params, self.cfg
         B, T = idx.shape
         assert T <= cfg.block_size
-        x = P["wte"][idx] + P["wpe"][:T]
+        p_drop = cfg.dropout
+        x, me = drop_fwd(P["wte"][idx] + P["wpe"][:T], p_drop, rng)
         caches = []
         for i in range(cfg.n_layer):
             h, c1 = ln_fwd(x, P[f"h{i}.ln1_g"], P[f"h{i}.ln1_b"])
-            a, ca = self._attn_fwd(h, i)
+            a, ca = self._attn_fwd(h, i, rng)
+            a, m1 = drop_fwd(a, p_drop, rng)
             x = x + a
             h, c2 = ln_fwd(x, P[f"h{i}.ln2_g"], P[f"h{i}.ln2_b"])
             f, cf = lin_fwd(h, P[f"h{i}.fc_W"], P[f"h{i}.fc_b"])
             g, cg = gelu_fwd(f)
             m, cm = lin_fwd(g, P[f"h{i}.out_W"], P[f"h{i}.out_b"])
+            m, m2 = drop_fwd(m, p_drop, rng)
             x = x + m
-            caches.append((c1, ca, c2, cf, cg, cm))
+            caches.append((c1, ca, c2, cf, cg, cm, m1, m2))
         h, cl = ln_fwd(x, P["lnf_g"], P["lnf_b"])
         logits, hin = lin_fwd(h, P["head_W"], P["head_b"])
         loss = None
         if targets is not None:
             pr = softmax(logits)
             loss = float(-np.log(pr[np.arange(B)[:, None], np.arange(T), targets] + 1e-30).mean())
-        return logits, loss, (idx, targets, caches, cl, hin, logits)
+        return logits, loss, (idx, targets, caches, cl, hin, logits, me)
 
     def backward(self, cache):
         P, cfg = self.params, self.cfg
-        idx, targets, caches, cl, hin, logits = cache
+        idx, targets, caches, cl, hin, logits, me = cache
         B, T = idx.shape
         G = {}
         d = softmax(logits)
@@ -152,23 +173,24 @@ class GPT:
         dx, G["lnf_g"], G["lnf_b"] = ln_bwd(dh, cl)
         dx = dx.astype(dh.dtype)
         for i in reversed(range(cfg.n_layer)):
-            c1, ca, c2, cf, cg, cm = caches[i]
-            dg, G[f"h{i}.out_W"], G[f"h{i}.out_b"] = lin_bwd(dx, cm, P[f"h{i}.out_W"])
+            c1, ca, c2, cf, cg, cm, m1, m2 = caches[i]
+            dg, G[f"h{i}.out_W"], G[f"h{i}.out_b"] = lin_bwd(drop_bwd(dx, m2), cm, P[f"h{i}.out_W"])
             df = gelu_bwd(dg, cg)
             dh, G[f"h{i}.fc_W"], G[f"h{i}.fc_b"] = lin_bwd(df, cf, P[f"h{i}.fc_W"])
             dl, G[f"h{i}.ln2_g"], G[f"h{i}.ln2_b"] = ln_bwd(dh, c2)
             dx = dx + dl
-            dh = self._attn_bwd(dx, ca, i, G)
+            dh = self._attn_bwd(drop_bwd(dx, m1), ca, i, G)
             dl, G[f"h{i}.ln1_g"], G[f"h{i}.ln1_b"] = ln_bwd(dh, c1)
             dx = dx + dl
+        dx = drop_bwd(dx, me)
         G["wpe"] = np.zeros_like(P["wpe"])
         G["wpe"][:T] = dx.sum(0)
         G["wte"] = np.zeros_like(P["wte"])
         np.add.at(G["wte"], idx, dx)
         return G
 
-    def loss_and_grads(self, idx, targets):
-        _, loss, cache = self.forward(idx, targets)
+    def loss_and_grads(self, idx, targets, rng=None):
+        _, loss, cache = self.forward(idx, targets, rng=rng)
         return loss, self.backward(cache)
 
     def generate(self, idx, max_new_tokens, temperature=1.0, top_k=None, seed=0, top_p=None):

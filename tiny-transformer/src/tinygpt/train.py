@@ -34,6 +34,7 @@ def main(argv=None):
     ap.add_argument("--embd", type=int, default=64)
     ap.add_argument("--micro-batch", type=int, default=0, help="split each batch into micro-batches (gradient accumulation)")
     ap.add_argument("--clip", type=float, default=0.0, help="clip global gradient norm to this value (0 = off)")
+    ap.add_argument("--dropout", type=float, default=0.0, help="dropout prob on embeddings, attention and residuals (train only)")
     ap.add_argument("--lr", type=float, default=3e-3)
     ap.add_argument("--warmup", type=int, default=0)
     ap.add_argument("--weight-decay", type=float, default=0.0)
@@ -51,18 +52,19 @@ def main(argv=None):
     val = data[len(data) - n_val:] if n_val > a.block + 1 else None
     if val is not None:
         data = data[:len(data) - n_val]
-    model = GPT(GPTConfig(tok.vocab_size, a.block, a.layers, a.heads, a.embd))
+    model = GPT(GPTConfig(tok.vocab_size, a.block, a.layers, a.heads, a.embd, a.dropout))
     opt = Adam(model.params, lr=a.lr, weight_decay=a.weight_decay)
     rng = np.random.default_rng(0)
+    drop_rng = np.random.default_rng(1) if a.dropout else None
     print(f"vocab={tok.vocab_size} params={model.num_params():,} chars={len(text):,}")
     t0 = time.time()
     for step in range(1, a.steps + 1):
         opt.lr = warmup_cosine(step, a.steps, a.lr, a.warmup)
         x, y = get_batch(data, a.batch, a.block, rng)
         if a.micro_batch:
-            loss, grads = accumulate_grads(model, x, y, a.micro_batch)
+            loss, grads = accumulate_grads(model, x, y, a.micro_batch, rng=drop_rng)
         else:
-            loss, grads = model.loss_and_grads(x, y)
+            loss, grads = model.loss_and_grads(x, y, rng=drop_rng)
         gnorm = None
         if a.clip:
             grads, gnorm = clip_grad_norm(grads, a.clip)
