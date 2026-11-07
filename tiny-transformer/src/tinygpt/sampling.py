@@ -1,4 +1,4 @@
-"""Shared next-token sampling: temperature, top-k and top-p (nucleus)."""
+"""Shared next-token sampling: temperature, top-k, top-p (nucleus) and repetition penalty."""
 import numpy as np
 
 
@@ -27,8 +27,25 @@ def filter_logits(logits, top_k=None, top_p=None):
     return lg
 
 
-def sample(logits, rng, temperature=1.0, top_k=None, top_p=None):
+def apply_repetition_penalty(logits, history, penalty=1.0):
+    """CTRL-style penalty: logits of already-seen tokens are divided by `penalty`
+    when positive and multiplied by it when negative (penalty > 1 discourages repeats)."""
+    lg = np.array(logits, dtype=np.float64)
+    if penalty is None or penalty == 1.0 or not len(history):
+        return lg
+    if penalty <= 0:
+        raise ValueError("repetition penalty must be > 0")
+    seen = np.unique(np.asarray(list(history), dtype=np.int64))
+    seen = seen[(seen >= 0) & (seen < len(lg))]
+    v = lg[seen]
+    lg[seen] = np.where(v > 0, v / penalty, v * penalty)
+    return lg
+
+
+def sample(logits, rng, temperature=1.0, top_k=None, top_p=None, history=None, repetition_penalty=1.0):
     lg = np.asarray(logits, dtype=np.float64)
+    if history is not None:
+        lg = apply_repetition_penalty(lg, history, repetition_penalty)
     if temperature <= 0:
         return int(lg.argmax())
     lg = filter_logits(lg / temperature, top_k, top_p)

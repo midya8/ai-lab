@@ -204,14 +204,14 @@ class GPT:
         _, loss, cache = self.forward(idx, targets, rng=rng)
         return loss, self.backward(cache)
 
-    def generate(self, idx, max_new_tokens, temperature=1.0, top_k=None, seed=0, top_p=None):
+    def generate(self, idx, max_new_tokens, temperature=1.0, top_k=None, seed=0, top_p=None, repetition_penalty=1.0):
         from .sampling import sample
         rng = np.random.default_rng(seed)
         idx = np.array(idx, dtype=np.int64).reshape(1, -1)
         for _ in range(max_new_tokens):
             ctx = idx[:, -self.cfg.block_size:]
             logits = self.forward(ctx)[0][0, -1].astype(np.float64)
-            nxt = sample(logits, rng, temperature, top_k, top_p)
+            nxt = sample(logits, rng, temperature, top_k, top_p, history=idx[0], repetition_penalty=repetition_penalty)
             idx = np.concatenate([idx, [[nxt]]], 1)
         return idx[0]
 

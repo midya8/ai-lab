@@ -22,6 +22,7 @@ def main(argv=None):
     g.add_argument("--temperature", type=float, default=0.8)
     g.add_argument("--top-k", type=int, default=10)
     g.add_argument("--top-p", type=float, default=None, help="nucleus sampling mass in (0,1)")
+    g.add_argument("--repetition-penalty", type=float, default=1.0, help=">1 discourages repeating seen tokens")
     g.add_argument("--seed", type=int, default=0)
     e = sub.add_parser("eval")
     e.add_argument("ckpt")
@@ -32,7 +33,8 @@ def main(argv=None):
     model, tok = load_checkpoint(a.ckpt)
     if a.cmd == "generate":
         ids = tok.encode(a.prompt) if a.prompt else [0]
-        out = generate_cached(model, ids, a.n, temperature=a.temperature, top_k=a.top_k, top_p=a.top_p, seed=a.seed)
+        out = generate_cached(model, ids, a.n, temperature=a.temperature, top_k=a.top_k, top_p=a.top_p, seed=a.seed,
+                              repetition_penalty=a.repetition_penalty)
         print(tok.decode(out))
     else:
         text = open(a.data, encoding="utf-8").read()

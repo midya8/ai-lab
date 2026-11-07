@@ -4,7 +4,7 @@ A GPT-style decoder-only transformer written in **pure NumPy, including hand-der
 
 - Pre-LayerNorm blocks, causal multi-head attention, GELU MLP, learned positional embeddings
 - Manual backward pass for every op, verified against finite differences in the test suite
-- Adam with gradient clipping, char tokenizer, temperature / top-k / top-p (nucleus) sampling (`--top-p`), save/load
+- Adam with gradient clipping, char tokenizer, temperature / top-k / top-p (nucleus) sampling (`--top-p`), CTRL-style repetition penalty (`--repetition-penalty`), save/load
 
 ## Run
 ```bash

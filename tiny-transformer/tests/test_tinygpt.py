@@ -99,3 +99,10 @@ def test_kv_cache_matches_generate_with_top_p():
     m, _, _ = make()
     kw = {"temperature": 0.9, "top_k": 6, "top_p": 0.8, "seed": 3}
     assert list(m.generate([1, 2], 12, **kw)) == list(generate_cached(m, [1, 2], 12, **kw))
+
+
+def test_kv_cache_matches_generate_with_repetition_penalty():
+    from tinygpt.kvcache import generate_cached
+    m, _, _ = make()
+    kw = {"temperature": 0.9, "top_k": 6, "seed": 5, "repetition_penalty": 1.5}
+    assert list(m.generate([1, 2], 14, **kw)) == list(generate_cached(m, [1, 2], 14, **kw))

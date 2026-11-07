@@ -40,3 +40,28 @@ def test_greedy_and_topk_combo():
     assert sample([0.1, 5, 0.2], rng, temperature=0) == 1
     assert all(sample([1, 2, 3, 4], rng, top_k=2, top_p=0.99) in (2, 3) for _ in range(50))
     assert abs(softmax(np.array([1.0, 1.0])).sum() - 1) < 1e-12
+
+
+def test_repetition_penalty_math():
+    from tinygpt.sampling import apply_repetition_penalty
+    out = apply_repetition_penalty([2.0, -2.0, 1.0], [0, 1], 2.0)
+    assert np.allclose(out, [1.0, -4.0, 1.0])
+
+
+def test_repetition_penalty_noop_and_validation():
+    from tinygpt.sampling import apply_repetition_penalty
+    x = np.array([1.0, 2.0])
+    assert np.allclose(apply_repetition_penalty(x, [0], 1.0), x)
+    assert np.allclose(apply_repetition_penalty(x, [], 3.0), x)
+    try:
+        apply_repetition_penalty(x, [0], 0)
+        assert False
+    except ValueError:
+        pass
+
+
+def test_repetition_penalty_flips_greedy_choice():
+    lg = [3.0, 2.9]
+    rng = np.random.default_rng(0)
+    assert sample(lg, rng, temperature=0, history=[], repetition_penalty=2.0) == 0
+    assert sample(lg, rng, temperature=0, history=[0], repetition_penalty=2.0) == 1

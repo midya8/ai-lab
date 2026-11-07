@@ -45,7 +45,7 @@ def _prefill(model: GPT, ctx):
 from .sampling import sample  # noqa: E402
 
 
-def generate_cached(model: GPT, idx, max_new_tokens, temperature=1.0, top_k=None, seed=0, top_p=None):
+def generate_cached(model: GPT, idx, max_new_tokens, temperature=1.0, top_k=None, seed=0, top_p=None, repetition_penalty=1.0):
     """Same sampling semantics and RNG stream as GPT.generate, but uses a KV cache.
 
     When the sequence outgrows block_size the window slides (positions are learned,
@@ -57,7 +57,7 @@ def generate_cached(model: GPT, idx, max_new_tokens, temperature=1.0, top_k=None
     logits, cache = _prefill(model, out[-B:])
     for n in range(max_new_tokens):
         lg = logits.astype(np.float64)
-        nxt = sample(lg, rng, temperature, top_k, top_p)
+        nxt = sample(lg, rng, temperature, top_k, top_p, history=out, repetition_penalty=repetition_penalty)
         out.append(nxt)
         if n == max_new_tokens - 1:
             break
