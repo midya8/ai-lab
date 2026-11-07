@@ -31,7 +31,7 @@ def _step(model: GPT, tok: int, pos: int, cache: list):
         g, _ = gelu_fwd(h @ P[f"h{i}.fc_W"] + P[f"h{i}.fc_b"])
         x = x + g @ P[f"h{i}.out_W"] + P[f"h{i}.out_b"]
     h, _ = ln_fwd(x, P["lnf_g"], P["lnf_b"])
-    return h @ P["head_W"] + P["head_b"]
+    return h @ (P["wte"].T if "head_W" not in P else P["head_W"]) + P["head_b"]
 
 
 def _prefill(model: GPT, ctx):

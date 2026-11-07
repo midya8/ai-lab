@@ -19,6 +19,7 @@ class GPTConfig:
     n_head: int = 4
     n_embd: int = 64
     dropout: float = 0.0  # applied to embeddings, attention probs and both residual branches (train only)
+    tie_weights: bool = False  # share the token embedding matrix with the output head (saves V*C params)
 
 
 # ---- primitives (each returns output + cache; *_bwd returns input grad) ----
@@ -83,7 +84,9 @@ class GPT:
         z = lambda *s: np.zeros(s, dtype)
         o = lambda *s: np.ones(s, dtype)
         p = {"wte": n(V, C), "wpe": n(cfg.block_size, C, std=0.01),
-             "lnf_g": o(C), "lnf_b": z(C), "head_W": n(C, V), "head_b": z(V)}
+             "lnf_g": o(C), "lnf_b": z(C), "head_b": z(V)}
+        if not cfg.tie_weights:
+            p["head_W"] = n(C, V)
         proj_std = 0.02 / np.sqrt(2 * cfg.n_layer)
         for i in range(cfg.n_layer):
             p.update({f"h{i}.ln1_g": o(C), f"h{i}.ln1_b": z(C),
@@ -93,6 +96,10 @@ class GPT:
                       f"h{i}.fc_W": n(C, 4 * C), f"h{i}.fc_b": z(4 * C),
                       f"h{i}.out_W": n(4 * C, C, std=proj_std), f"h{i}.out_b": z(C)})
         self.params = p
+
+    def head_W(self):
+        """Output projection (C, V): the transposed embedding when weights are tied."""
+        return self.params["wte"].T if self.cfg.tie_weights else self.params["head_W"]
 
     def num_params(self) -> int:
         return int(sum(v.size for v in self.params.values()))
@@ -154,7 +161,7 @@ class GPT:
             x = x + m
             caches.append((c1, ca, c2, cf, cg, cm, m1, m2))
         h, cl = ln_fwd(x, P["lnf_g"], P["lnf_b"])
-        logits, hin = lin_fwd(h, P["head_W"], P["head_b"])
+        logits, hin = lin_fwd(h, self.head_W(), P["head_b"])
         loss = None
         if targets is not None:
             pr = softmax(logits)
@@ -169,7 +176,9 @@ class GPT:
         d = softmax(logits)
         d[np.arange(B)[:, None], np.arange(T), targets] -= 1
         d /= B * T
-        dh, G["head_W"], G["head_b"] = lin_bwd(d, hin, P["head_W"])
+        dh, dW, G["head_b"] = lin_bwd(d, hin, self.head_W())
+        if not cfg.tie_weights:
+            G["head_W"] = dW
         dx, G["lnf_g"], G["lnf_b"] = ln_bwd(dh, cl)
         dx = dx.astype(dh.dtype)
         for i in reversed(range(cfg.n_layer)):
@@ -187,6 +196,8 @@ class GPT:
         G["wpe"][:T] = dx.sum(0)
         G["wte"] = np.zeros_like(P["wte"])
         np.add.at(G["wte"], idx, dx)
+        if cfg.tie_weights:
+            G["wte"] += dW.T
         return G
 
     def loss_and_grads(self, idx, targets, rng=None):

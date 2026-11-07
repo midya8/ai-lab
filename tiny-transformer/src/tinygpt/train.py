@@ -35,6 +35,7 @@ def main(argv=None):
     ap.add_argument("--micro-batch", type=int, default=0, help="split each batch into micro-batches (gradient accumulation)")
     ap.add_argument("--clip", type=float, default=0.0, help="clip global gradient norm to this value (0 = off)")
     ap.add_argument("--dropout", type=float, default=0.0, help="dropout prob on embeddings, attention and residuals (train only)")
+    ap.add_argument("--tie-weights", action="store_true", help="share token embedding with the output head")
     ap.add_argument("--lr", type=float, default=3e-3)
     ap.add_argument("--warmup", type=int, default=0)
     ap.add_argument("--weight-decay", type=float, default=0.0)
@@ -52,7 +53,7 @@ def main(argv=None):
     val = data[len(data) - n_val:] if n_val > a.block + 1 else None
     if val is not None:
         data = data[:len(data) - n_val]
-    model = GPT(GPTConfig(tok.vocab_size, a.block, a.layers, a.heads, a.embd, a.dropout))
+    model = GPT(GPTConfig(tok.vocab_size, a.block, a.layers, a.heads, a.embd, a.dropout, a.tie_weights))
     opt = Adam(model.params, lr=a.lr, weight_decay=a.weight_decay)
     rng = np.random.default_rng(0)
     drop_rng = np.random.default_rng(1) if a.dropout else None

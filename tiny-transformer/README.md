@@ -44,3 +44,7 @@ PYTHONPATH=src python -m tinygpt.cli eval tinygpt.npz --data data/corpus.txt --t
 ## Dropout
 
 `--dropout P` applies inverted dropout to the embeddings, attention probabilities, and both residual branches of every block, with hand-written backward passes through the saved masks (verified against finite differences with fixed masks). It is active only when a training RNG is passed to `forward`/`loss_and_grads`; evaluation, generation, and the KV-cache path are deterministic. The rate is stored in the checkpoint config; older checkpoints load with dropout 0.
+
+## Weight tying
+
+`--tie-weights` shares the token embedding with the output head (`logits = h @ wte.T`), removing `vocab × n_embd` parameters. The embedding gradient receives both the lookup and output-head contributions; verified against finite differences in `tests/test_tying.py`. Stored in the checkpoint config; older checkpoints load as untied.
