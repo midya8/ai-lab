@@ -1,0 +1,10 @@
+{"name": "basic", "template": "Question: {input}", "scorer": "contains",
+ "cases": [
+  {"id": "add", "input": "What is 17 + 25?", "expected": "42", "tags": ["math"]},
+  {"id": "mul", "input": "What is 6 * 7?", "expected": "42", "scorer": "numeric", "tags": ["math"]},
+  {"id": "fr", "input": "What is the capital of France?", "expected": "Paris", "tags": ["facts"]},
+  {"id": "jp", "input": "What is the capital of Japan?", "expected": "Tokyo", "tags": ["facts"]},
+  {"id": "planet", "input": "Which is the largest planet?", "expected": "Jupiter", "tags": ["facts"]},
+  {"id": "json", "input": "Reply in JSON with key ok", "expected": ["ok"], "scorer": "json_keys", "tags": ["format"]},
+  {"id": "hard", "input": "Who wrote Hamlet?", "expected": "Shakespeare", "tags": ["facts"]}
+ ]}
