@@ -51,6 +51,7 @@
 - guardkit: runtime guardrails — injection scoring, PII/secret detection with reversible redaction, policy file, redacted audit log, adversarial eval (62 tests; 24-case fixture: attack recall 1.000, PII caught 1.000, FPR 0.000). Runtime complement to promptguard (separate standalone repo), which lints prompt files statically.
 - logsentry: Grafana dashboard generator + importable JSON (v0.6)
 - tiny-transformer: self-contained checkpoints (config+tokenizer), held-out perplexity eval, generate/eval CLI (v0.5)
+- llm-router: complexity scoring, cheapest/fastest/quality/balanced strategies, fallback chain, circuit breaker, LRU+TTL cache, rolling budget with degradation, verifier cascade, outage simulator CLI (39 tests)
 
 ## Next
 
@@ -61,7 +62,7 @@
 5. lora-lab: LoRA on tiny-transformer attention, rank sweep
 6. logsentry: (done v0.6 Grafana dashboard)
 7. ticket-triage: urgency head
-8. llm-router: cost/latency routing, fallback, caching, budget guardrails
+8. llm-router: (done v0.1) -> next: sliding-window latency tracking from real observations, semantic cache, learned complexity classifier
 9. promptlab: prompt versioning, A/B comparison, prompt regression tests
 10. docqa: document Q&A CLI built on ragkit + agentkit, citations, no-hallucination mode
 11. autojob: agentic job-application assistant (only Midya's real resume data, never invents experience)

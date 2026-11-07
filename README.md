@@ -15,6 +15,7 @@ Midya's AI lab: small, tested, runnable AI projects.
 | [logsentry](logsentry) | Log anomaly detection: template mining, robust volume spikes, error bursts, new-pattern alerts, per-template spikes, streaming mode, Prometheus exporter, webhook alerts |
 | [ticket-triage](ticket-triage) | Support-ticket triage classifier from scratch: TF-IDF + softmax regression with confidence-based escalation |
 | [lora-lab](lora-lab) | LoRA low-rank adaptation from scratch in NumPy: manual backprop, gradcheck, merge/unmerge |
+| [llm-router](llm-router) | Cost/latency-aware LLM router: complexity scoring, 4 strategies, fallback chains, circuit breakers, cache, budget guardrails, cascade, outage simulator — 39 tests |
 
 Notes on overlap: `rag-evals` is retrieval-only evaluation; `ragkit` adds answering with citations on top of retrieval. `evalkit` is a general prompt/model eval harness; `rag-evals` is RAG-specific, and `llm-eval-harness` is the pluggable-backend variant. `guardkit` is runtime input/output guardrails; `promptguard` (separate repo) is the static file linter for prompt files.
 

@@ -1,0 +1,2 @@
+# No runtime dependencies: pure standard library.
+pytest>=7  # optional, tests also run under `python -m unittest`

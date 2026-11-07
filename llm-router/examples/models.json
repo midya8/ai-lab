@@ -1,0 +1,59 @@
+{
+ "_note": "Illustrative model catalogue. Prices, latencies and quality scores are made-up round numbers for the simulator, not vendor quotes.",
+ "models": [
+  {
+   "name": "nano-s",
+   "input_cost_per_1k": 5e-05,
+   "output_cost_per_1k": 0.0002,
+   "latency_ms": 180,
+   "ms_per_token": 4,
+   "quality": 0.45,
+   "context_window": 16000
+  },
+  {
+   "name": "mini-m",
+   "input_cost_per_1k": 0.0003,
+   "output_cost_per_1k": 0.0012,
+   "latency_ms": 350,
+   "ms_per_token": 9,
+   "quality": 0.65,
+   "context_window": 64000
+  },
+  {
+   "name": "swift-m",
+   "input_cost_per_1k": 0.0008,
+   "output_cost_per_1k": 0.003,
+   "latency_ms": 90,
+   "ms_per_token": 3,
+   "quality": 0.72,
+   "context_window": 64000
+  },
+  {
+   "name": "open-l",
+   "input_cost_per_1k": 0.0005,
+   "output_cost_per_1k": 0.0015,
+   "latency_ms": 900,
+   "ms_per_token": 30,
+   "quality": 0.82,
+   "context_window": 32000
+  },
+  {
+   "name": "pro-l",
+   "input_cost_per_1k": 0.003,
+   "output_cost_per_1k": 0.012,
+   "latency_ms": 700,
+   "ms_per_token": 16,
+   "quality": 0.85,
+   "context_window": 128000
+  },
+  {
+   "name": "ultra-xl",
+   "input_cost_per_1k": 0.015,
+   "output_cost_per_1k": 0.06,
+   "latency_ms": 1200,
+   "ms_per_token": 28,
+   "quality": 0.97,
+   "context_window": 200000
+  }
+ ]
+}

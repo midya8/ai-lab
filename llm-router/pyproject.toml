@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "llm-router"
+version = "0.1.0"
+description = "Cost/latency-aware LLM router: complexity scoring, strategies, fallback chains, circuit breakers, caching and budget guardrails"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+
+[project.scripts]
+llmrouter = "llmrouter.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["llmrouter"]
