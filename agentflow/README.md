@@ -10,3 +10,7 @@ A small multi-agent orchestration framework (stdlib only).
 python demo.py
 python -m pytest
 ```
+
+## Tracing and supervisor (v0.2)
+- `trace_agent(agent, tracer)` records an LLM/tool span (duration, status, error) per call; `tracer.summary()` aggregates per agent and `tracer.to_json()` exports.
+- `Supervisor(router_llm, workers, default)` routes each request to the best worker via `{"route": name}`, falling back to the default on an invalid choice.
