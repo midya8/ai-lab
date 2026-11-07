@@ -60,12 +60,13 @@
 - tiny-transformer: global-norm gradient clipping (--clip, logs pre-clip norm; 35 tests)
 - tiny-transformer: dropout (--dropout; embeddings, attention, residuals; finite-difference-checked masks; 42 tests)
 - tiny-transformer: weight tying (--tie-weights; shared wte/head, gradients summed, finite-difference-checked; 46 tests)
+- tiny-transformer: early stopping (--patience/--eval-every/--min-delta, best-weights restore; 52 tests)
 
 ## Next
 
 1. rag-evals: larger/harder benchmark (current corpus saturated at 1.0)
 2. llm-eval-harness: (done) -> next: multi-model comparison matrix
-3. tiny-transformer follow-ups: (done v0.5, top-p, grad accumulation); (done clipping); (done dropout); (done weight tying); next: early stopping on val
+3. tiny-transformer follow-ups: (done v0.5, top-p, grad accumulation); (done clipping); (done dropout); (done weight tying); (done early stopping); next: LR finder, sampling repetition penalty
 4. agentflow follow-ups: shared memory
 5. lora-lab: LoRA on tiny-transformer attention, rank sweep
 6. logsentry: (done v0.6 Grafana dashboard)

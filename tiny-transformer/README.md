@@ -37,6 +37,10 @@ PYTHONPATH=src python -m tinygpt.cli eval tinygpt.npz --data data/corpus.txt --t
 
 `--micro-batch N` splits each batch into micro-batches of N rows and averages their gradients (`tinygpt/accum.py`), so large effective batches fit in less memory. Tests verify the result equals the full-batch gradient.
 
+## Early stopping
+
+`--patience N` evaluates on the held-out tail every `--eval-every` steps (default 50) and stops after N evaluations without a `--min-delta` improvement, then restores the best weights before saving (`tinygpt/earlystop.py`).
+
 ## Gradient clipping
 
 `--clip X` rescales all gradients so their global L2 norm is at most X (`tinygpt/clip.py`, same semantics as `clip_grad_norm_`) and logs the pre-clip norm. Applied after accumulation, before the optimizer step.

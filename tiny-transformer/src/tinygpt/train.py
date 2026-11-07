@@ -13,6 +13,7 @@ from .bpe import BPETokenizer
 from .schedule import warmup_cosine
 from .accum import accumulate_grads
 from .clip import clip_grad_norm
+from .earlystop import EarlyStopper
 from .checkpoint import save_checkpoint, evaluate
 
 
@@ -36,6 +37,9 @@ def main(argv=None):
     ap.add_argument("--clip", type=float, default=0.0, help="clip global gradient norm to this value (0 = off)")
     ap.add_argument("--dropout", type=float, default=0.0, help="dropout prob on embeddings, attention and residuals (train only)")
     ap.add_argument("--tie-weights", action="store_true", help="share token embedding with the output head")
+    ap.add_argument("--patience", type=int, default=0, help="early stopping: evals without val improvement before stopping (0 = off)")
+    ap.add_argument("--eval-every", type=int, default=50, help="validation interval in steps when --patience is set")
+    ap.add_argument("--min-delta", type=float, default=0.0, help="minimum val-loss improvement that counts")
     ap.add_argument("--lr", type=float, default=3e-3)
     ap.add_argument("--warmup", type=int, default=0)
     ap.add_argument("--weight-decay", type=float, default=0.0)
@@ -58,6 +62,9 @@ def main(argv=None):
     rng = np.random.default_rng(0)
     drop_rng = np.random.default_rng(1) if a.dropout else None
     print(f"vocab={tok.vocab_size} params={model.num_params():,} chars={len(text):,}")
+    stopper = EarlyStopper(a.patience, a.min_delta) if a.patience and val is not None else None
+    if a.patience and val is None:
+        print("warning: --patience ignored (validation split too small)")
     t0 = time.time()
     for step in range(1, a.steps + 1):
         opt.lr = warmup_cosine(step, a.steps, a.lr, a.warmup)
@@ -73,6 +80,14 @@ def main(argv=None):
         if step % 50 == 0 or step == 1:
             extra = f" gnorm {gnorm:.2f}" if gnorm is not None else ""
             print(f"step {step:4d} loss {loss:.3f}{extra} ({time.time() - t0:.0f}s)")
+        if stopper is not None and step % a.eval_every == 0:
+            vl = evaluate(model, val)["loss"]
+            print(f"step {step:4d} val loss {vl:.3f} (best {min(vl, stopper.best):.3f})")
+            if stopper.update(vl, model.params, step):
+                print(f"early stop at step {step}; restoring best weights from step {stopper.best_step}")
+                break
+    if stopper is not None:
+        stopper.restore(model.params)
     save_checkpoint(a.out, model, tok)
     if val is not None:
         r = evaluate(model, val)
