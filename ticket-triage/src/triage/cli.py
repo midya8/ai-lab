@@ -1,6 +1,7 @@
 import argparse
 from .data import generate
 from .calibration import cross_validate, expected_calibration_error, CalibratedClassifier
+from .urgency import Triage, UrgencyClassifier, precision_recall_f1
 from .model import TicketClassifier, confusion, macro_f1
 
 
@@ -28,8 +29,11 @@ def main(argv=None):
     texts = [d["text"] for d in te]
     print(f"ECE raw={expected_calibration_error(clf.predict_proba(texts), yi):.3f} "
           f"calibrated={expected_calibration_error(cal.predict_proba(texts), yi):.3f} (T={cal.T:.2f})")
+    um = UrgencyClassifier().fit([d["text"] for d in tr], [d["urgent"] for d in tr])
+    r = precision_recall_f1([d["urgent"] for d in te], um.predict(texts))
+    print(f"urgency precision={r['precision']:.3f} recall={r['recall']:.3f} f1={r['f1']:.3f}")
     if a.text:
-        print(clf.predict_with_confidence(a.text))
+        print(Triage().fit(tr).route(a.text))
 
 
 if __name__ == "__main__":

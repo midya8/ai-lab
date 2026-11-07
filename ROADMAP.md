@@ -56,6 +56,7 @@
 - promptlab v0.2: multi-sample runs (--samples/--threshold), flaky-case detection, backward-compatible run files (34 tests)
 - tiny-transformer: top-p (nucleus) sampling shared module, CLI --top-p, cache/non-cache parity tested
 - tiny-transformer: gradient accumulation (--micro-batch), full-batch-equivalence tested (33 tests)
+- ticket-triage: urgency head (class-weighted logistic regression, recall-targeted threshold, combined queue routing; 17 tests; synthetic data)
 
 ## Next
 
@@ -65,7 +66,7 @@
 4. agentflow follow-ups: shared memory
 5. lora-lab: LoRA on tiny-transformer attention, rank sweep
 6. logsentry: (done v0.6 Grafana dashboard)
-7. ticket-triage: urgency head
+7. ticket-triage: (done urgency head) -> next: multi-label tags, active-learning review queue
 8. llm-router: (done v0.1) -> next: sliding-window latency tracking from real observations, semantic cache, learned complexity classifier
 9. promptlab: (done v0.1) -> v0.2 multi-sample done; next: LLM-judge check via evalkit, GitHub Action for check
 10. docqa: document Q&A CLI built on ragkit + agentkit, citations, no-hallucination mode
