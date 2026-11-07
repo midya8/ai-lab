@@ -7,7 +7,6 @@ Midya's AI lab: small, tested, runnable AI projects.
 | [tiny-transformer](tiny-transformer) | GPT from scratch in pure NumPy with hand-written backprop (gradient-checked), trainer and sampler |
 | [llm-eval-harness](llm-eval-harness) | Pluggable LLM eval harness with scorers, prompt suites and a CI regression gate |
 | [agentflow](agentflow) | Multi-agent orchestration framework: tool-using agents, task DAG, parallel runs, retries |
-
 | [logsentry](logsentry) | Log anomaly detection: template mining, robust volume spikes, error bursts, new-pattern alerts |
 
 See [ROADMAP.md](ROADMAP.md) for what's next.
