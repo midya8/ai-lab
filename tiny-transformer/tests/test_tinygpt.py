@@ -92,3 +92,10 @@ def test_kv_cache_matches_full_forward_and_generate():
         a = m.generate(prompt, 14, **kw)
         b = generate_cached(m, prompt, 14, **kw)
         assert list(a) == list(b)
+
+
+def test_kv_cache_matches_generate_with_top_p():
+    from tinygpt.kvcache import generate_cached
+    m, _, _ = make()
+    kw = {"temperature": 0.9, "top_k": 6, "top_p": 0.8, "seed": 3}
+    assert list(m.generate([1, 2], 12, **kw)) == list(generate_cached(m, [1, 2], 12, **kw))

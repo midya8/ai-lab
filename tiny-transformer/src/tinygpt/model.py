@@ -171,19 +171,14 @@ class GPT:
         _, loss, cache = self.forward(idx, targets)
         return loss, self.backward(cache)
 
-    def generate(self, idx, max_new_tokens, temperature=1.0, top_k=None, seed=0):
+    def generate(self, idx, max_new_tokens, temperature=1.0, top_k=None, seed=0, top_p=None):
+        from .sampling import sample
         rng = np.random.default_rng(seed)
         idx = np.array(idx, dtype=np.int64).reshape(1, -1)
         for _ in range(max_new_tokens):
             ctx = idx[:, -self.cfg.block_size:]
             logits = self.forward(ctx)[0][0, -1].astype(np.float64)
-            if temperature <= 0:
-                nxt = int(logits.argmax())
-            else:
-                logits = logits / temperature
-                if top_k:
-                    logits[logits < np.sort(logits)[-top_k]] = -np.inf
-                nxt = int(rng.choice(len(logits), p=softmax(logits)))
+            nxt = sample(logits, rng, temperature, top_k, top_p)
             idx = np.concatenate([idx, [[nxt]]], 1)
         return idx[0]
 
