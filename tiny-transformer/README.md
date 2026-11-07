@@ -25,3 +25,10 @@ Gradient check on every parameter tensor, causality (future tokens never affect 
 
 ## Training upgrades (v0.4)
 `--warmup N` and cosine decay to 10% of peak LR (`tinygpt.warmup_cosine`), decoupled AdamW weight decay on weight matrices (`--weight-decay`), and `--tokenizer bpe --vocab 300` to train on the from-scratch BPE tokenizer.
+
+## Self-contained checkpoints + perplexity (v0.5)
+`save_checkpoint` / `load_checkpoint` bundle weights, model config and tokenizer (char or BPE) in one `.npz`, so a model can be reloaded with no side files. `evaluate` computes deterministic held-out loss and perplexity; `train` now holds out the tail (`--val-frac`, default 0.1) and reports it.
+```bash
+PYTHONPATH=src python -m tinygpt.cli generate tinygpt.npz --prompt "To be" -n 200
+PYTHONPATH=src python -m tinygpt.cli eval tinygpt.npz --data data/corpus.txt --tail 0.1
+```

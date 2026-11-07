@@ -50,12 +50,13 @@
 
 - guardkit: runtime guardrails — injection scoring, PII/secret detection with reversible redaction, policy file, redacted audit log, adversarial eval (62 tests; 24-case fixture: attack recall 1.000, PII caught 1.000, FPR 0.000). Runtime complement to promptguard (separate standalone repo), which lints prompt files statically.
 - logsentry: Grafana dashboard generator + importable JSON (v0.6)
+- tiny-transformer: self-contained checkpoints (config+tokenizer), held-out perplexity eval, generate/eval CLI (v0.5)
 
 ## Next
 
 1. rag-evals: larger/harder benchmark (current corpus saturated at 1.0)
 2. llm-eval-harness: (done) -> next: multi-model comparison matrix
-3. tiny-transformer follow-ups: checkpoint tokenizer with model, eval perplexity
+3. tiny-transformer follow-ups: (done v0.5) -> next: top-p sampling, gradient accumulation
 4. agentflow follow-ups: shared memory
 5. lora-lab: LoRA on tiny-transformer attention, rank sweep
 6. logsentry: (done v0.6 Grafana dashboard)

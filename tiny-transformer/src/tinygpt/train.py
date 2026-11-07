@@ -11,6 +11,7 @@ from .optim import Adam
 from .tokenizer import CharTokenizer
 from .bpe import BPETokenizer
 from .schedule import warmup_cosine
+from .checkpoint import save_checkpoint, evaluate
 
 
 def get_batch(data, B, T, rng):
@@ -34,6 +35,7 @@ def main(argv=None):
     ap.add_argument("--weight-decay", type=float, default=0.0)
     ap.add_argument("--tokenizer", choices=["char", "bpe"], default="char")
     ap.add_argument("--vocab", type=int, default=300, help="BPE vocab size")
+    ap.add_argument("--val-frac", type=float, default=0.1, help="held-out tail fraction for perplexity")
     ap.add_argument("--out", default="tinygpt.npz")
     ap.add_argument("--sample", type=int, default=200)
     a = ap.parse_args(argv)
@@ -41,6 +43,10 @@ def main(argv=None):
     text = open(a.data, encoding="utf-8").read()
     tok = CharTokenizer(text) if a.tokenizer == "char" else BPETokenizer.train(text, a.vocab)
     data = np.array(tok.encode(text))
+    n_val = int(len(data) * a.val_frac)
+    val = data[len(data) - n_val:] if n_val > a.block + 1 else None
+    if val is not None:
+        data = data[:len(data) - n_val]
     model = GPT(GPTConfig(tok.vocab_size, a.block, a.layers, a.heads, a.embd))
     opt = Adam(model.params, lr=a.lr, weight_decay=a.weight_decay)
     rng = np.random.default_rng(0)
@@ -53,7 +59,10 @@ def main(argv=None):
         opt.step(grads)
         if step % 50 == 0 or step == 1:
             print(f"step {step:4d} loss {loss:.3f} ({time.time() - t0:.0f}s)")
-    model.save(a.out)
+    save_checkpoint(a.out, model, tok)
+    if val is not None:
+        r = evaluate(model, val)
+        print(f"held-out loss {r['loss']:.3f} perplexity {r['perplexity']:.2f} ({r['tokens']} tokens)")
     seed = tok.encode(text[:8])
     print("--- sample ---")
     print(tok.decode(model.generate(seed, a.sample, temperature=0.8, top_k=10)))
