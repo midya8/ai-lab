@@ -23,3 +23,6 @@ Per-template rate detectors, streaming mode, Prometheus exporter.
 
 ## Streaming (v0.3)
 `StreamDetector` (src/logsentry/stream.py) ingests events one at a time and emits anomalies as soon as each window closes, with bounded memory (`history=`). Output is tested identical to batch `detect`. CLI: `tail -f app.log | PYTHONPATH=src python -m logsentry.cli --follow`, or `--follow --demo`.
+
+## Prometheus exporter (v0.4)
+`--follow --metrics-port 9108` serves `/metrics` in Prometheus text format: `logsentry_events_total{level}`, `logsentry_anomalies_total{kind}`, `logsentry_windows_closed_total`, and the latest anomalous window timestamp. Zero dependencies (`metrics.py`).

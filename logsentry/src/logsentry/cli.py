@@ -13,10 +13,13 @@ def main(argv=None):
     p.add_argument("--json", action="store_true")
     p.add_argument("--per-template", action="store_true", help="also flag spikes in individual log templates")
     p.add_argument("--follow", action="store_true", help="streaming mode: read stdin/file line by line, print anomalies as windows close")
+    p.add_argument("--metrics-port", type=int, help="with --follow: serve Prometheus metrics at http://127.0.0.1:PORT/metrics")
     a = p.parse_args(argv)
     if a.follow:
-        from .stream import StreamDetector
-        sd = StreamDetector(window=a.window, z_thresh=a.z)
+        from .metrics import MetricsDetector, serve
+        sd = MetricsDetector(window=a.window, z_thresh=a.z)
+        if a.metrics_port:
+            serve(sd, a.metrics_port)
         src = generate() if a.demo else (open(a.file) if a.file else sys.stdin)
         def show(xs):
             for x in xs:
