@@ -15,6 +15,7 @@
 - tiny-transformer: KV-cache incremental decoding, equivalence-tested (v0.2)
 
 - tiny-transformer: byte-level BPE tokenizer (v0.3)
+- ticket-triage: k-fold CV, ECE, temperature scaling (v0.2)
 
 ## Next
 1. rag-evals: answer-faithfulness eval, larger/harder benchmark (current corpus saturated at 1.0)
@@ -23,4 +24,4 @@
 4. agentflow follow-ups: shared memory, supervisor/router agent, tracing
 5. LoRA fine-tuning pipeline
 6. logsentry follow-ups: per-template rates, streaming, Prometheus exporter
-7. ticket-triage: urgency head, k-fold CV, calibration
+7. ticket-triage: urgency head

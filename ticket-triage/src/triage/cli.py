@@ -1,11 +1,13 @@
 import argparse
 from .data import generate
+from .calibration import cross_validate, expected_calibration_error, CalibratedClassifier
 from .model import TicketClassifier, confusion, macro_f1
 
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description="Train/evaluate ticket triage and classify text")
     ap.add_argument("text", nargs="?", help="ticket text to classify")
+    ap.add_argument("--cv", type=int, default=0, help="run k-fold cross-validation")
     ap.add_argument("--n", type=int, default=800)
     a = ap.parse_args(argv)
     data = generate(a.n)
@@ -18,6 +20,14 @@ def main(argv=None):
     print(f"accuracy={acc:.3f} macro_f1={macro_f1(true, pred, clf.classes):.3f}")
     print(clf.classes)
     print(confusion(true, pred, clf.classes))
+    if a.cv:
+        r = cross_validate([d["text"] for d in data], [d["category"] for d in data], k=a.cv)
+        print(f"{a.cv}-fold acc={r['acc_mean']:.3f} f1={r['f1_mean']:.3f}")
+    cal = CalibratedClassifier().fit([d["text"] for d in tr], [d["category"] for d in tr])
+    yi = [clf.classes.index(t) for t in true]
+    texts = [d["text"] for d in te]
+    print(f"ECE raw={expected_calibration_error(clf.predict_proba(texts), yi):.3f} "
+          f"calibrated={expected_calibration_error(cal.predict_proba(texts), yi):.3f} (T={cal.T:.2f})")
     if a.text:
         print(clf.predict_with_confidence(a.text))
 

@@ -6,4 +6,4 @@ pip install -r requirements.txt
 PYTHONPATH=src python -m triage.cli "I was charged twice for my plan"
 python -m pytest
 ```
-Data is a deterministic synthetic generator (`triage.data`), so results are reproducible. Next: urgency head, k-fold CV, calibration.
+Data is a deterministic synthetic generator (`triage.data`), so results are reproducible. k-fold CV, ECE and temperature-scaling calibration (`--cv 5`) in `triage.calibration`. Next: urgency head.
