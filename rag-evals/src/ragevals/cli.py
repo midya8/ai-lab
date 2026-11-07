@@ -5,13 +5,21 @@ import argparse, json, pathlib
 from .chunking import chunk_text
 from .metrics import evaluate
 from .retrieval import BM25Index
+from .dense import LSAIndex, HybridIndex
 
 
-def build_index(docs_dir: str, max_words: int = 40) -> BM25Index:
+METHODS = {"bm25": BM25Index, "lsa": LSAIndex, "hybrid": HybridIndex}
+
+
+def load_chunks(docs_dir: str, max_words: int = 40):
     chunks = []
     for p in sorted(pathlib.Path(docs_dir).glob("*.txt")):
         chunks += chunk_text(p.stem, p.read_text(), max_words=max_words)
-    return BM25Index(chunks)
+    return chunks
+
+
+def build_index(docs_dir: str, max_words: int = 40, method: str = "bm25"):
+    return METHODS[method](load_chunks(docs_dir, max_words))
 
 
 def main(argv=None) -> int:
@@ -19,9 +27,18 @@ def main(argv=None) -> int:
     ap.add_argument("--docs", default="data/docs")
     ap.add_argument("--dataset", default="data/eval.json")
     ap.add_argument("--k", type=int, default=3)
+    ap.add_argument("--method", choices=[*METHODS, "all"], default="bm25")
     ap.add_argument("--query", help="run a single query instead of the eval")
     a = ap.parse_args(argv)
-    idx = build_index(a.docs)
+    if a.method == "all":
+        data = json.loads(pathlib.Path(a.dataset).read_text())
+        table = {}
+        for m in METHODS:
+            idx = build_index(a.docs, method=m)
+            table[m] = evaluate(lambda q, k, idx=idx: [c.doc_id for c, _ in idx.search(q, k)], data, a.k)
+        print(json.dumps(table, indent=2))
+        return 0
+    idx = build_index(a.docs, method=a.method)
     if a.query:
         for c, s in idx.search(a.query, a.k):
             print(f"{s:6.2f}  {c.id}  {c.text[:90]}")

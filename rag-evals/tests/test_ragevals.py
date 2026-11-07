@@ -43,3 +43,25 @@ def test_end_to_end_eval_quality(capsys):
     data = json.loads((ROOT / "data/eval.json").read_text())
     res = evaluate(lambda q, k: [c.doc_id for c, _ in idx.search(q, k)], data, 3)
     assert res["recall@3"] >= 0.85 and res["mrr"] >= 0.7
+
+
+def test_rrf_fuse_prefers_consensus():
+    from ragevals import rrf_fuse
+    fused = rrf_fuse([[1, 2, 3], [2, 1, 4]])
+    assert [d for d, _ in fused][:2] == [1, 2]
+    assert fused[0][1] == pytest.approx(1 / 61 + 1 / 62)
+    assert {d for d, _ in fused} == {1, 2, 3, 4}
+
+
+def test_lsa_and_hybrid_retrieve():
+    for m in ("lsa", "hybrid"):
+        idx = build_index(ROOT / "data" / "docs", method=m)
+        assert idx.search("LoRA low-rank matrices", 1)[0][0].doc_id == "lora"
+    assert build_index(ROOT / "data" / "docs", method="lsa").search("zzzz", 3) == []
+
+
+def test_cli_compare_all(capsys):
+    assert main(["--docs", str(ROOT / "data/docs"), "--dataset", str(ROOT / "data/eval.json"), "--method", "all"]) == 0
+    import json
+    out = json.loads(capsys.readouterr().out)
+    assert set(out) == {"bm25", "lsa", "hybrid"}
