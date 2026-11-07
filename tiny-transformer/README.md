@@ -32,3 +32,7 @@ Gradient check on every parameter tensor, causality (future tokens never affect 
 PYTHONPATH=src python -m tinygpt.cli generate tinygpt.npz --prompt "To be" -n 200
 PYTHONPATH=src python -m tinygpt.cli eval tinygpt.npz --data data/corpus.txt --tail 0.1
 ```
+
+## Gradient accumulation
+
+`--micro-batch N` splits each batch into micro-batches of N rows and averages their gradients (`tinygpt/accum.py`), so large effective batches fit in less memory. Tests verify the result equals the full-batch gradient.

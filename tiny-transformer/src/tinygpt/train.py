@@ -11,6 +11,7 @@ from .optim import Adam
 from .tokenizer import CharTokenizer
 from .bpe import BPETokenizer
 from .schedule import warmup_cosine
+from .accum import accumulate_grads
 from .checkpoint import save_checkpoint, evaluate
 
 
@@ -30,6 +31,7 @@ def main(argv=None):
     ap.add_argument("--layers", type=int, default=2)
     ap.add_argument("--heads", type=int, default=4)
     ap.add_argument("--embd", type=int, default=64)
+    ap.add_argument("--micro-batch", type=int, default=0, help="split each batch into micro-batches (gradient accumulation)")
     ap.add_argument("--lr", type=float, default=3e-3)
     ap.add_argument("--warmup", type=int, default=0)
     ap.add_argument("--weight-decay", type=float, default=0.0)
@@ -55,7 +57,10 @@ def main(argv=None):
     for step in range(1, a.steps + 1):
         opt.lr = warmup_cosine(step, a.steps, a.lr, a.warmup)
         x, y = get_batch(data, a.batch, a.block, rng)
-        loss, grads = model.loss_and_grads(x, y)
+        if a.micro_batch:
+            loss, grads = accumulate_grads(model, x, y, a.micro_batch)
+        else:
+            loss, grads = model.loss_and_grads(x, y)
         opt.step(grads)
         if step % 50 == 0 or step == 1:
             print(f"step {step:4d} loss {loss:.3f} ({time.time() - t0:.0f}s)")
