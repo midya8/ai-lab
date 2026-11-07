@@ -1,0 +1,166 @@
+"""Multi-agent orchestration: agents with tools run tasks arranged in a dependency DAG.
+
+Agents follow a ReAct-style loop. The LLM returns either
+  {"tool": name, "args": {...}}  -> tool call, result fed back as an observation
+  {"final": text}                -> task answer
+Independent tasks run in parallel threads; failures retry with backoff and
+cascade as "skipped" to dependents.
+"""
+from __future__ import annotations
+
+import json
+import time
+from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
+from dataclasses import dataclass, field
+from typing import Callable, Dict, List, Optional
+
+
+class CycleError(ValueError):
+    pass
+
+
+class ToolRegistry:
+    def __init__(self):
+        self._tools: Dict[str, Callable] = {}
+
+    def register(self, name: str, fn: Callable) -> None:
+        self._tools[name] = fn
+
+    def call(self, name: str, args: dict):
+        if name not in self._tools:
+            raise KeyError(f"unknown tool: {name}")
+        return self._tools[name](**args)
+
+    def names(self) -> List[str]:
+        return sorted(self._tools)
+
+
+class ScriptedLLM:
+    """Deterministic LLM stand-in: replays queued replies (str or dict) per call.
+    Swap in any object with .complete(messages) -> str to use a real model."""
+
+    def __init__(self, replies):
+        self.replies = list(replies)
+        self.calls = 0
+
+    def complete(self, messages: List[dict]) -> str:
+        if self.calls >= len(self.replies):
+            raise RuntimeError("ScriptedLLM exhausted")
+        r = self.replies[self.calls]
+        self.calls += 1
+        return r if isinstance(r, str) else json.dumps(r)
+
+
+@dataclass
+class Agent:
+    name: str
+    llm: object
+    tools: ToolRegistry = field(default_factory=ToolRegistry)
+    system: str = ""
+    max_steps: int = 6
+
+    def run(self, prompt: str) -> str:
+        messages = [{"role": "system", "content": self.system or f"You are {self.name}. Tools: {self.tools.names()}"},
+                    {"role": "user", "content": prompt}]
+        for _ in range(self.max_steps):
+            raw = self.llm.complete(messages)
+            messages.append({"role": "assistant", "content": raw})
+            try:
+                msg = json.loads(raw)
+                if not isinstance(msg, dict):
+                    raise ValueError
+            except ValueError:
+                return raw  # plain text is a final answer
+            if "final" in msg:
+                return str(msg["final"])
+            if "tool" in msg:
+                try:
+                    obs = self.tools.call(msg["tool"], msg.get("args", {}))
+                except Exception as e:  # surfaced to the model so it can recover
+                    obs = f"ERROR: {e}"
+                messages.append({"role": "user", "content": f"observation: {obs}"})
+            else:
+                return raw
+        raise RuntimeError(f"{self.name} exceeded {self.max_steps} steps")
+
+
+@dataclass
+class Task:
+    id: str
+    agent: str
+    prompt: str  # may reference upstream outputs as {dep_id}
+    deps: List[str] = field(default_factory=list)
+    retries: int = 0
+
+
+@dataclass
+class Result:
+    status: str  # ok | failed | skipped
+    output: Optional[str] = None
+    error: Optional[str] = None
+    attempts: int = 0
+
+
+class _Safe(dict):
+    def __missing__(self, k):
+        return "{" + k + "}"
+
+
+class Orchestrator:
+    def __init__(self, agents: List[Agent], max_workers: int = 4, backoff: float = 0.0):
+        self.agents = {a.name: a for a in agents}
+        self.max_workers = max_workers
+        self.backoff = backoff
+
+    def plan(self, tasks: List[Task]) -> List[List[str]]:
+        """Topological layers; raises CycleError / KeyError on bad graphs."""
+        ids = {t.id: t for t in tasks}
+        for t in tasks:
+            if t.agent not in self.agents:
+                raise KeyError(f"task {t.id}: unknown agent {t.agent}")
+            for d in t.deps:
+                if d not in ids:
+                    raise KeyError(f"task {t.id}: unknown dependency {d}")
+        done, layers, remaining = set(), [], dict(ids)
+        while remaining:
+            layer = sorted(i for i, t in remaining.items() if all(d in done for d in t.deps))
+            if not layer:
+                raise CycleError(f"cycle among: {sorted(remaining)}")
+            layers.append(layer)
+            done.update(layer)
+            for i in layer:
+                del remaining[i]
+        return layers
+
+    def _exec(self, task: Task, outputs: Dict[str, str]) -> Result:
+        prompt = task.prompt.format_map(_Safe(outputs))
+        err = None
+        for attempt in range(1, task.retries + 2):
+            try:
+                return Result("ok", self.agents[task.agent].run(prompt), attempts=attempt)
+            except Exception as e:
+                err = str(e)
+                if attempt <= task.retries:
+                    time.sleep(self.backoff * 2 ** (attempt - 1))
+        return Result("failed", error=err, attempts=task.retries + 1)
+
+    def run(self, tasks: List[Task]) -> Dict[str, Result]:
+        self.plan(tasks)
+        pending = {t.id: t for t in tasks}
+        results: Dict[str, Result] = {}
+        running = {}
+        with ThreadPoolExecutor(self.max_workers) as pool:
+            while pending or running:
+                for tid, t in list(pending.items()):
+                    if any(d in results and results[d].status != "ok" for d in t.deps):
+                        results[tid] = Result("skipped", error="upstream failure")
+                        del pending[tid]
+                    elif all(d in results for d in t.deps):
+                        outs = {k: r.output for k, r in results.items() if r.output is not None}
+                        running[pool.submit(self._exec, t, outs)] = tid
+                        del pending[tid]
+                if running:
+                    finished, _ = wait(running, return_when=FIRST_COMPLETED)
+                    for f in finished:
+                        results[running.pop(f)] = f.result()
+        return results
