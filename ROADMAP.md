@@ -10,6 +10,7 @@
 - agentflow: agent loop, DAG orchestrator, parallelism, retries (v0.1)
 
 - llm-eval-harness: pass@k estimator + LLM-as-judge scorer (v0.2)
+- logsentry: log anomaly detection (v0.1)
 
 ## Next
 1. rag-evals: answer-faithfulness eval, larger/harder benchmark (current corpus saturated at 1.0)
@@ -17,5 +18,5 @@
 3. tiny-transformer follow-ups: BPE tokenizer, KV-cache generation, LR schedule
 4. agentflow follow-ups: shared memory, supervisor/router agent, tracing
 5. LoRA fine-tuning pipeline
-6. DevOps log anomaly detection service
+6. logsentry follow-ups: per-template rates, streaming, Prometheus exporter
 7. Support-ticket triage classifier

@@ -9,3 +9,4 @@ Midya's AI lab: small, tested, runnable AI projects.
 | [agentflow](agentflow) | Multi-agent orchestration framework: tool-using agents, task DAG, parallel runs, retries |
 
 See [ROADMAP.md](ROADMAP.md) for what's next.
+| [logsentry](logsentry) | Log anomaly detection: template mining, robust volume spikes, error bursts, new-pattern alerts |
