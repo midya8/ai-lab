@@ -1,0 +1,3 @@
+Classify the support ticket.
+
+{{ticket}}

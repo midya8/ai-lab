@@ -1,0 +1,60 @@
+{"id": "t001", "vars": {"ticket": "Urgent: The invoice for March shows a payment I never authorised."}, "checks": [{"type": "regex", "value": "\\bbilling\\b", "ignore_case": true}]}
+{"id": "t002", "vars": {"ticket": "Quick question - The mobile client freezes on the upload step."}, "checks": [{"type": "regex", "value": "\\bbug\\b", "ignore_case": true}]}
+{"id": "t003", "vars": {"ticket": "Hi team, I forgot my password and the reset link never arrives."}, "checks": [{"type": "regex", "value": "\\baccount\\b", "ignore_case": true}]}
+{"id": "t004", "vars": {"ticket": "Not sure who to ask, but We would love dark mode for the editor."}, "checks": [{"type": "regex", "value": "\\bfeature\\b", "ignore_case": true}]}
+{"id": "t005", "vars": {"ticket": "Urgent: I need a refund for the duplicate charge on my statement."}, "checks": [{"type": "regex", "value": "\\bbilling\\b", "ignore_case": true}]}
+{"id": "t006", "vars": {"ticket": "Hi team, Search is broken: it shows an error for any query with a hyphen."}, "checks": [{"type": "regex", "value": "\\bbug\\b", "ignore_case": true}]}
+{"id": "t007", "vars": {"ticket": "Hello, I forgot my password and the reset link never arrives."}, "checks": [{"type": "regex", "value": "\\baccount\\b", "ignore_case": true}]}
+{"id": "t008", "vars": {"ticket": "Hi team, I wish the calendar view could show weekends optionally."}, "checks": [{"type": "regex", "value": "\\bfeature\\b", "ignore_case": true}]}
+{"id": "t009", "vars": {"ticket": "Quick question - I was charged twice for my plan this month and need a refund."}, "checks": [{"type": "regex", "value": "\\bbilling\\b", "ignore_case": true}]}
+{"id": "t010", "vars": {"ticket": "Hello, The app crash happens every time I open the export screen."}, "checks": [{"type": "regex", "value": "\\bbug\\b", "ignore_case": true}]}
+{"id": "t011", "vars": {"ticket": "Not sure who to ask, but Two-factor codes stopped working on my new phone, I cannot log in."}, "checks": [{"type": "regex", "value": "\\baccount\\b", "ignore_case": true}]}
+{"id": "t012", "vars": {"ticket": "Hi team, Any plans for support for webhooks on new comments?"}, "checks": [{"type": "regex", "value": "\\bfeature\\b", "ignore_case": true}]}
+{"id": "t013", "vars": {"ticket": "Hi team, The invoice for March shows a payment I never authorised."}, "checks": [{"type": "regex", "value": "\\bbilling\\b", "ignore_case": true}]}
+{"id": "t014", "vars": {"ticket": "Following up from last week: The mobile client freezes on the upload step."}, "checks": [{"type": "regex", "value": "\\bbug\\b", "ignore_case": true}]}
+{"id": "t015", "vars": {"ticket": "Not sure who to ask, but I forgot my password and the reset link never arrives."}, "checks": [{"type": "regex", "value": "\\baccount\\b", "ignore_case": true}]}
+{"id": "t016", "vars": {"ticket": "Not sure who to ask, but Any plans for support for webhooks on new comments?"}, "checks": [{"type": "regex", "value": "\\bfeature\\b", "ignore_case": true}]}
+{"id": "t017", "vars": {"ticket": "Quick question - I was charged twice for my plan this month and need a refund."}, "checks": [{"type": "regex", "value": "\\bbilling\\b", "ignore_case": true}]}
+{"id": "t018", "vars": {"ticket": "Hello, The app crash happens every time I open the export screen."}, "checks": [{"type": "regex", "value": "\\bbug\\b", "ignore_case": true}]}
+{"id": "t019", "vars": {"ticket": "Not sure who to ask, but I am locked out after too many login attempts."}, "checks": [{"type": "regex", "value": "\\baccount\\b", "ignore_case": true}]}
+{"id": "t020", "vars": {"ticket": "Urgent: I wish the calendar view could show weekends optionally."}, "checks": [{"type": "regex", "value": "\\bfeature\\b", "ignore_case": true}]}
+{"id": "t021", "vars": {"ticket": "Hello, I need a refund for the duplicate charge on my statement."}, "checks": [{"type": "regex", "value": "\\bbilling\\b", "ignore_case": true}]}
+{"id": "t022", "vars": {"ticket": "Hi team, Search is broken: it shows an error for any query with a hyphen."}, "checks": [{"type": "regex", "value": "\\bbug\\b", "ignore_case": true}]}
+{"id": "t023", "vars": {"ticket": "Urgent: Please help me recover my login, I lost access."}, "checks": [{"type": "regex", "value": "\\baccount\\b", "ignore_case": true}]}
+{"id": "t024", "vars": {"ticket": "Following up from last week: Please add CSV export to the analytics page."}, "checks": [{"type": "regex", "value": "\\bfeature\\b", "ignore_case": true}]}
+{"id": "t025", "vars": {"ticket": "Hi team, I need a refund for the duplicate charge on my statement."}, "checks": [{"type": "regex", "value": "\\bbilling\\b", "ignore_case": true}]}
+{"id": "t026", "vars": {"ticket": "Not sure who to ask, but The mobile client freezes on the upload step."}, "checks": [{"type": "regex", "value": "\\bbug\\b", "ignore_case": true}]}
+{"id": "t027", "vars": {"ticket": "Hello, How do I change the email address on my profile?"}, "checks": [{"type": "regex", "value": "\\baccount\\b", "ignore_case": true}]}
+{"id": "t028", "vars": {"ticket": "Hi team, Any plans for support for webhooks on new comments?"}, "checks": [{"type": "regex", "value": "\\bfeature\\b", "ignore_case": true}]}
+{"id": "t029", "vars": {"ticket": "Following up from last week: I was charged twice for my plan this month and need a refund."}, "checks": [{"type": "regex", "value": "\\bbilling\\b", "ignore_case": true}]}
+{"id": "t030", "vars": {"ticket": "Not sure who to ask, but The app crash happens every time I open the export screen."}, "checks": [{"type": "regex", "value": "\\bbug\\b", "ignore_case": true}]}
+{"id": "t031", "vars": {"ticket": "Not sure who to ask, but I am locked out after too many login attempts."}, "checks": [{"type": "regex", "value": "\\baccount\\b", "ignore_case": true}]}
+{"id": "t032", "vars": {"ticket": "Quick question - It would be great if you could please add keyboard shortcuts."}, "checks": [{"type": "regex", "value": "\\bfeature\\b", "ignore_case": true}]}
+{"id": "t033", "vars": {"ticket": "Not sure who to ask, but Can you resend the invoice? The total looks higher than quoted."}, "checks": [{"type": "regex", "value": "\\bbilling\\b", "ignore_case": true}]}
+{"id": "t034", "vars": {"ticket": "Urgent: An exception pops up on startup and then it freezes."}, "checks": [{"type": "regex", "value": "\\bbug\\b", "ignore_case": true}]}
+{"id": "t035", "vars": {"ticket": "Not sure who to ask, but Two-factor codes stopped working on my new phone, I cannot log in."}, "checks": [{"type": "regex", "value": "\\baccount\\b", "ignore_case": true}]}
+{"id": "t036", "vars": {"ticket": "Urgent: Feature request: support for single sign-on with Okta."}, "checks": [{"type": "regex", "value": "\\bfeature\\b", "ignore_case": true}]}
+{"id": "t037", "vars": {"ticket": "Hello, The invoice for March shows a payment I never authorised."}, "checks": [{"type": "regex", "value": "\\bbilling\\b", "ignore_case": true}]}
+{"id": "t038", "vars": {"ticket": "Following up from last week: I get an error 500 when saving a report."}, "checks": [{"type": "regex", "value": "\\bbug\\b", "ignore_case": true}]}
+{"id": "t039", "vars": {"ticket": "Hi team, Please help me recover my login, I lost access."}, "checks": [{"type": "regex", "value": "\\baccount\\b", "ignore_case": true}]}
+{"id": "t040", "vars": {"ticket": "Urgent: Any plans for support for webhooks on new comments?"}, "checks": [{"type": "regex", "value": "\\bfeature\\b", "ignore_case": true}]}
+{"id": "t041", "vars": {"ticket": "Quick question - My card was billed after I cancelled; please reverse it."}, "checks": [{"type": "regex", "value": "\\bbilling\\b", "ignore_case": true}]}
+{"id": "t042", "vars": {"ticket": "Following up from last week: An exception pops up on startup and then it freezes."}, "checks": [{"type": "regex", "value": "\\bbug\\b", "ignore_case": true}]}
+{"id": "t043", "vars": {"ticket": "Urgent: Please help me recover my login, I lost access."}, "checks": [{"type": "regex", "value": "\\baccount\\b", "ignore_case": true}]}
+{"id": "t044", "vars": {"ticket": "Hi team, We would love dark mode for the editor."}, "checks": [{"type": "regex", "value": "\\bfeature\\b", "ignore_case": true}]}
+{"id": "t045", "vars": {"ticket": "Not sure who to ask, but Can you resend the invoice? The total looks higher than quoted."}, "checks": [{"type": "regex", "value": "\\bbilling\\b", "ignore_case": true}]}
+{"id": "t046", "vars": {"ticket": "Hello, The dashboard is broken after the latest update, nothing is not loading properly."}, "checks": [{"type": "regex", "value": "\\bbug\\b", "ignore_case": true}]}
+{"id": "t047", "vars": {"ticket": "Hello, Two-factor codes stopped working on my new phone, I cannot log in."}, "checks": [{"type": "regex", "value": "\\baccount\\b", "ignore_case": true}]}
+{"id": "t048", "vars": {"ticket": "Quick question - We would love dark mode for the editor."}, "checks": [{"type": "regex", "value": "\\bfeature\\b", "ignore_case": true}]}
+{"id": "t049", "vars": {"ticket": "Following up from last week: I was charged twice for my plan this month and need a refund."}, "checks": [{"type": "regex", "value": "\\bbilling\\b", "ignore_case": true}]}
+{"id": "t050", "vars": {"ticket": "Not sure who to ask, but Search is broken: it shows an error for any query with a hyphen."}, "checks": [{"type": "regex", "value": "\\bbug\\b", "ignore_case": true}]}
+{"id": "t051", "vars": {"ticket": "Urgent: How do I change the email address on my profile?"}, "checks": [{"type": "regex", "value": "\\baccount\\b", "ignore_case": true}]}
+{"id": "t052", "vars": {"ticket": "Following up from last week: Feature request: support for single sign-on with Okta."}, "checks": [{"type": "regex", "value": "\\bfeature\\b", "ignore_case": true}]}
+{"id": "t053", "vars": {"ticket": "Not sure who to ask, but Can you resend the invoice? The total looks higher than quoted."}, "checks": [{"type": "regex", "value": "\\bbilling\\b", "ignore_case": true}]}
+{"id": "t054", "vars": {"ticket": "Not sure who to ask, but An exception pops up on startup and then it freezes."}, "checks": [{"type": "regex", "value": "\\bbug\\b", "ignore_case": true}]}
+{"id": "t055", "vars": {"ticket": "Hi team, I forgot my password and the reset link never arrives."}, "checks": [{"type": "regex", "value": "\\baccount\\b", "ignore_case": true}]}
+{"id": "t056", "vars": {"ticket": "Urgent: I wish the calendar view could show weekends optionally."}, "checks": [{"type": "regex", "value": "\\bfeature\\b", "ignore_case": true}]}
+{"id": "t057", "vars": {"ticket": "Following up from last week: Why was my payment declined when the balance is fine?"}, "checks": [{"type": "regex", "value": "\\bbilling\\b", "ignore_case": true}]}
+{"id": "t058", "vars": {"ticket": "Hi team, The app crash happens every time I open the export screen."}, "checks": [{"type": "regex", "value": "\\bbug\\b", "ignore_case": true}]}
+{"id": "t059", "vars": {"ticket": "Following up from last week: I need to update the email address tied to my workspace."}, "checks": [{"type": "regex", "value": "\\baccount\\b", "ignore_case": true}]}
+{"id": "t060", "vars": {"ticket": "Urgent: It would be great if you could please add keyboard shortcuts."}, "checks": [{"type": "regex", "value": "\\bfeature\\b", "ignore_case": true}]}
