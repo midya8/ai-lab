@@ -29,7 +29,12 @@ def main(argv=None) -> int:
     ap.add_argument("--k", type=int, default=3)
     ap.add_argument("--method", choices=[*METHODS, "all"], default="bm25")
     ap.add_argument("--query", help="run a single query instead of the eval")
+    ap.add_argument("--faithfulness", metavar="ANSWERS_JSON", help="score answer faithfulness/relevance from a JSON file")
     a = ap.parse_args(argv)
+    if a.faithfulness:
+        from .faithfulness import evaluate_answers
+        print(json.dumps(evaluate_answers(json.loads(pathlib.Path(a.faithfulness).read_text())), indent=2))
+        return 0
     if a.method == "all":
         data = json.loads(pathlib.Path(a.dataset).read_text())
         table = {}

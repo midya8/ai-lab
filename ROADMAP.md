@@ -16,9 +16,10 @@
 
 - tiny-transformer: byte-level BPE tokenizer (v0.3)
 - ticket-triage: k-fold CV, ECE, temperature scaling (v0.2)
+- rag-evals: answer-faithfulness + answer-relevance eval (v0.3)
 
 ## Next
-1. rag-evals: answer-faithfulness eval, larger/harder benchmark (current corpus saturated at 1.0)
+1. rag-evals: larger/harder benchmark (current corpus saturated at 1.0)
 2. llm-eval-harness: GitHub Action wrapper
 3. tiny-transformer follow-ups: LR schedule, wire BPE into train CLI
 4. agentflow follow-ups: shared memory, supervisor/router agent, tracing

@@ -1,0 +1,8 @@
+[
+ {"question": "How does LoRA reduce trainable parameters?",
+  "answer": "LoRA freezes the pretrained weights and trains low-rank matrices. It was invented by Google in 2015.",
+  "context": ["LoRA freezes the pretrained model weights and injects trainable low-rank matrices into each layer, greatly reducing trainable parameters."]},
+ {"question": "What does Adam add on top of gradient descent?",
+  "answer": "Adam adds momentum and per-parameter adaptive learning rates.",
+  "context": ["Adam combines momentum with per-parameter adaptive learning rates based on running estimates of gradient moments."]}
+]

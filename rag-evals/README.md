@@ -19,3 +19,10 @@ python -m pytest
 
 Sample result on the bundled corpus: recall@3 = 1.0, MRR = 1.0 (7 questions, 5 docs).
 Add your own `.txt` files to `data/docs` and questions to `data/eval.json`.
+
+## Answer faithfulness (v0.3)
+`ragevals.faithfulness` splits an answer into claims and checks each against retrieved context
+(lexical support, threshold configurable; pass `supports=` to plug in an NLI/LLM judge). Also reports answer relevance.
+```bash
+PYTHONPATH=src python -m ragevals.cli --faithfulness data/answers.json
+```
