@@ -19,6 +19,67 @@ from promptlab.runner import RunResult, CaseResult
 EX = Path(__file__).resolve().parents[1] / "examples"
 
 
+class MultiSampleTests(unittest.TestCase):
+    def _v(self):
+        with tempfile.TemporaryDirectory() as d:
+            reg = Registry(d)
+            v, _ = reg.commit("p", "Say {{x}}", "")
+            return v
+
+    def test_flaky_model_detected(self):
+        v = self._v()
+        seq = iter(["yes", "no", "yes", "yes"])
+        cases = [Case("a", {"x": "1"}, [{"type": "contains", "value": "yes"}])]
+        r = run_prompt(v, cases, lambda p: next(seq), samples=4)
+        c = r.results[0]
+        self.assertEqual((c.samples, c.pass_count, c.passed, c.flaky), (4, 3, False, True))
+        self.assertAlmostEqual(c.score, 0.75)
+        self.assertEqual(r.flaky, ["a"])
+        self.assertTrue(c.failures)
+
+    def test_threshold_allows_partial(self):
+        v = self._v()
+        seq = iter(["yes", "no", "yes", "yes"])
+        cases = [Case("a", {"x": "1"}, [{"type": "contains", "value": "yes"}])]
+        r = run_prompt(v, cases, lambda p: next(seq), samples=4, threshold=0.75)
+        self.assertTrue(r.results[0].passed)
+
+    def test_model_errors_count_as_failed_samples(self):
+        v = self._v()
+        n = {"i": 0}
+        def m(p):
+            n["i"] += 1
+            if n["i"] == 1:
+                raise RuntimeError("boom")
+            return "yes"
+        cases = [Case("a", {"x": "1"}, [{"type": "contains", "value": "yes"}])]
+        r = run_prompt(v, cases, m, samples=2, threshold=0.5)
+        self.assertTrue(r.results[0].passed)
+        self.assertEqual(r.results[0].pass_count, 1)
+
+    def test_bad_args_and_legacy_load(self):
+        v = self._v()
+        with self.assertRaises(ValueError):
+            run_prompt(v, [], lambda p: "", samples=0)
+        with self.assertRaises(ValueError):
+            run_prompt(v, [], lambda p: "", threshold=0)
+        old = CaseResult("z", True, 1.0, "ok")
+        self.assertEqual((old.samples, old.pass_count), (1, 1))
+        self.assertEqual(CaseResult("z", False, 0.0, "").pass_count, 0)
+
+    def test_cli_samples_flag(self):
+        with tempfile.TemporaryDirectory() as d:
+            pf, cf = Path(d, "p.txt"), Path(d, "c.jsonl")
+            pf.write_text("Say {{x}}")
+            cf.write_text(json.dumps({"id": "a", "vars": {"x": "hi"}, "checks": [{"type": "min_words", "value": 1}]}) + "\n")
+            main(["--root", d + "/reg", "commit", "p", "--file", str(pf)])
+            buf = io.StringIO()
+            with redirect_stdout(buf):
+                rc = main(["--root", d + "/reg", "run", "p", "--cases", str(cf), "--samples", "3", "-v"])
+            self.assertEqual(rc, 0)
+            self.assertIn("[3/3]", buf.getvalue())
+
+
 class TemplateTests(unittest.TestCase):
     def test_variables_and_required(self):
         t = Template("Hi {{ name }}, {{greeting|hello}} {{name}} {{x}}")

@@ -28,6 +28,17 @@ class CaseResult:
     output: str
     failures: list[str] = field(default_factory=list)
     error: str = ""
+    samples: int = 1
+    pass_count: int = -1  # -1 = legacy file; derived from ``passed``
+
+    def __post_init__(self):
+        if self.pass_count < 0:
+            self.pass_count = self.samples if self.passed else 0
+
+    @property
+    def flaky(self) -> bool:
+        """Some, but not all, samples passed."""
+        return 0 < self.pass_count < self.samples
 
 
 @dataclass
@@ -54,6 +65,10 @@ class RunResult:
     @property
     def mean_score(self) -> float:
         return sum(r.score for r in self.results) / self.n if self.n else 0.0
+
+    @property
+    def flaky(self) -> list[str]:
+        return [r.id for r in self.results if r.flaky]
 
     def by_id(self) -> dict[str, CaseResult]:
         return {r.id: r for r in self.results}
@@ -97,31 +112,60 @@ def load_cases(path: str | Path) -> list[Case]:
     return cases
 
 
-def run_prompt(version: Version, cases: list[Case], model: Model) -> RunResult:
+def run_prompt(version: Version, cases: list[Case], model: Model,
+               samples: int = 1, threshold: float = 1.0) -> RunResult:
     """Render the version for each case, call ``model`` and score the output.
 
-    A render error or a model exception fails that case (score 0) and is
+    With ``samples`` > 1 the model is called that many times per case (for
+    non-deterministic models). A case passes when at least ``threshold`` of
+    its samples pass every check (default 1.0: all of them); its score is the
+    mean over samples. Cases with mixed outcomes are reported as flaky.
+    The stored output is the first failing sample's, else the first.
+
+    A render error or a model exception fails that sample (score 0) and is
     recorded; it never aborts the run.
     """
+    if samples < 1:
+        raise ValueError("samples must be >= 1")
+    if not 0 < threshold <= 1:
+        raise ValueError("threshold must be in (0, 1]")
     tpl: Template = version.template
     results: list[CaseResult] = []
-    pw = ow = 0
+    pw = ow = calls = 0
     for c in cases:
         try:
             prompt = tpl.render(c.vars)
         except TemplateError as e:
-            results.append(CaseResult(c.id, False, 0.0, "", [], f"render: {e}"))
+            results.append(CaseResult(c.id, False, 0.0, "", [], f"render: {e}", samples, 0))
             continue
-        pw += len(prompt.split())
-        try:
-            out = model(prompt)
-        except Exception as e:  # noqa: BLE001 - model backends can fail any way
-            results.append(CaseResult(c.id, False, 0.0, "", [], f"model: {e}"))
-            continue
-        ow += len(out.split())
-        checks = [run_check(ch, out) for ch in c.checks]
-        ok = sum(ch.passed for ch in checks)
-        fails = [f"{ch.type}: {ch.detail}" if ch.detail else ch.type for ch in checks if not ch.passed]
-        results.append(CaseResult(c.id, ok == len(checks), ok / len(checks), out, fails))
+        scores: list[float] = []
+        wins = 0
+        out_keep, fails_keep, err_keep = None, [], ""
+        for _ in range(samples):
+            pw += len(prompt.split())
+            try:
+                out = model(prompt)
+            except Exception as e:  # noqa: BLE001 - model backends can fail any way
+                scores.append(0.0)
+                if out_keep is None or not err_keep and not fails_keep:
+                    out_keep, err_keep = "", f"model: {e}"
+                continue
+            calls += 1
+            ow += len(out.split())
+            checks = [run_check(ch, out) for ch in c.checks]
+            ok = sum(ch.passed for ch in checks)
+            scores.append(ok / len(checks))
+            if ok == len(checks):
+                wins += 1
+                if out_keep is None:
+                    out_keep = out
+            else:
+                fails = [f"{ch.type}: {ch.detail}" if ch.detail else ch.type for ch in checks if not ch.passed]
+                if not fails_keep and not err_keep:
+                    out_keep, fails_keep = out, fails
+        passed = wins / samples >= threshold - 1e-12
+        results.append(CaseResult(c.id, passed, sum(scores) / samples, out_keep or "",
+                                  fails_keep, err_keep, samples, wins))
     n = max(len(results), 1)
-    return RunResult(version.name, version.number, version.hash, results, pw / n, ow / n)
+    return RunResult(version.name, version.number, version.hash, results,
+                     pw / (n * samples), ow / max(calls, 1))

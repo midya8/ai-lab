@@ -53,6 +53,14 @@ v1 vs v2: *B is better (exact McNemar p = 0.0005)* — 24 cases fixed, 5 broken.
 Gating v3 against a v2 baseline then **fails** despite the higher average:
 `1 regression(s) > allowed 0: t036`. That is the point of the gate.
 
+## Non-deterministic models
+
+`--samples N` calls the model N times per case; `--threshold F` (default 1.0) is the fraction of samples that must pass every check. Mixed outcomes are flagged as flaky and listed after `run -v`; case score is the mean over samples.
+
+```
+promptlab run summarize --cases cases.jsonl --model cmd:./my_llm.sh --samples 5 --threshold 0.8 -v
+```
+
 ## Test cases
 
 JSONL, one case per line (`#` comments allowed):

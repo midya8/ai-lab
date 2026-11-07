@@ -13,7 +13,8 @@ from .runner import RunResult, load_cases, run_prompt
 
 def _run(reg: Registry, args, ref: str) -> RunResult:
     v = reg.resolve(args.name, ref)
-    return run_prompt(v, load_cases(args.cases), make_model(args.model))
+    return run_prompt(v, load_cases(args.cases), make_model(args.model),
+                      samples=args.samples, threshold=args.threshold)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -24,6 +25,8 @@ def main(argv: list[str] | None = None) -> int:
     def add_run_opts(p):
         p.add_argument("--cases", required=True, help="JSONL test cases")
         p.add_argument("--model", default="rule", help="rule | rule:<seed> | cmd:<command>")
+        p.add_argument("--samples", type=int, default=1, help="model calls per case (non-deterministic models)")
+        p.add_argument("--threshold", type=float, default=1.0, help="fraction of samples that must pass a case")
 
     p = sub.add_parser("commit", help="store a new prompt version"); p.add_argument("name"); p.add_argument("--file", required=True); p.add_argument("-m", "--message", default="")
     sub.add_parser("list", help="list prompts")
@@ -65,7 +68,10 @@ def main(argv: list[str] | None = None) -> int:
             print(f"{r.prompt} v{r.version}: {r.passed}/{r.n} passed ({r.pass_rate:.1%}), mean score {r.mean_score:.3f}")
             for x in r.results:
                 if args.verbose or not x.passed:
-                    print(f"  {'PASS' if x.passed else 'FAIL'} {x.id}: {x.error or '; '.join(x.failures) or 'ok'}")
+                    tag = f" [{x.pass_count}/{x.samples}{' flaky' if x.flaky else ''}]" if x.samples > 1 else ""
+                    print(f"  {'PASS' if x.passed else 'FAIL'} {x.id}{tag}: {x.error or '; '.join(x.failures) or 'ok'}")
+            if r.flaky:
+                print(f"flaky cases ({len(r.flaky)}): {', '.join(r.flaky)}")
             if args.out:
                 r.save(args.out)
         elif args.cmd == "compare":
