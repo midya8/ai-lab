@@ -1,0 +1,25 @@
+name: LLM Eval Harness
+description: Run an LLM prompt suite and fail the job on regression against a baseline.
+inputs:
+  suite: {description: Path to suite JSON, required: true}
+  backend: {description: "echo, rules or http", default: rules}
+  url: {description: Chat-completions URL for http backend, default: ""}
+  model: {description: Model name for http backend, default: ""}
+  api-key: {description: API key for http backend, default: ""}
+  baseline: {description: Baseline run JSON; fail on regression, default: ""}
+  save: {description: Where to write the run JSON, default: eval-run.json}
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v5
+      with: {python-version: "3.11"}
+    - shell: bash
+      env:
+        PYTHONPATH: ${{ github.action_path }}/src
+      run: |
+        args=("${{ inputs.suite }}" --backend "${{ inputs.backend }}" --save "${{ inputs.save }}" --summary-file "$GITHUB_STEP_SUMMARY")
+        [ -n "${{ inputs.url }}" ] && args+=(--url "${{ inputs.url }}")
+        [ -n "${{ inputs.model }}" ] && args+=(--model "${{ inputs.model }}")
+        [ -n "${{ inputs.baseline }}" ] && args+=(--baseline "${{ inputs.baseline }}")
+        if [ -n "${{ inputs.api-key }}" ]; then export EVAL_KEY="${{ inputs.api-key }}"; args+=(--api-key "$EVAL_KEY"); fi
+        python -m evalharness.cli "${args[@]}"

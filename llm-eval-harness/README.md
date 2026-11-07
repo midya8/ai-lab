@@ -17,3 +17,11 @@ python -m pytest
 
 ## pass@k and LLM-as-judge
 `evalharness.pass_at_k(n, c, k)` is the unbiased estimator from the Codex paper; `evaluate_pass_at_k(backend, cases, scorer, n=5, ks=(1,5))` samples each prompt n times. `judge_scorer(judge_backend, rubric)` returns a scorer that has a second model grade 1-5, mapped to 0..1.
+
+## GitHub Action
+`action.yml` is a composite action: it runs a suite, writes the Markdown report to the job summary, saves the run JSON, and fails the job on regression.
+```yaml
+- uses: midya8/ai-lab/llm-eval-harness@main
+  with: {suite: suites/basic.json, backend: rules, baseline: baseline.json}
+```
+CLI flag `--summary-file PATH` appends the report to any file.

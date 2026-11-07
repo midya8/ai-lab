@@ -23,9 +23,11 @@
 - logsentry: per-template spike detection (v0.2)
 - logsentry: streaming detector + --follow CLI, batch-equivalence tested (v0.3)
 
+- llm-eval-harness: GitHub composite Action + job summary (v0.3)
+
 ## Next
 1. rag-evals: larger/harder benchmark (current corpus saturated at 1.0)
-2. llm-eval-harness: GitHub Action wrapper
+2. llm-eval-harness: (done) -> next: HTML report
 3. tiny-transformer follow-ups: checkpoint tokenizer with model, eval perplexity
 4. agentflow follow-ups: shared memory
 5. lora-lab: LoRA on tiny-transformer attention, rank sweep
