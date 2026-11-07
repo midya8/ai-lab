@@ -53,7 +53,7 @@
 ## Next
 
 1. rag-evals: larger/harder benchmark (current corpus saturated at 1.0)
-2. llm-eval-harness: (done) -> next: HTML report
+2. llm-eval-harness: (done) -> next: multi-model comparison matrix
 3. tiny-transformer follow-ups: checkpoint tokenizer with model, eval perplexity
 4. agentflow follow-ups: shared memory
 5. lora-lab: LoRA on tiny-transformer attention, rank sweep

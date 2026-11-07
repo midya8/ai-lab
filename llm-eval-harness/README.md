@@ -25,3 +25,6 @@ python -m pytest
   with: {suite: suites/basic.json, backend: rules, baseline: baseline.json}
 ```
 CLI flag `--summary-file PATH` appends the report to any file.
+
+## HTML report
+`--html report.html` writes a self-contained page (score bars, per-tag table, latency, regressions highlighted when `--baseline` is given). All model output is HTML-escaped.
