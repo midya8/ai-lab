@@ -12,7 +12,21 @@ def main(argv=None):
     p.add_argument("--z", type=float, default=4.0)
     p.add_argument("--json", action="store_true")
     p.add_argument("--per-template", action="store_true", help="also flag spikes in individual log templates")
+    p.add_argument("--follow", action="store_true", help="streaming mode: read stdin/file line by line, print anomalies as windows close")
     a = p.parse_args(argv)
+    if a.follow:
+        from .stream import StreamDetector
+        sd = StreamDetector(window=a.window, z_thresh=a.z)
+        src = generate() if a.demo else (open(a.file) if a.file else sys.stdin)
+        def show(xs):
+            for x in xs:
+                print(f"{x.window:%H:%M} {x.kind:13} score={x.score:<7} {x.detail}", flush=True)
+        for line in src:
+            e = parse_line(line.rstrip("\n"))
+            if e:
+                show(sd.feed(e))
+        show(sd.flush())
+        return 0
     if a.demo:
         lines = generate()
     else:

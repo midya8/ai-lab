@@ -20,3 +20,6 @@ Per-template rate detectors, streaming mode, Prometheus exporter.
 
 ## Per-template spikes (v0.2)
 `--per-template` tracks each template's count per window and flags `template_spike` when one surges (robust z) even if total volume looks flat.
+
+## Streaming (v0.3)
+`StreamDetector` (src/logsentry/stream.py) ingests events one at a time and emits anomalies as soon as each window closes, with bounded memory (`history=`). Output is tested identical to batch `detect`. CLI: `tail -f app.log | PYTHONPATH=src python -m logsentry.cli --follow`, or `--follow --demo`.
