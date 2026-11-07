@@ -1,0 +1,28 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Run tests
+        run: python -m unittest discover -s tests -v
+      - name: Demo run + compare (regression is expected: exit 1)
+        run: |
+          python -m evalkit validate cases/demo.json
+          python -m evalkit run cases/demo.json --adapter stub \
+            --fixtures fixtures/stub_responses.json \
+            --out runs/run.json --repeat 2 --seed 42 || test $? -eq 1
+          python -m evalkit compare runs/baseline.json runs/run.json \
+            --min-score 0.85 || test $? -eq 1
+          python -m evalkit report runs/run.json --md reports/run.md

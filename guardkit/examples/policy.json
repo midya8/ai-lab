@@ -1,0 +1,1 @@
+{"enabled_detectors":["email","phone","card","jwt","private_key","assigned_secret","injection"],"injection_action":"block","injection_threshold":0.4,"max_input_chars":5000,"pii_action":"block","secret_action":"block"}

@@ -1,0 +1,1 @@
+{"max_steps":10,"notes_dir":"examples/notes","task":"Search notes for launch date","tools":["search_notes"]}

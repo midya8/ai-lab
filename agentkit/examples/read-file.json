@@ -1,0 +1,1 @@
+{"max_steps":10,"task":"Read the file project-notes.md","tools":["read_file"]}
