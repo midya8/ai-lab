@@ -4,7 +4,7 @@ A GPT-style decoder-only transformer written in **pure NumPy, including hand-der
 
 - Pre-LayerNorm blocks, causal multi-head attention, GELU MLP, learned positional embeddings
 - Manual backward pass for every op, verified against finite differences in the test suite
-- Adam with gradient clipping, char tokenizer, temperature / top-k / top-p (nucleus) sampling (`--top-p`), CTRL-style repetition penalty (`--repetition-penalty`), save/load
+- LR range test (`--find-lr`), Adam with gradient clipping, char tokenizer, temperature / top-k / top-p (nucleus) sampling (`--top-p`), CTRL-style repetition penalty (`--repetition-penalty`), save/load
 
 ## Run
 ```bash
@@ -52,3 +52,7 @@ PYTHONPATH=src python -m tinygpt.cli eval tinygpt.npz --data data/corpus.txt --t
 ## Weight tying
 
 `--tie-weights` shares the token embedding with the output head (`logits = h @ wte.T`), removing `vocab × n_embd` parameters. The embedding gradient receives both the lookup and output-head contributions; verified against finite differences in `tests/test_tying.py`. Stored in the checkpoint config; older checkpoints load as untied.
+
+## LR finder
+
+`python -m tinygpt.train --find-lr --steps 80` runs a Smith-style learning-rate range test (exponential sweep 1e-6 to 1, bias-corrected smoothed loss, stops on divergence), prints the LR at the steepest descent and exits. Model weights are restored, so it has no side effects (`tinygpt/lrfind.py`). Treat the suggestion as a starting point.

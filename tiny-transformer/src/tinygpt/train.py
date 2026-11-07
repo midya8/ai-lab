@@ -14,6 +14,7 @@ from .schedule import warmup_cosine
 from .accum import accumulate_grads
 from .clip import clip_grad_norm
 from .earlystop import EarlyStopper
+from .lrfind import find_lr
 from .checkpoint import save_checkpoint, evaluate
 
 
@@ -40,6 +41,7 @@ def main(argv=None):
     ap.add_argument("--patience", type=int, default=0, help="early stopping: evals without val improvement before stopping (0 = off)")
     ap.add_argument("--eval-every", type=int, default=50, help="validation interval in steps when --patience is set")
     ap.add_argument("--min-delta", type=float, default=0.0, help="minimum val-loss improvement that counts")
+    ap.add_argument("--find-lr", action="store_true", help="run an LR range test, print a suggested LR and exit (weights untouched)")
     ap.add_argument("--lr", type=float, default=3e-3)
     ap.add_argument("--warmup", type=int, default=0)
     ap.add_argument("--weight-decay", type=float, default=0.0)
@@ -59,6 +61,12 @@ def main(argv=None):
         data = data[:len(data) - n_val]
     model = GPT(GPTConfig(tok.vocab_size, a.block, a.layers, a.heads, a.embd, a.dropout, a.tie_weights))
     opt = Adam(model.params, lr=a.lr, weight_decay=a.weight_decay)
+    if a.find_lr:
+        r = find_lr(model, data, a.batch, a.block, steps=min(a.steps, 100), get_batch=get_batch)
+        for lr, l in list(zip(r["lrs"], r["losses"]))[::max(1, len(r["lrs"]) // 15)]:
+            print(f"lr {lr:.2e}  loss {l:.3f}")
+        print(f"suggested --lr {r['suggested']:.2e}" + (" (sweep stopped at divergence)" if r["stopped_early"] else ""))
+        return
     rng = np.random.default_rng(0)
     drop_rng = np.random.default_rng(1) if a.dropout else None
     print(f"vocab={tok.vocab_size} params={model.num_params():,} chars={len(text):,}")
