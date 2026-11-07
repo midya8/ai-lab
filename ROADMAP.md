@@ -49,6 +49,7 @@
 - evalkit: golden sets, scorers, regression compare, Markdown/JSON reports, flaky detection (36 tests)
 
 - guardkit: runtime guardrails — injection scoring, PII/secret detection with reversible redaction, policy file, redacted audit log, adversarial eval (62 tests; 24-case fixture: attack recall 1.000, PII caught 1.000, FPR 0.000). Runtime complement to promptguard (separate standalone repo), which lints prompt files statically.
+- logsentry: Grafana dashboard generator + importable JSON (v0.6)
 
 ## Next
 
@@ -57,7 +58,7 @@
 3. tiny-transformer follow-ups: checkpoint tokenizer with model, eval perplexity
 4. agentflow follow-ups: shared memory
 5. lora-lab: LoRA on tiny-transformer attention, rank sweep
-6. logsentry follow-ups: Grafana dashboard JSON
+6. logsentry: (done v0.6 Grafana dashboard)
 7. ticket-triage: urgency head
 8. llm-router: cost/latency routing, fallback, caching, budget guardrails
 9. promptlab: prompt versioning, A/B comparison, prompt regression tests

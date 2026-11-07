@@ -29,3 +29,6 @@ Per-template rate detectors, streaming mode, Prometheus exporter.
 
 ## Alert webhooks (v0.5)
 `--follow --webhook URL [--cooldown 300]` POSTs each anomaly as Slack-compatible JSON (`text` plus structured fields). Identical (kind, detail) alerts are suppressed within the cooldown; delivery failures never crash the stream (`alerts.py`).
+
+## Grafana dashboard (v0.6)
+`python src/logsentry/grafana.py dashboard.json` writes an importable Grafana dashboard (events/sec by level, anomalies by kind, window and anomaly stats) over the v0.4 metrics; a test checks every query only references exported metrics.
