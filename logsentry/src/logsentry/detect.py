@@ -26,7 +26,7 @@ def robust_z(x: float, history) -> float:
     return float((x - med) / mad)
 
 
-def detect(events, window=60, warmup=5, z_thresh=4.0, error_ratio=0.3):
+def detect(events, window=60, warmup=5, z_thresh=4.0, error_ratio=0.3, per_template=False, min_count=10):
     """Return anomalies sorted by time. The first `warmup` windows train the baseline."""
     events = sorted(events, key=lambda e: e.ts)
     if not events:
@@ -41,6 +41,7 @@ def detect(events, window=60, warmup=5, z_thresh=4.0, error_ratio=0.3):
         t += timedelta(seconds=window)
 
     out, seen, volume = [], set(), []
+    tpl_hist = defaultdict(list)
     for i, w in enumerate(wins):
         evs = by_win.get(w, [])
         training = i < warmup
@@ -56,6 +57,20 @@ def detect(events, window=60, warmup=5, z_thresh=4.0, error_ratio=0.3):
                     out.append(Anomaly("error_burst", w, round(errs / len(evs), 2), f"{errs}/{len(evs)} errors, top: {top}"))
             for tpl in sorted({e.template for e in evs} - seen):
                 out.append(Anomaly("new_template", w, 1.0, tpl))
+        if per_template:
+            cnt = Counter(e.template for e in evs)
+            if not training:
+                for tpl, hist in tpl_hist.items():
+                    if len(hist) < i:  # pad windows before first sighting
+                        hist[:0] = [0] * (i - len(hist))
+                    c = cnt.get(tpl, 0)
+                    z = robust_z(c, hist)
+                    if z >= z_thresh and c >= min_count:
+                        out.append(Anomaly("template_spike", w, round(z, 2), f"{tpl}: {c} in window (median {np.median(hist):.0f})"))
+            for tpl in set(tpl_hist) | set(cnt):
+                h = tpl_hist[tpl]
+                h.extend([0] * (i - len(h)))
+                h.append(cnt.get(tpl, 0))
         seen.update(e.template for e in evs)
         volume.append(len(evs))
     return sorted(out, key=lambda a: (a.window, a.kind))

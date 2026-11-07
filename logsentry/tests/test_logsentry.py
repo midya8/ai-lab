@@ -39,3 +39,21 @@ def test_empty_and_cli(capsys):
     assert detect([]) == []
     assert main(["--demo"]) == 0
     assert "anomalies" in capsys.readouterr().out
+
+
+def test_per_template_spike_hidden_in_flat_volume():
+    from datetime import datetime, timedelta
+    from logsentry.parser import LogEvent
+    t0 = datetime(2025, 1, 1)
+    evs = []
+    for m in range(12):
+        n_b = 5 if m == 9 else 20
+        n_a = 40 if m == 9 else 5   # A spikes while B drops: total volume constant
+        for k in range(n_a):
+            evs.append(LogEvent(t0 + timedelta(minutes=m, seconds=k), "INFO", "A <NUM>", ""))
+        for k in range(n_b):
+            evs.append(LogEvent(t0 + timedelta(minutes=m, seconds=k), "INFO", "B <NUM>", ""))
+    base = {a.kind for a in detect(evs)}
+    assert "template_spike" not in base
+    found = [a for a in detect(evs, per_template=True) if a.kind == "template_spike"]
+    assert len(found) == 1 and found[0].detail.startswith("A <NUM>")

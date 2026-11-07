@@ -17,3 +17,6 @@ Demo output finds the injected 8x traffic spike at 12:20 and the DB error burst 
 
 ## Next
 Per-template rate detectors, streaming mode, Prometheus exporter.
+
+## Per-template spikes (v0.2)
+`--per-template` tracks each template's count per window and flags `template_spike` when one surges (robust z) even if total volume looks flat.
