@@ -78,6 +78,7 @@ class GPT:
     def __init__(self, cfg: GPTConfig, seed: int = 0, dtype=np.float32):
         assert cfg.n_embd % cfg.n_head == 0
         self.cfg = cfg
+        self.label_smoothing = 0.0  # training-time only; evaluate() reports plain NLL
         rng = np.random.default_rng(seed)
         C, V = cfg.n_embd, cfg.vocab_size
         n = lambda *s, std=0.02: (rng.standard_normal(s) * std).astype(dtype)
@@ -174,7 +175,12 @@ class GPT:
         B, T = idx.shape
         G = {}
         d = softmax(logits)
-        d[np.arange(B)[:, None], np.arange(T), targets] -= 1
+        eps = self.label_smoothing
+        if eps:
+            d -= eps / logits.shape[-1]
+            d[np.arange(B)[:, None], np.arange(T), targets] -= 1 - eps
+        else:
+            d[np.arange(B)[:, None], np.arange(T), targets] -= 1
         d /= B * T
         dh, dW, G["head_b"] = lin_bwd(d, hin, self.head_W())
         if not cfg.tie_weights:
@@ -202,6 +208,11 @@ class GPT:
 
     def loss_and_grads(self, idx, targets, rng=None):
         _, loss, cache = self.forward(idx, targets, rng=rng)
+        eps = self.label_smoothing
+        if eps:
+            # smoothed target q = (1-eps)*onehot + eps/V  =>  loss = (1-eps)*NLL + eps*mean(-log p)
+            lp = np.log(softmax(cache[5]) + 1e-30)
+            loss = float((1 - eps) * loss - eps * lp.mean())
         return loss, self.backward(cache)
 
     def generate(self, idx, max_new_tokens, temperature=1.0, top_k=None, seed=0, top_p=None, repetition_penalty=1.0):

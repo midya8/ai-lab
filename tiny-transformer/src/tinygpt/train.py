@@ -36,6 +36,7 @@ def main(argv=None):
     ap.add_argument("--embd", type=int, default=64)
     ap.add_argument("--micro-batch", type=int, default=0, help="split each batch into micro-batches (gradient accumulation)")
     ap.add_argument("--clip", type=float, default=0.0, help="clip global gradient norm to this value (0 = off)")
+    ap.add_argument("--label-smoothing", type=float, default=0.0, help="label smoothing epsilon in [0,1) for the training loss")
     ap.add_argument("--dropout", type=float, default=0.0, help="dropout prob on embeddings, attention and residuals (train only)")
     ap.add_argument("--tie-weights", action="store_true", help="share token embedding with the output head")
     ap.add_argument("--patience", type=int, default=0, help="early stopping: evals without val improvement before stopping (0 = off)")
@@ -68,6 +69,7 @@ def main(argv=None):
         print(f"suggested --lr {r['suggested']:.2e}" + (" (sweep stopped at divergence)" if r["stopped_early"] else ""))
         return
     rng = np.random.default_rng(0)
+    model.label_smoothing = a.label_smoothing
     drop_rng = np.random.default_rng(1) if a.dropout else None
     print(f"vocab={tok.vocab_size} params={model.num_params():,} chars={len(text):,}")
     stopper = EarlyStopper(a.patience, a.min_delta) if a.patience and val is not None else None

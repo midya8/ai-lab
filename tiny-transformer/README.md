@@ -56,3 +56,7 @@ PYTHONPATH=src python -m tinygpt.cli eval tinygpt.npz --data data/corpus.txt --t
 ## LR finder
 
 `python -m tinygpt.train --find-lr --steps 80` runs a Smith-style learning-rate range test (exponential sweep 1e-6 to 1, bias-corrected smoothed loss, stops on divergence), prints the LR at the steepest descent and exits. Model weights are restored, so it has no side effects (`tinygpt/lrfind.py`). Treat the suggestion as a starting point.
+
+## Label smoothing
+
+`--label-smoothing EPS` trains against `(1-EPS)*onehot + EPS/V` targets (loss = `(1-EPS)*NLL + EPS*mean(-log p)`, gradient `p - q`, finite-difference-checked). Only the training loss/gradients change; validation loss and perplexity stay plain NLL so runs remain comparable.
