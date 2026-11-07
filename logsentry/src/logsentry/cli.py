@@ -14,14 +14,20 @@ def main(argv=None):
     p.add_argument("--per-template", action="store_true", help="also flag spikes in individual log templates")
     p.add_argument("--follow", action="store_true", help="streaming mode: read stdin/file line by line, print anomalies as windows close")
     p.add_argument("--metrics-port", type=int, help="with --follow: serve Prometheus metrics at http://127.0.0.1:PORT/metrics")
+    p.add_argument("--webhook", help="with --follow: POST each anomaly (Slack-compatible JSON) to this URL")
+    p.add_argument("--cooldown", type=int, default=300, help="seconds before an identical alert re-fires (default 300)")
     a = p.parse_args(argv)
     if a.follow:
         from .metrics import MetricsDetector, serve
         sd = MetricsDetector(window=a.window, z_thresh=a.z)
         if a.metrics_port:
             serve(sd, a.metrics_port)
+        from .alerts import WebhookNotifier
+        notifier = WebhookNotifier(a.webhook, cooldown=a.cooldown) if a.webhook else None
         src = generate() if a.demo else (open(a.file) if a.file else sys.stdin)
         def show(xs):
+            if notifier:
+                notifier.notify(xs)
             for x in xs:
                 print(f"{x.window:%H:%M} {x.kind:13} score={x.score:<7} {x.detail}", flush=True)
         for line in src:

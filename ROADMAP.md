@@ -26,6 +26,7 @@
 - llm-eval-harness: GitHub composite Action + job summary (v0.3)
 
 - logsentry: Prometheus exporter, --metrics-port (v0.4)
+- logsentry: webhook alerts with cooldown (v0.5)
 
 ## Next
 1. rag-evals: larger/harder benchmark (current corpus saturated at 1.0)
@@ -33,5 +34,5 @@
 3. tiny-transformer follow-ups: checkpoint tokenizer with model, eval perplexity
 4. agentflow follow-ups: shared memory
 5. lora-lab: LoRA on tiny-transformer attention, rank sweep
-6. logsentry follow-ups: Grafana dashboard JSON, alert webhooks
+6. logsentry follow-ups: Grafana dashboard JSON
 7. ticket-triage: urgency head

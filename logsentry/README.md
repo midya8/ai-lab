@@ -26,3 +26,6 @@ Per-template rate detectors, streaming mode, Prometheus exporter.
 
 ## Prometheus exporter (v0.4)
 `--follow --metrics-port 9108` serves `/metrics` in Prometheus text format: `logsentry_events_total{level}`, `logsentry_anomalies_total{kind}`, `logsentry_windows_closed_total`, and the latest anomalous window timestamp. Zero dependencies (`metrics.py`).
+
+## Alert webhooks (v0.5)
+`--follow --webhook URL [--cooldown 300]` POSTs each anomaly as Slack-compatible JSON (`text` plus structured fields). Identical (kind, detail) alerts are suppressed within the cooldown; delivery failures never crash the stream (`alerts.py`).
