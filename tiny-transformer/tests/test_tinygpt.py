@@ -79,3 +79,16 @@ def test_save_load_roundtrip(tmp_path):
     m2 = GPT(m.cfg, seed=99)
     m2.load(path)
     assert np.allclose(m.forward(idx)[0], m2.forward(idx)[0])
+
+
+def test_kv_cache_matches_full_forward_and_generate():
+    from tinygpt.kvcache import generate_cached, _prefill
+    m, idx, _ = make()
+    logits, _ = _prefill(m, idx[0])
+    assert np.allclose(logits, m.forward(idx[:1])[0][0, -1], atol=1e-9)
+    prompt = [1, 2, 3]
+    for kw in ({"temperature": 0}, {"temperature": 0.8, "top_k": 4, "seed": 5}):
+        # 14 new tokens exceeds block_size=8 so the sliding window path is covered
+        a = m.generate(prompt, 14, **kw)
+        b = generate_cached(m, prompt, 14, **kw)
+        assert list(a) == list(b)

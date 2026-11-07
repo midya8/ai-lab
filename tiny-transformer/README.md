@@ -14,5 +14,8 @@ python -m pytest
 ```
 A 108k-parameter model drops from loss 3.63 to ~0.25 on the bundled corpus in about 30s on a CPU and starts producing the text.
 
+## KV-cache decoding
+`tinygpt.generate_cached(model, prompt, n)` prefills per-layer keys/values once and decodes each token in O(T) instead of re-running the full sequence. It is verified to produce token-identical output to `GPT.generate` (greedy and top-k sampling), including the sliding-window case past `block_size`.
+
 ## Tests
 Gradient check on every parameter tensor, causality (future tokens never affect past logits), initial loss ≈ ln(vocab), overfitting a tiny corpus and generating it, checkpoint round trip.
