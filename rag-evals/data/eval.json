@@ -1,0 +1,9 @@
+[
+ {"question": "How does LoRA reduce trainable parameters?", "relevant_docs": ["lora"]},
+ {"question": "What is QLoRA and 4-bit quantization?", "relevant_docs": ["lora"]},
+ {"question": "Why do transformers need positional encodings?", "relevant_docs": ["transformers"]},
+ {"question": "How does retrieval augmented generation reduce hallucination?", "relevant_docs": ["rag"]},
+ {"question": "Which ranking function uses inverse document frequency with length normalization?", "relevant_docs": ["bm25"]},
+ {"question": "What does Adam add on top of gradient descent?", "relevant_docs": ["optimization"]},
+ {"question": "Combine lexical search and dense embeddings", "relevant_docs": ["bm25"]}
+]

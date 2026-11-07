@@ -1,0 +1,1 @@
+BM25 is a ranking function based on term frequency and inverse document frequency with length normalization. It remains a strong lexical baseline for search. Hybrid systems combine BM25 with dense embeddings.

@@ -1,0 +1,1 @@
+LoRA freezes the pretrained weights and trains small low-rank matrices added to each layer. This cuts trainable parameters by orders of magnitude. QLoRA combines LoRA with a 4-bit quantized base model to fit large models on one GPU.

@@ -1,0 +1,1 @@
+Gradient descent updates parameters in the direction that reduces the loss. Adam adds momentum and per-parameter adaptive learning rates. Learning rate warmup stabilizes early training of large models.

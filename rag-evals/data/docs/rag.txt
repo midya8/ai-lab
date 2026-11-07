@@ -1,0 +1,1 @@
+Retrieval augmented generation fetches relevant passages and places them in the prompt. This reduces hallucination and lets models answer from private documents. Good chunking and a strong retriever matter more than the generator.

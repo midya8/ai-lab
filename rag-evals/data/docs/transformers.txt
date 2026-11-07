@@ -1,0 +1,1 @@
+Transformers use self-attention to weigh every token against every other token. Multi-head attention runs several attention functions in parallel. Positional encodings inject word order because attention itself is permutation invariant.
