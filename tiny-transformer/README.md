@@ -36,3 +36,7 @@ PYTHONPATH=src python -m tinygpt.cli eval tinygpt.npz --data data/corpus.txt --t
 ## Gradient accumulation
 
 `--micro-batch N` splits each batch into micro-batches of N rows and averages their gradients (`tinygpt/accum.py`), so large effective batches fit in less memory. Tests verify the result equals the full-batch gradient.
+
+## Gradient clipping
+
+`--clip X` rescales all gradients so their global L2 norm is at most X (`tinygpt/clip.py`, same semantics as `clip_grad_norm_`) and logs the pre-clip norm. Applied after accumulation, before the optimizer step.

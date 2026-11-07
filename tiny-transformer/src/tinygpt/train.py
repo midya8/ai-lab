@@ -12,6 +12,7 @@ from .tokenizer import CharTokenizer
 from .bpe import BPETokenizer
 from .schedule import warmup_cosine
 from .accum import accumulate_grads
+from .clip import clip_grad_norm
 from .checkpoint import save_checkpoint, evaluate
 
 
@@ -32,6 +33,7 @@ def main(argv=None):
     ap.add_argument("--heads", type=int, default=4)
     ap.add_argument("--embd", type=int, default=64)
     ap.add_argument("--micro-batch", type=int, default=0, help="split each batch into micro-batches (gradient accumulation)")
+    ap.add_argument("--clip", type=float, default=0.0, help="clip global gradient norm to this value (0 = off)")
     ap.add_argument("--lr", type=float, default=3e-3)
     ap.add_argument("--warmup", type=int, default=0)
     ap.add_argument("--weight-decay", type=float, default=0.0)
@@ -61,9 +63,13 @@ def main(argv=None):
             loss, grads = accumulate_grads(model, x, y, a.micro_batch)
         else:
             loss, grads = model.loss_and_grads(x, y)
+        gnorm = None
+        if a.clip:
+            grads, gnorm = clip_grad_norm(grads, a.clip)
         opt.step(grads)
         if step % 50 == 0 or step == 1:
-            print(f"step {step:4d} loss {loss:.3f} ({time.time() - t0:.0f}s)")
+            extra = f" gnorm {gnorm:.2f}" if gnorm is not None else ""
+            print(f"step {step:4d} loss {loss:.3f}{extra} ({time.time() - t0:.0f}s)")
     save_checkpoint(a.out, model, tok)
     if val is not None:
         r = evaluate(model, val)

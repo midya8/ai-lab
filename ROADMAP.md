@@ -57,12 +57,13 @@
 - tiny-transformer: top-p (nucleus) sampling shared module, CLI --top-p, cache/non-cache parity tested
 - tiny-transformer: gradient accumulation (--micro-batch), full-batch-equivalence tested (33 tests)
 - ticket-triage: urgency head (class-weighted logistic regression, recall-targeted threshold, combined queue routing; 17 tests; synthetic data)
+- tiny-transformer: global-norm gradient clipping (--clip, logs pre-clip norm; 35 tests)
 
 ## Next
 
 1. rag-evals: larger/harder benchmark (current corpus saturated at 1.0)
 2. llm-eval-harness: (done) -> next: multi-model comparison matrix
-3. tiny-transformer follow-ups: (done v0.5, top-p, grad accumulation); next: gradient clipping, dropout
+3. tiny-transformer follow-ups: (done v0.5, top-p, grad accumulation); (done clipping); next: dropout
 4. agentflow follow-ups: shared memory
 5. lora-lab: LoRA on tiny-transformer attention, rank sweep
 6. logsentry: (done v0.6 Grafana dashboard)
