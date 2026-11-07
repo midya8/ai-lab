@@ -14,10 +14,12 @@
 - ticket-triage: TF-IDF + softmax classifier, escalation (v0.1)
 - tiny-transformer: KV-cache incremental decoding, equivalence-tested (v0.2)
 
+- tiny-transformer: byte-level BPE tokenizer (v0.3)
+
 ## Next
 1. rag-evals: answer-faithfulness eval, larger/harder benchmark (current corpus saturated at 1.0)
 2. llm-eval-harness: GitHub Action wrapper
-3. tiny-transformer follow-ups: BPE tokenizer, LR schedule
+3. tiny-transformer follow-ups: LR schedule, wire BPE into train CLI
 4. agentflow follow-ups: shared memory, supervisor/router agent, tracing
 5. LoRA fine-tuning pipeline
 6. logsentry follow-ups: per-template rates, streaming, Prometheus exporter

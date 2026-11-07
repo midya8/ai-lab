@@ -17,5 +17,8 @@ A 108k-parameter model drops from loss 3.63 to ~0.25 on the bundled corpus in ab
 ## KV-cache decoding
 `tinygpt.generate_cached(model, prompt, n)` prefills per-layer keys/values once and decodes each token in O(T) instead of re-running the full sequence. It is verified to produce token-identical output to `GPT.generate` (greedy and top-k sampling), including the sliding-window case past `block_size`.
 
+## BPE tokenizer
+`tinygpt.BPETokenizer.train(text, vocab_size)` learns byte-level BPE merges from scratch (256 byte base vocab, lossless on any Unicode, JSON save/load). Same interface as `CharTokenizer`, so it plugs into the trainer's data pipeline.
+
 ## Tests
 Gradient check on every parameter tensor, causality (future tokens never affect past logits), initial loss ≈ ln(vocab), overfitting a tiny corpus and generating it, checkpoint round trip.
