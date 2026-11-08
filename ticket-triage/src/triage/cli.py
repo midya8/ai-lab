@@ -3,6 +3,7 @@ from .data import generate
 from .calibration import cross_validate, expected_calibration_error, CalibratedClassifier
 from .urgency import Triage, UrgencyClassifier, precision_recall_f1
 from .active import compare as active_compare, review_queue
+from .tags import TagClassifier, generate_tagged, multilabel_metrics, TAGS
 from .model import TicketClassifier, confusion, macro_f1
 
 
@@ -11,6 +12,7 @@ def main(argv=None):
     ap.add_argument("text", nargs="?", help="ticket text to classify")
     ap.add_argument("--cv", type=int, default=0, help="run k-fold cross-validation")
     ap.add_argument("--active", action="store_true", help="active-learning demo: strategy learning curves + review queue")
+    ap.add_argument("--tags", action="store_true", help="multi-label tag demo (mobile/performance/security/enterprise)")
     ap.add_argument("--n", type=int, default=800)
     a = ap.parse_args(argv)
     data = generate(a.n)
@@ -41,6 +43,17 @@ def main(argv=None):
         small = TicketClassifier().fit([d["text"] for d in data[:24]], [d["category"] for d in data[:24]])
         for r in review_queue(small, [d["text"] for d in data[24:300]], k=5, strategy="entropy"):
             print(f"review #{r['index']} ({r['predicted']} {r['confidence']:.2f}): {r['text']}")
+    if a.tags:
+        td = generate_tagged(a.n)
+        c1, c2 = int(len(td) * 0.6), int(len(td) * 0.8)
+        f = lambda rows: ([r["text"] for r in rows], [r["tags"] for r in rows])
+        tc = TagClassifier().fit(*f(td[:c1]))
+        tc.tune_thresholds(*f(td[c1:c2]))
+        m = multilabel_metrics(tc._Y(f(td[c2:])[1]), tc.predict(f(td[c2:])[0]))
+        print(f"tags micro_f1={m['micro_f1']:.3f} macro_f1={m['macro_f1']:.3f} hamming={m['hamming_loss']:.3f} exact={m['exact_match']:.3f}")
+        print(" ".join(f"{t}:{x:.2f}" for t, x in zip(TAGS, m["per_tag_f1"])))
+        if a.text:
+            print("tags:", tc.predict_tags(a.text))
     if a.text:
         print(Triage().fit(tr).route(a.text))
 
