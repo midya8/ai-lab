@@ -31,3 +31,15 @@ were fixed by treating vague quantifiers ("certain", "amount") as filler and let
 "open" match "closed" (the sentence carries the polarity). Caveat: the set is small and
 the fix was made while looking at it, so expect it not to generalise fully; unsupported
 yes/no questions ("open on Mars?") still abstain (tested).
+
+## Use as an agentkit tool
+
+```python
+from agentkit.tools import builtin_tools
+from docqa.agent_tool import register
+
+registry = register(builtin_tools(), "path/to/docs")   # adds `ask_docs`
+registry.call("ask_docs", {"question": "How long do I have to return a bike?"})
+```
+
+The tool returns verbatim cited sentences or an explicit "I don't know", so an agent run can ground itself in documents and abstain when they are silent.

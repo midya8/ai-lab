@@ -91,6 +91,7 @@
 - agentflow: per-worker CircuitBreaker (open/half-open/closed, cooldown, Supervisor skips open workers, skipped_open in result; 3 new tests)
 - agentflow: run metrics (per-task duration, critical path, parallelism, failure/retry counts; 2 new tests)
 - agentflow: SupervisedAgent (Supervisor as a DAG node in Orchestrator; routing_summary; 4 new tests)
+- docqa: agentkit integration (`ask_docs` tool via docqa.agent_tool.register; 5 new tests)
 
 ## Next
 
@@ -103,5 +104,5 @@
 7. ticket-triage: (done urgency head) (done active learning) (done multi-label tags) (done tag-aware routing) (done SLA-breach simulation) -> next: feed live router output into the simulator
 8. llm-router: (done v0.1) -> (done latency tracking) (done semantic cache) (done learned complexity classifier) (done persistence)
 9. promptlab: (done v0.1) -> v0.2 multi-sample done; (done GitHub Action + summary); next: LLM-judge check via evalkit
-10. docqa: (done v0.1) -> (done paraphrase) (done broad benchmark) (done yes/no fixes) next: agentkit integration
+10. docqa: (done v0.1) -> (done paraphrase) (done broad benchmark) (done yes/no fixes) (done agentkit integration) next: agentflow worker wrapper
 11. autojob: agentic job-application assistant (only Midya's real resume data, never invents experience)
