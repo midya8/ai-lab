@@ -1,0 +1,7 @@
+{
+  "disabled_rules": ["py-complexity"],
+  "severity_overrides": {"py-weak-hash": "info", "py-requests-no-timeout": "high"},
+  "ignore_paths": ["vendor/*", "migrations/*", "*.min.js"],
+  "max_comments": 20,
+  "min_severity": "low"
+}

@@ -1,0 +1,44 @@
+name: reviewkit
+description: Review a pull request with deterministic security/bug rules plus an optional, validated LLM pass. Posts inline comments once (idempotent across pushes).
+inputs:
+  fail-on: {description: "Fail the job at or above this severity (info|low|medium|high|critical); empty = never", default: ""}
+  provider: {description: "none, openai (any OpenAI-compatible endpoint) or cmd", default: none}
+  base-url: {description: "Endpoint root for provider=openai, e.g. https://api.openai.com/v1", default: ""}
+  model: {description: "Model name for provider=openai", default: ""}
+  api-key: {description: "API key for provider=openai (pass a secret)", default: ""}
+  config: {description: "Path to a reviewkit JSON config", default: .reviewkit.json}
+  github-token: {description: "Token used to post the review", default: "${{ github.token }}"}
+  post: {description: "Post inline comments to the pull request", default: "true"}
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v5
+      with: {python-version: "3.11"}
+    - shell: bash
+      env:
+        PYTHONPATH: ${{ github.action_path }}/src
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+        REVIEWKIT_API_KEY: ${{ inputs.api-key }}
+        IN_FAIL_ON: ${{ inputs.fail-on }}
+        IN_PROVIDER: ${{ inputs.provider }}
+        IN_BASE_URL: ${{ inputs.base-url }}
+        IN_MODEL: ${{ inputs.model }}
+        IN_CONFIG: ${{ inputs.config }}
+        IN_POST: ${{ inputs.post }}
+        BASE_REF: ${{ github.base_ref }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        REPO: ${{ github.repository }}
+      run: |
+        # The workflow must check out the PR head with fetch-depth: 0 so the base ref exists.
+        # Inputs arrive through env vars, never interpolated into the script text.
+        args=(review --base "origin/$BASE_REF" --root . --config "$IN_CONFIG" --format markdown)
+        [ -n "$IN_FAIL_ON" ] && args+=(--fail-on "$IN_FAIL_ON")
+        if [ "$IN_PROVIDER" != "none" ]; then
+          args+=(--provider "$IN_PROVIDER" --base-url "$IN_BASE_URL" --model "$IN_MODEL")
+        fi
+        if [ "$IN_POST" = "true" ] && [ -n "$PR_NUMBER" ]; then
+          args+=(--post "$REPO#$PR_NUMBER" --commit "$HEAD_SHA")
+        fi
+        python -m reviewkit "${args[@]}" | tee -a "$GITHUB_STEP_SUMMARY"
+        exit "${PIPESTATUS[0]}"

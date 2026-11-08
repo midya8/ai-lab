@@ -1,0 +1,22 @@
+# .github/workflows/review.yml in the repo you want reviewed
+name: reviewkit
+on: pull_request
+permissions:
+  contents: read
+  pull-requests: write
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: midya8/ai-lab/reviewkit@main
+        with:
+          fail-on: high
+          # optional model pass (any OpenAI-compatible endpoint):
+          # provider: openai
+          # base-url: https://api.openai.com/v1
+          # model: your-model
+          # api-key: ${{ secrets.LLM_API_KEY }}
