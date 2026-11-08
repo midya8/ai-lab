@@ -2,3 +2,5 @@ from .core import Agent, Task, Orchestrator, ToolRegistry, ScriptedLLM, CycleErr
 __all__ = ["Agent", "Task", "Orchestrator", "ToolRegistry", "ScriptedLLM", "CycleError", "Result"]
 from .extras import Tracer, Span, trace_agent, Supervisor
 __all__ += ["Tracer", "Span", "trace_agent", "Supervisor"]
+from .memory import SharedMemory, attach_memory
+__all__ += ["SharedMemory", "attach_memory"]

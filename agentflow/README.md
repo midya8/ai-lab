@@ -14,3 +14,6 @@ python -m pytest
 ## Tracing and supervisor (v0.2)
 - `trace_agent(agent, tracer)` records an LLM/tool span (duration, status, error) per call; `tracer.summary()` aggregates per agent and `tracer.to_json()` exports.
 - `Supervisor(router_llm, workers, default)` routes each request to the best worker via `{"route": name}`, falling back to the default on an invalid choice.
+
+## Shared memory (v0.3)
+`SharedMemory` is a thread-safe key/value store with token-overlap `search` (key matches weigh double), author stamps, and optional atomic JSON persistence (`SharedMemory(path)`). `attach_memory(agent, memory)` gives an agent `remember`, `recall`, `search` and `forget` tools so agents in one Orchestrator run can hand off facts beyond templated task outputs.
