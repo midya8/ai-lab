@@ -8,3 +8,5 @@ from .extras import CircuitBreaker
 __all__ += ["CircuitBreaker"]
 from .metrics import RunMetrics, compute_metrics
 __all__ += ["RunMetrics", "compute_metrics"]
+from .integration import SupervisedAgent
+__all__ += ["SupervisedAgent"]

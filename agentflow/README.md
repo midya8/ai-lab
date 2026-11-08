@@ -26,3 +26,6 @@ python -m pytest
 
 ## Run metrics
 `compute_metrics(tasks, results)` returns a `RunMetrics`: total work, critical path (and its task ids), ideal parallelism (work / critical path), and failed/skipped/retry counts. Each `Result` now carries a `duration`.
+
+## Supervisor inside a DAG
+`SupervisedAgent(supervisor, name="auto")` wraps a Supervisor as an Agent, so any Orchestrator task addressed to `auto` is routed to the best worker (with memory, fallbacks and circuit breaking). `routing_summary()` counts routes; `decisions` keeps per-call metadata such as `failed_attempts`. A total failure marks the task failed and skips downstream tasks as usual.
