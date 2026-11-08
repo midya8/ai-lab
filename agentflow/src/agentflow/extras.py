@@ -87,10 +87,39 @@ def trace_agent(agent: Agent, tracer: Tracer) -> Agent:
     return agent
 
 
+class CircuitBreaker:
+    """Per-worker breaker: opens after `threshold` consecutive failures, allows a
+    trial call once `cooldown` seconds pass (half-open), closes on success."""
+
+    def __init__(self, threshold: int = 3, cooldown: float = 30.0, clock=None):
+        import time
+        self.threshold, self.cooldown = max(1, threshold), cooldown
+        self._clock = clock or time.monotonic
+        self._fails: dict = {}
+        self._opened: dict = {}
+
+    def state(self, name: str) -> str:
+        if name not in self._opened:
+            return "closed"
+        return "half-open" if self._clock() - self._opened[name] >= self.cooldown else "open"
+
+    def allow(self, name: str) -> bool:
+        return self.state(name) != "open"
+
+    def success(self, name: str) -> None:
+        self._fails.pop(name, None)
+        self._opened.pop(name, None)
+
+    def failure(self, name: str) -> None:
+        self._fails[name] = self._fails.get(name, 0) + 1
+        if name in self._opened or self._fails[name] >= self.threshold:
+            self._opened[name] = self._clock()  # (re)open, restarting the cooldown
+
+
 class Supervisor:
     def __init__(self, router_llm, workers: List[Agent], default: Optional[str] = None,
                  memory=None, recall_limit: int = 3, remember_results: bool = True,
-                 max_attempts: int = 1):
+                 max_attempts: int = 1, breaker: Optional[CircuitBreaker] = None):
         if not workers:
             raise ValueError("need at least one worker")
         self.router_llm = router_llm
@@ -100,6 +129,7 @@ class Supervisor:
         self.recall_limit = recall_limit
         self.remember_results = remember_results
         self.max_attempts = max(1, max_attempts)
+        self.breaker = breaker
         if self.default not in self.workers:
             raise KeyError(f"unknown default agent {self.default}")
 
@@ -127,6 +157,12 @@ class Supervisor:
             notes = "\n".join(f"- {e['key']}: {e['value']}" for e in ctx)
             prompt = f"Relevant shared memory:\n{notes}\n\nRequest: {request}"
         order = [name] + [n for n in self.workers if n != name]
+        skipped = []
+        if self.breaker is not None:
+            skipped = [n for n in order if not self.breaker.allow(n)]
+            order = [n for n in order if n not in skipped] or order  # never leave nothing to try
+            if order == [n for n in order if n in skipped]:
+                skipped = []
         failures = []
         out = None
         for attempt, cand in enumerate(order[:self.max_attempts], 1):
@@ -135,10 +171,14 @@ class Supervisor:
                 p += "\n\nEarlier attempts failed:\n" + "\n".join(f"- {a}: {e}" for a, e in failures)
             try:
                 out = self.workers[cand].run(p)
+                if self.breaker is not None:
+                    self.breaker.success(cand)
                 name = cand
                 break
             except Exception as e:  # fall through to the next worker
                 failures.append((cand, str(e)))
+                if self.breaker is not None:
+                    self.breaker.failure(cand)
                 if self.memory is not None:
                     self.memory.remember(f"failure:{cand}:{request[:40]}", str(e), author="supervisor")
         else:
@@ -146,6 +186,8 @@ class Supervisor:
         if self.memory is not None and self.remember_results:
             self.memory.remember(f"supervisor:{request[:60]}", out, author=name)
         result = {"agent": name, "output": out}
+        if skipped:
+            result["skipped_open"] = skipped
         if failures:
             result["failed_attempts"] = [a for a, _ in failures]
         if self.memory is not None:

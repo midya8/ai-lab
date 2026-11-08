@@ -20,3 +20,6 @@ python -m pytest
 
 ## Memory-aware Supervisor
 `Supervisor(router_llm, workers, memory=SharedMemory())` searches shared memory for each request, prepends the top `recall_limit` hits to the worker prompt, records the worker's output under `supervisor:<request>` (disable with `remember_results=False`), and returns `memory_used` keys in the result. Without `memory` behaviour is unchanged.
+
+## Circuit breaker
+`Supervisor(..., max_attempts=3, breaker=CircuitBreaker(threshold=3, cooldown=30))` stops sending traffic to a worker after `threshold` consecutive failures. Open workers are skipped (reported as `skipped_open`) until `cooldown` seconds pass; then one trial call runs (half-open) and a success closes the breaker while a failure reopens it. If every worker is open, all are tried anyway rather than failing outright.
