@@ -66,3 +66,25 @@ def test_ttl_persists(tmp_path):
     SharedMemory(p, clock=lambda: 0).remember("k", "v", ttl=5)
     assert SharedMemory(p, clock=lambda: 4).recall("k") == "v"
     assert SharedMemory(p, clock=lambda: 6).recall("k") is None
+
+
+class _Boom:
+    def complete(self, messages):
+        raise RuntimeError("model down")
+
+
+def test_supervisor_retries_next_worker_and_records_failure():
+    m = SharedMemory()
+    bad = Agent("bad", _Boom(), ToolRegistry())
+    good = mk("good", [{"final": "ok"}])
+    sup = Supervisor(ScriptedLLM(['{"route": "bad"}']), [bad, good], memory=m, max_attempts=2)
+    r = sup.run("do thing")
+    assert r["agent"] == "good" and r["failed_attempts"] == ["bad"]
+    assert any(k.startswith("failure:bad") for k in m._data)
+
+
+def test_supervisor_raises_when_all_attempts_fail():
+    import pytest
+    sup = Supervisor(ScriptedLLM(['{"route": "bad"}']), [Agent("bad", _Boom(), ToolRegistry())], max_attempts=3)
+    with pytest.raises(RuntimeError):
+        sup.run("x")

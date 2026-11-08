@@ -89,7 +89,8 @@ def trace_agent(agent: Agent, tracer: Tracer) -> Agent:
 
 class Supervisor:
     def __init__(self, router_llm, workers: List[Agent], default: Optional[str] = None,
-                 memory=None, recall_limit: int = 3, remember_results: bool = True):
+                 memory=None, recall_limit: int = 3, remember_results: bool = True,
+                 max_attempts: int = 1):
         if not workers:
             raise ValueError("need at least one worker")
         self.router_llm = router_llm
@@ -98,6 +99,7 @@ class Supervisor:
         self.memory = memory
         self.recall_limit = recall_limit
         self.remember_results = remember_results
+        self.max_attempts = max(1, max_attempts)
         if self.default not in self.workers:
             raise KeyError(f"unknown default agent {self.default}")
 
@@ -124,10 +126,28 @@ class Supervisor:
         if ctx:
             notes = "\n".join(f"- {e['key']}: {e['value']}" for e in ctx)
             prompt = f"Relevant shared memory:\n{notes}\n\nRequest: {request}"
-        out = self.workers[name].run(prompt)
+        order = [name] + [n for n in self.workers if n != name]
+        failures = []
+        out = None
+        for attempt, cand in enumerate(order[:self.max_attempts], 1):
+            p = prompt
+            if failures:
+                p += "\n\nEarlier attempts failed:\n" + "\n".join(f"- {a}: {e}" for a, e in failures)
+            try:
+                out = self.workers[cand].run(p)
+                name = cand
+                break
+            except Exception as e:  # fall through to the next worker
+                failures.append((cand, str(e)))
+                if self.memory is not None:
+                    self.memory.remember(f"failure:{cand}:{request[:40]}", str(e), author="supervisor")
+        else:
+            raise RuntimeError("all attempts failed: " + "; ".join(f"{a}: {e}" for a, e in failures))
         if self.memory is not None and self.remember_results:
             self.memory.remember(f"supervisor:{request[:60]}", out, author=name)
         result = {"agent": name, "output": out}
+        if failures:
+            result["failed_attempts"] = [a for a, _ in failures]
         if self.memory is not None:
             result["memory_used"] = [e["key"] for e in ctx]
         return result

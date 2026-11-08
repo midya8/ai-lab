@@ -87,13 +87,14 @@
 - docqa: broad 13-question benchmark across all docs (answer 0.80, abstain 1.00; 2 yes/no misses documented; 1 new test)
 - docqa: yes/no fixes (vague-quantifier filler, open/closed polarity group; broad benchmark answer 1.00, abstain 1.00; 2 new tests)
 - agentflow: memory-aware Supervisor (recalls relevant memory into prompts, records results, reports memory_used; 2 new tests)
+- agentflow: Supervisor fallback retries (max_attempts tries next workers, records failures in memory, failed_attempts in result; 2 new tests)
 
 ## Next
 
 1. rag-evals: (done hard benchmark) (done chunk sweep) -> next: dense embeddings beyond LSA
 2. llm-eval-harness: (done) (done matrix) (done per-tag matrix) -> next: HTTP-model matrix specs
 3. tiny-transformer follow-ups: (done v0.5, top-p, grad accumulation); (done clipping); (done dropout); (done weight tying); (done early stopping); (done repetition penalty); (done LR finder); (done label smoothing); (done per-position eval); (done sliding-window eval); next: lora-lab on tiny-transformer attention
-4. agentflow follow-ups: (done shared memory) -> (done TTL) (done memory-aware Supervisor) -> next: memory-driven task retries
+4. agentflow follow-ups: (done shared memory) (done TTL) (done memory-aware Supervisor) (done failure fallback retries) -> next: per-worker circuit breaker
 5. lora-lab: (done rank sweep) -> next: harder task so ranks separate, LoRA on tiny-transformer attention
 6. logsentry: (done v0.6 Grafana dashboard)
 7. ticket-triage: (done urgency head) (done active learning) (done multi-label tags) (done tag-aware routing) (done SLA-breach simulation) -> next: feed live router output into the simulator
