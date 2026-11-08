@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "promptlab"
-version = "0.1.0"
+version = "0.3.0"
 description = "Prompt versioning, paired A/B comparison with significance tests, and regression gates for LLM prompts"
 requires-python = ">=3.10"
 license = { text = "MIT" }

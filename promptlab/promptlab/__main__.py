@@ -6,7 +6,8 @@ import sys
 from pathlib import Path
 
 from .compare import check_regression, render_check_markdown, compare_runs, render_markdown
-from .models import make_model
+from .judge import calibrate_judge, load_calibration_items, render_calibration
+from .models import make_judge, make_model
 from .registry import Registry, RegistryError
 from .runner import RunResult, load_cases, run_prompt
 
@@ -14,7 +15,7 @@ from .runner import RunResult, load_cases, run_prompt
 def _run(reg: Registry, args, ref: str) -> RunResult:
     v = reg.resolve(args.name, ref)
     return run_prompt(v, load_cases(args.cases), make_model(args.model),
-                      samples=args.samples, threshold=args.threshold)
+                      samples=args.samples, threshold=args.threshold, judge=make_judge(args.judge))
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -27,6 +28,7 @@ def main(argv: list[str] | None = None) -> int:
         p.add_argument("--model", default="rule", help="rule | rule:<seed> | cmd:<command>")
         p.add_argument("--samples", type=int, default=1, help="model calls per case (non-deterministic models)")
         p.add_argument("--threshold", type=float, default=1.0, help="fraction of samples that must pass a case")
+        p.add_argument("--judge", default=None, help="model for judge checks: rule | cmd:<command> (judge checks fail without one)")
 
     p = sub.add_parser("commit", help="store a new prompt version"); p.add_argument("name"); p.add_argument("--file", required=True); p.add_argument("-m", "--message", default="")
     sub.add_parser("list", help="list prompts")
@@ -39,6 +41,13 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("baseline", help="save a run as the regression baseline"); p.add_argument("name"); p.add_argument("--ref", default="latest"); add_run_opts(p); p.add_argument("--out", required=True)
     p = sub.add_parser("check", help="gate a version against a baseline (exit 1 on failure)"); p.add_argument("name"); p.add_argument("--ref", default="latest"); add_run_opts(p)
     p.add_argument("--baseline", required=True); p.add_argument("--max-regressions", type=int, default=0); p.add_argument("--min-pass-rate", type=float); p.add_argument("--max-drop", type=float); p.add_argument("--summary", help="append a Markdown summary to this file (e.g. $GITHUB_STEP_SUMMARY)")
+
+    p = sub.add_parser("calibrate", help="measure a judge's agreement with human scores")
+    p.add_argument("--labels", required=True, help="JSONL of {id, rubric, output, human_score}")
+    p.add_argument("--judge", default="rule", help="rule | cmd:<command>")
+    p.add_argument("--min-score", type=int, default=4, help="score at or above which an output passes")
+    p.add_argument("--votes", type=int, default=1, help="judge calls per item (lower median)")
+    p.add_argument("--min-kappa", type=float, help="exit 1 if Cohen's kappa is below this (or undefined)")
 
     args = ap.parse_args(argv)
     reg = Registry(args.root)
@@ -85,6 +94,13 @@ def main(argv: list[str] | None = None) -> int:
             r = _run(reg, args, args.ref)
             r.save(args.out)
             print(f"baseline saved: {r.prompt} v{r.version}, {r.passed}/{r.n} passed -> {args.out}")
+        elif args.cmd == "calibrate":
+            judge = make_judge(args.judge)
+            cal = calibrate_judge(load_calibration_items(args.labels), judge, args.min_score, args.votes)
+            print(render_calibration(cal))
+            if args.min_kappa is not None and (cal.kappa is None or cal.kappa < args.min_kappa):
+                print(f"FAIL: kappa {'undefined' if cal.kappa is None else f'{cal.kappa:.2f}'} < required {args.min_kappa}")
+                return 1
         elif args.cmd == "check":
             cur = _run(reg, args, args.ref)
             rep = check_regression(cur, RunResult.load(args.baseline), args.max_regressions, args.min_pass_rate, args.max_drop)

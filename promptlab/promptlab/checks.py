@@ -31,14 +31,20 @@ def _parse_json(output: str):
     return json.loads(fence.group(1) if fence else s)
 
 
-def run_check(check: dict, output: str) -> CheckResult:
+def run_check(check: dict, output: str, judge=None, vars: dict | None = None) -> CheckResult:
     """Evaluate one check dict such as ``{"type": "contains", "value": "refund"}``.
 
     ``contains``/``not_contains``/``equals`` take ``ignore_case`` (default true
     for contains, false for equals). Unknown check types are a failed check
     rather than an exception, so one typo cannot hide the rest of a run.
+
+    ``judge`` (a prompt -> text callable) and ``vars`` (the case inputs) are only
+    used by ``{"type": "judge", "rubric": ...}`` checks; see ``judge.py``.
     """
     t = check.get("type", "")
+    if t == "judge":
+        from .judge import run_judge_check  # lazy: judge.py imports CheckResult from here
+        return run_judge_check(check, output, judge, vars)
     try:
         if t in ("contains", "not_contains"):
             ic = check.get("ignore_case", True)

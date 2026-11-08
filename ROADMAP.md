@@ -102,6 +102,7 @@
 - lora-lab: adapter hub (swap/blend/route/compose; named adapters over one frozen GPT, delta blending, label-free routing by prompt NLL, SVD composition, save/load hub; second synthetic 'kitchen' domain; tech/kitchen specialists NLL 5.6 -> ~1.4, routing 1.000, 50/50 blend is a compromise; 13 new tests, 30 total)
 - docqa: corpus-grounded spelling correction (OSA distance 1-2 against document vocabulary only, never invents words, deterministic ties, reported corrections, --no-spell; typo benchmark answered 7/12 -> 12/12 with abstention 8/8 unchanged and clean benchmarks identical; 23 new tests, 64 total)
 - lora-lab: QLoRA-style quantized base (block-wise absmax int8 / uniform int4 / NF4 codebook, nibble-packed save files, `QuantizedBase` keeps codes and verifies the base stays frozen; GPTLoRA trains through dequantized weights unchanged; 4.3x smaller model, int8 weight error 0.6%, NF4 degrades base less than int4 (0.373 vs 0.396 NLL), adapter quality on domain B matches fp32 within noise; 20 new tests, 50 total)
+- promptlab v0.3: LLM-as-judge checks and judge calibration (strict 1-5 reply parsing, injection-defanged grading prompt, `votes` lower-median, judge failures fail loudly; `calibrate` reports agreement + Wilson CI, Cohen's kappa, Spearman, bias, lenient/harsh confusion, `--min-kappa` gate; Action `judge` input; offline lexical RuleJudge scores only kappa 0.44 on 32 author-written labels, reported as is; 33 new tests, 64 total)
 
 
 ## Next
@@ -114,6 +115,6 @@
 6. logsentry: (done v0.6 Grafana dashboard)
 7. ticket-triage: (done urgency head) (done active learning) (done multi-label tags) (done tag-aware routing) (done SLA-breach simulation) -> next: feed live router output into the simulator
 8. llm-router: (done v0.1) -> (done latency tracking) (done semantic cache) (done learned complexity classifier) (done persistence)
-9. promptlab: (done v0.1) -> v0.2 multi-sample done; (done GitHub Action + summary); next: LLM-judge check via evalkit
+9. promptlab: (done v0.1) -> v0.2 multi-sample done; (done GitHub Action + summary); (done LLM-judge checks + calibration) -> next: pairwise judge comparison with position-swap bias check
 10. docqa: (done v0.1) -> (done paraphrase) (done broad benchmark) (done yes/no fixes) (done agentkit integration) (done agentflow worker) (done HTTP service) (done cache + metrics) (done typo-tolerant spelling) next: docqa on llm-router / dense or hybrid retrieval
 11. autojob: agentic job-application assistant (only Midya's real resume data, never invents experience)

@@ -8,6 +8,7 @@ inputs:
   ref: {description: Version ref, default: latest}
   model: {description: "rule | cmd:<command>", default: rule}
   max-regressions: {description: Allowed regressions, default: "0"}
+  judge: {description: "Judge model for judge checks: rule | cmd:<command> (empty = judge checks fail)", default: ""}
 runs:
   using: composite
   steps:
@@ -16,8 +17,17 @@ runs:
     - shell: bash
       env:
         PYTHONPATH: ${{ github.action_path }}/..
-      run: >
-        python -m promptlab --root "${{ inputs.root }}" check "${{ inputs.name }}"
-        --ref "${{ inputs.ref }}" --cases "${{ inputs.cases }}" --baseline "${{ inputs.baseline }}"
-        --model "${{ inputs.model }}" --max-regressions "${{ inputs.max-regressions }}"
-        --summary "$GITHUB_STEP_SUMMARY"
+        PL_ROOT: ${{ inputs.root }}
+        PL_NAME: ${{ inputs.name }}
+        PL_REF: ${{ inputs.ref }}
+        PL_CASES: ${{ inputs.cases }}
+        PL_BASELINE: ${{ inputs.baseline }}
+        PL_MODEL: ${{ inputs.model }}
+        PL_MAXREG: ${{ inputs.max-regressions }}
+        PL_JUDGE: ${{ inputs.judge }}
+      run: |
+        extra=()
+        if [ -n "$PL_JUDGE" ]; then extra+=(--judge "$PL_JUDGE"); fi
+        python -m promptlab --root "$PL_ROOT" check "$PL_NAME" --ref "$PL_REF" --cases "$PL_CASES" \
+          --baseline "$PL_BASELINE" --model "$PL_MODEL" --max-regressions "$PL_MAXREG" \
+          --summary "$GITHUB_STEP_SUMMARY" "${extra[@]}"

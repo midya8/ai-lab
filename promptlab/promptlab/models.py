@@ -90,3 +90,47 @@ def make_model(spec: str):
     if spec.startswith("cmd:"):
         return CommandModel(spec[4:])
     raise ValueError(f"unknown model spec {spec!r} (use rule, rule:<seed> or cmd:<command>)")
+
+
+class RuleJudge:
+    """Offline stand-in for a judge LLM, for demos and tests (not a real grader).
+
+    It reads the rubric's double-quoted terms: terms in a sentence containing
+    avoid/never/must not/without are *forbidden*, all others *required*. The
+    score is ``1 + 4 * share of required terms present`` (word-boundary,
+    case-insensitive), minus 2 per forbidden term present, clamped to 1..5.
+    It only measures lexical coverage, so calibrate it before believing it.
+    """
+
+    _NEG = re.compile(r"\b(avoid|never|must not|should not|without|do not|don't)\b", re.I)
+
+    def __call__(self, prompt: str) -> str:
+        rub = re.search(r"^<rubric>\n(.*?)\n</rubric>$", prompt, re.S | re.M)
+        resp = re.search(r"^<response>\n(.*?)\n</response>$", prompt, re.S | re.M)
+        rubric = rub.group(1) if rub else ""
+        response = (resp.group(1) if resp else "").lower()
+        required, forbidden = [], []
+        for sentence in re.split(r"(?<=[.;!?])\s+|\n", rubric):
+            terms = re.findall(r'"([^"]+)"', sentence)
+            (forbidden if self._NEG.search(sentence) else required).extend(t.lower() for t in terms)
+
+        def present(t: str) -> bool:
+            return re.search(r"(?<!\w)" + re.escape(t) + r"(?!\w)", response) is not None
+
+        got = [t for t in required if present(t)]
+        bad = [t for t in forbidden if present(t)]
+        cover = len(got) / len(required) if required else 1.0
+        score = max(1, min(5, round(1 + 4 * cover) - 2 * len(bad)))
+        reason = f"covers {len(got)}/{len(required)} required terms" + (f"; contains forbidden {bad}" if bad else "")
+        return json.dumps({"score": score, "reason": reason})
+
+
+def make_judge(spec: str | None):
+    """``None`` | ``rule`` | ``cmd:<command>`` (the prompt goes on stdin, the reply is read from stdout)."""
+    if spec is None or spec == "":
+        return None
+    if spec == "rule":
+        return RuleJudge()
+    if spec.startswith("cmd:"):
+        return CommandModel(spec[4:])
+    raise ValueError(f"unknown judge spec {spec!r} (use rule or cmd:<command>)")

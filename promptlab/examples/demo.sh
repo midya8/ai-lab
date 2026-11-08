@@ -15,3 +15,4 @@ echo; $P compare triage v1 v2 --cases $CASES
 echo; $P compare triage v1 v3 --cases $CASES
 $P baseline triage --ref v2 --cases $CASES --out "$ROOT/baseline.json"
 $P check triage --ref v3 --cases $CASES --baseline "$ROOT/baseline.json" || true
+echo; python -m promptlab calibrate --labels examples/judge_labels.jsonl --judge rule

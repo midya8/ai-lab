@@ -2,7 +2,7 @@
 
 Treat prompts like code: version them, A/B them with real statistics, and
 block a prompt change in CI when it breaks cases that used to work.
-Pure standard-library Python, 29 tests, no API keys needed.
+Pure standard-library Python, 64 tests, no API keys needed.
 
 Built in November 2026 as a portfolio project. The bundled `RuleModel` is a
 **deterministic stand-in for an LLM** whose error rate depends on prompt
@@ -71,9 +71,54 @@ JSONL, one case per line (`#` comments allowed):
 
 Checks: `contains`, `not_contains`, `equals`, `regex`, `max_words`, `min_words`,
 `max_chars`, `json_valid`, `json_field` (dotted path, optional `value`).
+`judge` (LLM-as-judge against a rubric) is described [below](#llm-as-judge-checks).
 A case passes only if all its checks pass; its score is the fraction passed.
 A bad check, a render error or a failing model call fails that case and is
 recorded — it never aborts the run.
+
+## LLM-as-judge checks
+
+Some criteria ("polite", "mentions the refund window") are awkward to express as regexes. A `judge` check
+asks a second model to grade the output 1-5 against a rubric and passes at `min_score` (default 4):
+
+```json
+{"id": "r01", "vars": {"ticket": "Charged twice"}, "checks": [
+  {"type": "max_words", "value": 60},
+  {"type": "judge", "rubric": "Confirms the refund and says it arrives within \"5 business days\".", "min_score": 4, "votes": 3}]}
+```
+
+```bash
+promptlab run reply --cases cases.jsonl --judge cmd:./my_judge.sh     # prompt on stdin, JSON reply on stdout
+```
+
+- **Strict parsing.** The judge must reply `{"score": 1-5, "reason": "..."}` (a fenced or prose-wrapped object, `Score: 4` or a bare `4/5` also parse). A score outside 1-5, a non-integer, or no number at all FAILS the check; nothing is rounded, clamped or guessed.
+- **Never silently skipped.** No `--judge`, a judge exception, or an unparseable reply fails the check with a reason (`judge: scored 2/5 < 4: ...`). Deterministic checks in the same case still run and still count toward the case score.
+- **Injection-aware prompt.** The output and case inputs are placed in delimited sections, the grader is told they are untrusted data, and any `<rubric>`, `<input>` or `<response>` tag inside them is defanged so output cannot close its own section.
+- **`votes: N`** asks the judge N times and takes the lower median (conservative on ties). Judge calls are not cached, so votes stay independent.
+
+### Calibrate before you trust a judge
+
+A judge is itself a model with its own errors. `calibrate` scores a human-labelled sample with the judge and reports
+how well they agree, so "the judge passes it" means something measured:
+
+```bash
+promptlab calibrate --labels examples/judge_labels.jsonl --judge rule --min-kappa 0.6   # exit 1 if kappa < 0.6
+```
+
+```
+Judge calibration on 32 human-scored items (pass = score >= 4)
+  agreement   71.9%  (95% CI 54.6%-84.4%)
+  kappa       0.44 (moderate)
+  spearman    0.70
+  bias        -0.09 (judge - human; positive = more lenient)   MAE 0.84
+  confusion   both-pass 13, both-fail 10, judge-too-lenient 3, judge-too-harsh 6
+```
+
+Cohen's kappa corrects raw agreement for chance (a judge that always says "pass" can look 70% accurate on a mostly-passing set and scores kappa 0).
+Leniency (`judge-too-lenient`) is the dangerous direction for a CI gate, so it is reported separately from harshness. Warnings are printed for fewer than 30 items,
+single-class labels (kappa undefined) and items the judge could not score (counted as fails).
+
+**About the bundled numbers.** `--judge rule` is a deterministic lexical stand-in (quoted rubric terms present/absent), not an LLM. The 32 labels in `examples/judge_labels.jsonl` were written by the repo author before running the judge and the judge was not tuned against them; they include paraphrases ("five working days") that the lexical judge scores too harshly and keyword-stuffed or negated-term outputs it scores too leniently. The moderate kappa is the expected, honest result: a real LLM judge should be calibrated the same way with a larger, independently labelled sample.
 
 ## Templates
 
@@ -98,9 +143,10 @@ silently test the wrong prompt.
 | `registry.py` | versions, tags, ref resolution, diff |
 | `checks.py` | deterministic output assertions |
 | `runner.py` | case loading, running, per-case results, save/load |
-| `stats.py` | Wilson, exact McNemar, paired bootstrap |
+| `stats.py` | Wilson, exact McNemar, paired bootstrap, Cohen's kappa, Spearman |
 | `compare.py` | A/B verdict, Markdown report, baseline regression gate |
-| `models.py` | `RuleModel` offline stand-in, `CommandModel` adapter |
+| `models.py` | `RuleModel` / `RuleJudge` offline stand-ins, `CommandModel` adapter |
+| `judge.py` | judge prompt + strict reply parser, `judge` check, calibration (agreement, kappa, Spearman, bias) |
 
 ## GitHub Action
 
@@ -116,6 +162,6 @@ fixed and new cases. Use it from a checkout of this repo:
 
 ## Limitations
 
-Deterministic checks only (no LLM-as-judge here; see `llm-eval-harness` and
-`evalkit`). Real models are non-deterministic, so for those, run each case
+The bundled judge is a lexical stand-in; a real LLM judge costs one extra call per
+judged check (times `votes`) and needs its own calibration. Real models are non-deterministic, so for those, run each case
 several times or fix temperature to 0 before trusting a small difference.

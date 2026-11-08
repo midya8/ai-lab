@@ -113,7 +113,7 @@ def load_cases(path: str | Path) -> list[Case]:
 
 
 def run_prompt(version: Version, cases: list[Case], model: Model,
-               samples: int = 1, threshold: float = 1.0) -> RunResult:
+               samples: int = 1, threshold: float = 1.0, judge: Model | None = None) -> RunResult:
     """Render the version for each case, call ``model`` and score the output.
 
     With ``samples`` > 1 the model is called that many times per case (for
@@ -121,6 +121,8 @@ def run_prompt(version: Version, cases: list[Case], model: Model,
     its samples pass every check (default 1.0: all of them); its score is the
     mean over samples. Cases with mixed outcomes are reported as flaky.
     The stored output is the first failing sample's, else the first.
+
+    ``judge`` is the model used by ``judge`` checks (without one they fail).
 
     A render error or a model exception fails that sample (score 0) and is
     recorded; it never aborts the run.
@@ -152,7 +154,7 @@ def run_prompt(version: Version, cases: list[Case], model: Model,
                 continue
             calls += 1
             ow += len(out.split())
-            checks = [run_check(ch, out) for ch in c.checks]
+            checks = [run_check(ch, out, judge, c.vars) for ch in c.checks]
             ok = sum(ch.passed for ch in checks)
             scores.append(ok / len(checks))
             if ok == len(checks):
