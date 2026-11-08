@@ -69,10 +69,11 @@
 - llm-router: observed-latency tracking (sliding-window median correction for fastest/balanced; 46 tests)
 - llm-router: semantic cache (hashed lexical embeddings, cosine threshold, TTL/LRU; 53 tests)
 - llm-router: semantic-cache persistence (atomic JSON save/load, age-based TTL across restarts; 65 tests)
+- rag-evals v0.4: harder paraphrase benchmark (8 docs, 19 questions; recall@3 0.84, no longer saturated; 16 tests)
 
 ## Next
 
-1. rag-evals: larger/harder benchmark (current corpus saturated at 1.0)
+1. rag-evals: (done hard benchmark) -> next: dense embeddings beyond LSA, chunk-size sweep
 2. llm-eval-harness: (done) -> next: multi-model comparison matrix
 3. tiny-transformer follow-ups: (done v0.5, top-p, grad accumulation); (done clipping); (done dropout); (done weight tying); (done early stopping); (done repetition penalty); (done LR finder); (done label smoothing); (done per-position eval); (done sliding-window eval); next: lora-lab on tiny-transformer attention
 4. agentflow follow-ups: shared memory

@@ -1,0 +1,1 @@
+Techniques that fight overfitting include randomly zeroing activations during training, penalizing large weights, and halting training when validation loss stops improving. Data augmentation enlarges the effective training set. Smaller models and more data also reduce the generalization gap.

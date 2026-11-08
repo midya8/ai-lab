@@ -1,0 +1,1 @@
+Reducing numeric precision shrinks a model and speeds inference. Weights stored as eight bit or four bit integers use a scale factor per group of values. Post training methods calibrate on a small sample, while quantization aware training simulates rounding during learning. Outlier channels can hurt accuracy and are often kept at higher precision.

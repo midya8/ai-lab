@@ -1,0 +1,1 @@
+Approximate nearest neighbor indexes find similar embeddings without scanning everything. Graph based indexes such as HNSW navigate layers of proximity links. Inverted file indexes cluster vectors and probe only a few clusters. Product quantization compresses vectors into short codes. Recall is traded against latency and memory.

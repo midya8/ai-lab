@@ -1,0 +1,1 @@
+Judging generated text is hard because many answers are valid. Reference overlap metrics like BLEU and ROUGE reward shared n-grams. Model based graders score helpfulness against a rubric but show position and verbosity bias. Human preference comparisons remain the gold standard yet are slow and costly.

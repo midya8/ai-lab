@@ -1,0 +1,116 @@
+[
+ {
+  "question": "How does a token decide which other words matter to it?",
+  "relevant_docs": [
+   "attention"
+  ]
+ },
+ {
+  "question": "Why can a language model not peek at future words while training?",
+  "relevant_docs": [
+   "attention"
+  ]
+ },
+ {
+  "question": "Why divide dot products by the root of dimension?",
+  "relevant_docs": [
+   "attention"
+  ]
+ },
+ {
+  "question": "How do models avoid out-of-vocabulary failures?",
+  "relevant_docs": [
+   "tokenization"
+  ]
+ },
+ {
+  "question": "Which algorithm merges the commonest neighbouring symbols repeatedly?",
+  "relevant_docs": [
+   "tokenization"
+  ]
+ },
+ {
+  "question": "What is the downside of a huge vocabulary?",
+  "relevant_docs": [
+   "tokenization"
+  ]
+ },
+ {
+  "question": "How can a model be made smaller by using integers instead of floats?",
+  "relevant_docs": [
+   "quantization"
+  ]
+ },
+ {
+  "question": "Why keep some channels at full precision when compressing?",
+  "relevant_docs": [
+   "quantization"
+  ]
+ },
+ {
+  "question": "Finding similar embeddings without checking every single one",
+  "relevant_docs": [
+   "vector_search"
+  ]
+ },
+ {
+  "question": "Layered proximity graph for fast lookup",
+  "relevant_docs": [
+   "vector_search"
+  ]
+ },
+ {
+  "question": "Shrinking embeddings into short codes to save memory",
+  "relevant_docs": [
+   "vector_search"
+  ]
+ },
+ {
+  "question": "Why is scoring free-form model outputs difficult?",
+  "relevant_docs": [
+   "evaluation"
+  ]
+ },
+ {
+  "question": "Do automated graders prefer longer answers?",
+  "relevant_docs": [
+   "evaluation"
+  ]
+ },
+ {
+  "question": "How to stop a network memorizing its training data?",
+  "relevant_docs": [
+   "regularization"
+  ]
+ },
+ {
+  "question": "Stop training once held-out loss stops getting better",
+  "relevant_docs": [
+   "regularization"
+  ]
+ },
+ {
+  "question": "What prevents a self-directed LLM program from running forever?",
+  "relevant_docs": [
+   "agents"
+  ]
+ },
+ {
+  "question": "Can output from a called function be trusted?",
+  "relevant_docs": [
+   "agents"
+  ]
+ },
+ {
+  "question": "Teaching a pretrained network a narrow job cheaply by training a sliver of weights",
+  "relevant_docs": [
+   "finetuning"
+  ]
+ },
+ {
+  "question": "How to avoid forgetting original abilities when adapting a model?",
+  "relevant_docs": [
+   "finetuning"
+  ]
+ }
+]

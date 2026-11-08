@@ -1,0 +1,1 @@
+Adapting a pretrained network to a narrow task with a small labeled set. Freezing most layers keeps compute low. Low rank update matrices can be attached to frozen weights so only a sliver of parameters train. Learning rates are kept small to avoid forgetting the original abilities.

@@ -26,3 +26,10 @@ Add your own `.txt` files to `data/docs` and questions to `data/eval.json`.
 ```bash
 PYTHONPATH=src python -m ragevals.cli --faithfulness data/answers.json
 ```
+
+## Harder benchmark (v0.4)
+`data/hard_docs` (8 topically adjacent docs) + `data/hard_eval.json` (19 paraphrased questions with deliberate vocabulary mismatch) so the original 1.0 scores are no longer the ceiling.
+```bash
+PYTHONPATH=src python -m ragevals.cli --docs data/hard_docs --dataset data/hard_eval.json --method all --k 3
+```
+Result (recall@3 / MRR): BM25 0.842 / 0.866, LSA 0.842 / 0.839, hybrid 0.842 / 0.866. Small hand-written corpus: treat as a regression canary, not a leaderboard. A test asserts the set stays unsaturated.

@@ -1,0 +1,1 @@
+Subword vocabularies split rare words into pieces so no input is ever unknown. Byte pair encoding repeatedly merges the most frequent adjacent symbol pair. WordPiece and unigram language model segmentation are alternatives. Vocabulary size trades sequence length against embedding table size.

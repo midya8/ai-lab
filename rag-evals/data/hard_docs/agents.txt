@@ -1,0 +1,1 @@
+Autonomous language model programs loop between reasoning, calling external functions, and observing results. A planner decomposes goals into steps. Memory stores earlier observations. Guard conditions cap the number of iterations to avoid runaway loops. Tool outputs must be validated since they can carry untrusted instructions.
