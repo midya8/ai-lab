@@ -20,15 +20,21 @@ def main(argv=None) -> int:
     sv.add_argument("--host", default="127.0.0.1")
     sv.add_argument("--port", type=int, default=8000)
     sv.add_argument("--min-coverage", type=float, default=0.6)
+    sv.add_argument("--cache-size", type=int, default=256, help="answer cache entries (0 disables)")
+    sv.add_argument("--cache-ttl", type=float, default=300.0, help="cache TTL seconds (0 = no expiry)")
     a = p.parse_args(argv)
     if a.cmd == "serve":
+        from .cache import AnswerCache
         from .server import make_server
         try:
-            srv = make_server(DocQA.from_dir(a.docs, min_coverage=a.min_coverage), a.host, a.port)
+            cache = (AnswerCache(a.cache_size, a.cache_ttl or None)
+                     if a.cache_size > 0 else None)
+            srv = make_server(DocQA.from_dir(a.docs, min_coverage=a.min_coverage),
+                              a.host, a.port, cache=cache)
         except (ValueError, OSError) as e:
             print(f"error: {e}", file=sys.stderr)
             return 2
-        print(f"docqa serving on http://{a.host}:{a.port}  (POST /ask)")
+        print(f"docqa serving on http://{a.host}:{a.port}  (POST /ask, GET /stats, /metrics)")
         try:
             srv.serve_forever()
         except KeyboardInterrupt:

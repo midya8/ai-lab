@@ -94,6 +94,7 @@
 - docqa: agentkit integration (`ask_docs` tool via docqa.agent_tool.register; 5 new tests)
 - docqa: agentflow worker (DocQAWorker, strict mode fails/skips downstream on abstention; 6 new tests)
 - docqa: HTTP service (`python -m docqa serve`, POST /ask, GET /health, input validation; 4 new tests)
+- docqa: answer cache + request metrics (LRU+TTL cache with X-Cache header, /stats JSON, /metrics Prometheus histogram, --cache-size/--cache-ttl; 16 new tests, 41 total)
 
 ## Next
 
@@ -106,5 +107,5 @@
 7. ticket-triage: (done urgency head) (done active learning) (done multi-label tags) (done tag-aware routing) (done SLA-breach simulation) -> next: feed live router output into the simulator
 8. llm-router: (done v0.1) -> (done latency tracking) (done semantic cache) (done learned complexity classifier) (done persistence)
 9. promptlab: (done v0.1) -> v0.2 multi-sample done; (done GitHub Action + summary); next: LLM-judge check via evalkit
-10. docqa: (done v0.1) -> (done paraphrase) (done broad benchmark) (done yes/no fixes) (done agentkit integration) (done agentflow worker) (done HTTP service) next: docqa answer caching + request metrics
+10. docqa: (done v0.1) -> (done paraphrase) (done broad benchmark) (done yes/no fixes) (done agentkit integration) (done agentflow worker) (done HTTP service) (done cache + metrics) next: docqa on llm-router / hybrid retrieval
 11. autojob: agentic job-application assistant (only Midya's real resume data, never invents experience)

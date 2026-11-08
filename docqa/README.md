@@ -65,3 +65,13 @@ curl -s localhost:8000/health
 ```
 
 `POST /ask` returns the cited answer as JSON (an abstention is a normal 200 with `"answered": false`); malformed input gets 400, oversized bodies 413. Stdlib only, no extra dependencies.
+
+### Answer cache and metrics
+
+```bash
+python -m docqa serve path/to/docs --cache-size 256 --cache-ttl 300   # --cache-size 0 disables
+curl -s localhost:8000/stats      # JSON: requests, answered/abstained, cache, latency p50/p95/max
+curl -s localhost:8000/metrics    # Prometheus text (counters, cache gauge, latency histogram)
+```
+
+Repeat questions are served from a thread-safe LRU + TTL cache and carry an `X-Cache: HIT|MISS` header. The key ignores case, punctuation and whitespace but keeps word order and every word, so reworded questions are cache misses by design (a wrong hit is worse than a miss). A hit echoes the caller's own phrasing in `question`. Latency percentiles are nearest-rank over the last 1024 `/ask` calls; unknown routes are bucketed as `other` so scanners cannot inflate label cardinality. Library use: `make_server(qa, cache=AnswerCache(...), metrics=Metrics())`.
