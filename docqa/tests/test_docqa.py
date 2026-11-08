@@ -78,12 +78,19 @@ def test_paraphrase_does_not_break_original_eval():
     assert res["answer_rate"] == 1.0 and res["abstain_rate"] == 1.0
 
 
-def test_broad_eval_documented_baseline(qa):
+def test_broad_eval_yes_no_fixed(qa):
     res = run_eval(qa, ROOT / "eval" / "broad.json")
     assert res["abstain_rate"] == 1.0
-    assert res["answer_rate"] >= 0.8
-    # known misses (lexical matching): negation/yes-no phrasing
-    assert set(res["failures"]) <= {
-        "Is shipping free over a certain amount?",
-        "Is the shop open on Sundays?",
-    }
+    assert res["answer_rate"] == 1.0, res["failures"]
+
+
+def test_yes_no_questions_cite_evidence(qa):
+    r = qa.ask("Is the shop open on Sundays?")
+    assert r.answered and "closed on Sundays" in r.text
+    r = qa.ask("Is shipping free over a certain amount?")
+    assert r.answered and "$150" in r.text
+
+
+def test_yes_no_still_abstains_when_unsupported(qa):
+    assert not qa.ask("Is the shop open on Mars?").answered
+    assert not qa.ask("Is there a certain amount of snow?").answered

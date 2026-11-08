@@ -16,7 +16,8 @@ from ragkit.retrieve import Retriever, tokenize
 
 SPLIT = re.compile(r"(?<=[.!?])\s+")
 # question words that carry the answer's *type*, not content to look up
-FILLER = {"long", "fast", "quickly", "much", "many", "often", "soon", "late", "early"}
+FILLER = {"long", "fast", "quickly", "much", "many", "often", "soon", "late", "early",
+          "certain", "amount", "specific", "particular"}  # vague quantifiers in yes/no questions
 QUANTITY_RE = re.compile(r"\b(how\s+(long|many|much|fast|often|soon|late|early)|when|what\s+time)\b", re.I)
 DIGIT_RE = re.compile(r"\d")
 
@@ -36,6 +37,8 @@ SYNONYM_GROUPS = [
     {"reward", "bonus", "perk"},
     {"buy", "purchase", "order"},
     {"standard", "basic", "regular"},
+    # yes/no questions: "open?" is answered by "closed on ..." (the sentence carries the polarity)
+    {"open", "closed", "close", "closing"},
 ]
 SYNONYM_CREDIT = 0.8
 

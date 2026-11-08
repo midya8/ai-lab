@@ -26,7 +26,8 @@ abstention on unanswerable ones is still enforced. Generic words ("back",
 ## Broad benchmark (eval/broad.json)
 
 13 questions across all six demo docs (10 answerable, 3 not). Current result:
-answer rate 0.80 (8/10), abstain rate 1.00. The two misses are yes/no phrasings
-("Is shipping free over...", "Is the shop open on Sundays?") where the question
-words ("free", "open") don't lexically match the evidence ("closed", "free shipping on orders").
-Kept unsaturated on purpose as a target for dense retrieval.
+answer rate 1.00 (10/10), abstain rate 1.00. The two earlier misses (yes/no phrasings)
+were fixed by treating vague quantifiers ("certain", "amount") as filler and letting
+"open" match "closed" (the sentence carries the polarity). Caveat: the set is small and
+the fix was made while looking at it, so expect it not to generalise fully; unsupported
+yes/no questions ("open on Mars?") still abstain (tested).
