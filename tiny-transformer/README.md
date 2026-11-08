@@ -60,3 +60,9 @@ PYTHONPATH=src python -m tinygpt.cli eval tinygpt.npz --data data/corpus.txt --t
 ## Label smoothing
 
 `--label-smoothing EPS` trains against `(1-EPS)*onehot + EPS/V` targets (loss = `(1-EPS)*NLL + EPS*mean(-log p)`, gradient `p - q`, finite-difference-checked). Only the training loss/gradients change; validation loss and perplexity stay plain NLL so runs remain comparable.
+
+## Per-position loss (context usage)
+
+`python -m tinygpt.cli eval ckpt.npz --data corpus.txt --by-position 4` prints mean loss per
+context-position bin and the "context gain" (first bin minus last bin). A model that uses its
+context shows loss falling with position; `evaluate_by_position` exposes the full per-position curve.

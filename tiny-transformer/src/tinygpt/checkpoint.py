@@ -64,3 +64,34 @@ def evaluate(model: GPT, data, batch: int = 16) -> dict:
         total += loss * x.size
     mean = total / xs.size
     return {"loss": mean, "perplexity": float(np.exp(mean)), "tokens": int(xs.size)}
+
+
+def evaluate_by_position(model: GPT, data, bins: int = 4, batch: int = 16) -> dict:
+    """Mean loss as a function of position inside the context window.
+
+    Early positions see little context, so loss should fall with position when the
+    model really uses its context. Returns {"per_position": [T losses],
+    "bins": [{"start","end","loss"}], "gain": first_bin_loss - last_bin_loss}.
+    """
+    data = np.asarray(data)
+    T = model.cfg.block_size
+    n = (len(data) - 1) // T
+    if n < 1:
+        raise ValueError("data shorter than block_size + 1")
+    if not 1 <= bins <= T:
+        raise ValueError("bins must be in [1, block_size]")
+    xs = np.stack([data[i * T:(i + 1) * T] for i in range(n)])
+    ys = np.stack([data[i * T + 1:(i + 1) * T + 1] for i in range(n)])
+    total = np.zeros(T)
+    for s in range(0, n, batch):
+        logits, _, _ = model.forward(xs[s:s + batch])
+        z = logits - logits.max(-1, keepdims=True)
+        logp = z - np.log(np.exp(z).sum(-1, keepdims=True))
+        y = ys[s:s + batch]
+        nll = -np.take_along_axis(logp, y[..., None], -1)[..., 0]
+        total += nll.sum(0)
+    per = total / n
+    edges = np.linspace(0, T, bins + 1).astype(int)
+    out = [{"start": int(a), "end": int(b), "loss": float(per[a:b].mean())}
+           for a, b in zip(edges[:-1], edges[1:])]
+    return {"per_position": per.tolist(), "bins": out, "gain": out[0]["loss"] - out[-1]["loss"]}

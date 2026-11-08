@@ -8,7 +8,7 @@ import argparse
 
 import numpy as np
 
-from .checkpoint import evaluate, load_checkpoint
+from .checkpoint import evaluate, evaluate_by_position, load_checkpoint
 from .kvcache import generate_cached
 
 
@@ -28,6 +28,8 @@ def main(argv=None):
     e.add_argument("ckpt")
     e.add_argument("--data", required=True)
     e.add_argument("--tail", type=float, default=1.0, help="evaluate only the last fraction of the file")
+    e.add_argument("--by-position", type=int, default=0, metavar="BINS",
+                   help="also print mean loss per context-position bin")
     a = ap.parse_args(argv)
 
     model, tok = load_checkpoint(a.ckpt)
@@ -41,6 +43,11 @@ def main(argv=None):
         text = text[int(len(text) * (1 - a.tail)):]
         r = evaluate(model, np.array(tok.encode(text)))
         print(f"loss {r['loss']:.4f}  perplexity {r['perplexity']:.3f}  tokens {r['tokens']}")
+        if a.by_position:
+            bp = evaluate_by_position(model, np.array(tok.encode(text)), bins=a.by_position)
+            for b in bp["bins"]:
+                print(f"  pos {b['start']:>4}-{b['end']:<4} loss {b['loss']:.4f}")
+            print(f"  context gain (first - last bin): {bp['gain']:.4f}")
 
 
 if __name__ == "__main__":

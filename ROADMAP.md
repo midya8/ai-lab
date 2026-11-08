@@ -64,12 +64,13 @@
 - tiny-transformer: repetition penalty (--repetition-penalty, CTRL-style; cached/non-cached parity tested; 56 tests)
 - tiny-transformer: LR range test (--find-lr, restores weights, steepest-descent suggestion; 60 tests)
 - tiny-transformer: label smoothing (--label-smoothing, train-only, eval stays plain NLL; finite-difference-checked; 63 tests)
+- tiny-transformer: per-position loss eval (--by-position, context gain; 67 tests)
 
 ## Next
 
 1. rag-evals: larger/harder benchmark (current corpus saturated at 1.0)
 2. llm-eval-harness: (done) -> next: multi-model comparison matrix
-3. tiny-transformer follow-ups: (done v0.5, top-p, grad accumulation); (done clipping); (done dropout); (done weight tying); (done early stopping); (done repetition penalty); (done LR finder); (done label smoothing); next: mixed-context eval
+3. tiny-transformer follow-ups: (done v0.5, top-p, grad accumulation); (done clipping); (done dropout); (done weight tying); (done early stopping); (done repetition penalty); (done LR finder); (done label smoothing); (done per-position eval); next: sliding-window eval
 4. agentflow follow-ups: shared memory
 5. lora-lab: LoRA on tiny-transformer attention, rank sweep
 6. logsentry: (done v0.6 Grafana dashboard)

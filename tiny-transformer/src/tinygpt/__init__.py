@@ -6,4 +6,4 @@ __all__ = ["GPT", "GPTConfig", "CharTokenizer", "Adam"]
 from .kvcache import generate_cached  # noqa: F401
 from .bpe import BPETokenizer  # noqa: F401
 from .schedule import warmup_cosine  # noqa: F401
-from .checkpoint import save_checkpoint, load_checkpoint, evaluate  # noqa: F401
+from .checkpoint import save_checkpoint, load_checkpoint, evaluate, evaluate_by_position  # noqa: F401
