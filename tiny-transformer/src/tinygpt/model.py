@@ -22,6 +22,16 @@ class GPTConfig:
     tie_weights: bool = False  # share the token embedding matrix with the output head (saves V*C params)
     rope: bool = False  # rotary position embeddings on q/k instead of learned absolute positions (no wpe)
     rope_base: float = 10000.0
+    n_kv_head: int = 0  # grouped-query attention: number of key/value heads (0 = n_head, i.e. plain MHA; 1 = MQA)
+
+    @property
+    def kv_heads(self) -> int:
+        return self.n_kv_head or self.n_head
+
+    @property
+    def kv_dim(self) -> int:
+        """Width of the K (and of the V) projection: kv_heads * head_dim."""
+        return self.kv_heads * (self.n_embd // self.n_head)
 
 
 # ---- primitives (each returns output + cache; *_bwd returns input grad) ----
@@ -96,6 +106,22 @@ def rope_bwd(dy, cos, sin):
     return np.concatenate([d1 * cos + d2 * sin, -d1 * sin + d2 * cos], -1)
 
 
+def expand_kv(x, g):
+    """(B, Hk, T, D) -> (B, Hk*g, T, D): repeat each kv head for its g query heads."""
+    return np.repeat(x, g, axis=1)
+
+
+def reduce_kv(dx, g):
+    """Adjoint of expand_kv: (B, Hk*g, T, D) -> (B, Hk, T, D), summing over each group."""
+    B, H, T, D = dx.shape
+    return dx.reshape(B, H // g, g, T, D).sum(2)
+
+
+def kv_cache_bytes(cfg, seq_len, bytes_per=4):
+    """Size of the inference KV cache for one sequence: 2 (K,V) * layers * kv_dim * seq_len."""
+    return 2 * cfg.n_layer * cfg.kv_dim * seq_len * bytes_per
+
+
 def softmax(x):
     e = np.exp(x - x.max(-1, keepdims=True))
     return e / e.sum(-1, keepdims=True)
@@ -104,6 +130,8 @@ def softmax(x):
 class GPT:
     def __init__(self, cfg: GPTConfig, seed: int = 0, dtype=np.float32):
         assert cfg.n_embd % cfg.n_head == 0
+        assert 0 <= cfg.n_kv_head <= cfg.n_head and cfg.n_head % cfg.kv_heads == 0, \
+            "n_kv_head must divide n_head"
         assert not cfg.rope or (cfg.n_embd // cfg.n_head) % 2 == 0, "rope needs an even head dimension"
         self.cfg = cfg
         self.label_smoothing = 0.0  # training-time only; evaluate() reports plain NLL
@@ -121,7 +149,7 @@ class GPT:
         proj_std = 0.02 / np.sqrt(2 * cfg.n_layer)
         for i in range(cfg.n_layer):
             p.update({f"h{i}.ln1_g": o(C), f"h{i}.ln1_b": z(C),
-                      f"h{i}.qkv_W": n(C, 3 * C), f"h{i}.qkv_b": z(3 * C),
+                      f"h{i}.qkv_W": n(C, C + 2 * cfg.kv_dim), f"h{i}.qkv_b": z(C + 2 * cfg.kv_dim),
                       f"h{i}.proj_W": n(C, C, std=proj_std), f"h{i}.proj_b": z(C),
                       f"h{i}.ln2_g": o(C), f"h{i}.ln2_b": z(C),
                       f"h{i}.fc_W": n(C, 4 * C), f"h{i}.fc_b": z(4 * C),
@@ -138,14 +166,20 @@ class GPT:
     # ---- attention ----
     def _attn_fwd(self, x, i, rng=None):
         P, H = self.params, self.cfg.n_head
+        Hk = self.cfg.kv_heads
         B, T, C = x.shape
         D = C // H
         qkv, xin = lin_fwd(x, P[f"h{i}.qkv_W"], P[f"h{i}.qkv_b"])
-        q, k, v = (t.reshape(B, T, H, D).transpose(0, 2, 1, 3) for t in np.split(qkv, 3, -1))
+        kd = self.cfg.kv_dim
+        q = qkv[..., :C].reshape(B, T, H, D).transpose(0, 2, 1, 3)
+        k = qkv[..., C:C + kd].reshape(B, T, Hk, D).transpose(0, 2, 1, 3)
+        v = qkv[..., C + kd:].reshape(B, T, Hk, D).transpose(0, 2, 1, 3)
         rc = None
         if self.cfg.rope:
             rc = rope_tables(T, D, self.cfg.rope_base, dtype=q.dtype)
             q, k = rope_fwd(q, *rc), rope_fwd(k, *rc)
+        if Hk != H:  # query head h reads kv head h // (H // Hk); the compact k/v stay in the cache
+            k, v = expand_kv(k, H // Hk), expand_kv(v, H // Hk)
         s = q @ k.transpose(0, 1, 3, 2) / np.sqrt(D)
         s = np.where(np.tril(np.ones((T, T), bool)), s, -1e30)
         a = softmax(s)
@@ -156,6 +190,7 @@ class GPT:
 
     def _attn_bwd(self, dout, cache, i, G):
         P, H = self.params, self.cfg.n_head
+        Hk = self.cfg.kv_heads
         xin, q, k, v, a, ad, ma, yin, rc = cache
         B, T, C = xin.shape
         D = C // H
@@ -166,9 +201,11 @@ class GPT:
         da = drop_bwd(da, ma)
         ds = a * (da - (da * a).sum(-1, keepdims=True)) / np.sqrt(D)
         dq, dk = ds @ k, ds.transpose(0, 1, 3, 2) @ q
+        if Hk != H:  # every query head in a group contributed to its shared k/v head: sum them
+            dk, dv = reduce_kv(dk, H // Hk), reduce_kv(dv, H // Hk)
         if rc is not None:
             dq, dk = rope_bwd(dq, *rc), rope_bwd(dk, *rc)
-        m = lambda t: t.transpose(0, 2, 1, 3).reshape(B, T, C)
+        m = lambda t: t.transpose(0, 2, 1, 3).reshape(B, T, -1)
         dqkv = np.concatenate([m(dq), m(dk), m(dv)], -1)
         dx, G[f"h{i}.qkv_W"], G[f"h{i}.qkv_b"] = lin_bwd(dqkv, xin, P[f"h{i}.qkv_W"])
         return dx

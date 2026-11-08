@@ -2,7 +2,7 @@
 
 A GPT-style decoder-only transformer written in **pure NumPy, including hand-derived backpropagation**. No autograd, no PyTorch.
 
-- Pre-LayerNorm blocks, causal multi-head attention, GELU MLP, learned positional embeddings, or rotary embeddings (`--rope`)
+- Pre-LayerNorm blocks, causal multi-head / grouped-query / multi-query attention (`--kv-heads`), GELU MLP, learned positional embeddings, or rotary embeddings (`--rope`)
 - Manual backward pass for every op, verified against finite differences in the test suite
 - LR range test (`--find-lr`), Adam with gradient clipping, char tokenizer, temperature / top-k / top-p (nucleus) sampling (`--top-p`), CTRL-style repetition penalty (`--repetition-penalty`), save/load
 
@@ -90,3 +90,23 @@ Held-out loss (nats/char, trained with block 32, 2.6k-char corpus; one seed, sma
 | rope | 104,869 | 0.376 | 0.217 | 0.508 | 1.223 |
 
 RoPE matches learned positions inside the training window (a second run, seed 1 / 500 steps, gave 0.340/0.197 vs 0.339/0.196). It *can* be run past `block_size` (a learned table cannot), but at this scale it does **not** extrapolate gracefully: loss climbs on unseen lengths. The script reports that rather than hiding it; length extrapolation usually needs position interpolation or training on varied lengths.
+
+## Grouped-query attention (GQA / MQA)
+
+`--kv-heads N` (`GPTConfig.n_kv_head`) gives the model `N` key/value heads shared by groups of `n_head / N` query heads: `N = n_head` is ordinary multi-head attention (the default, identical weights layout as before), `1 < N < n_head` is GQA, `N = 1` is multi-query attention. The `qkv` projection shrinks to `C + 2*N*head_dim` columns. Forward repeats each kv head for its query group (`expand_kv`); backward sums the gradients of every query head in a group back onto the shared head (`reduce_kv`, the exact adjoint, tested). The KV cache stores only the `N` compact heads, so inference memory falls by `n_head / N` (`kv_cache_bytes(cfg, seq_len)`). Works with RoPE, tied weights, dropout and checkpoints; old checkpoints without the field load as MHA. Verified in `tests/test_gqa.py`: finite-difference gradients (GQA and MQA, with RoPE, tying and dropout masks), MQA exactly equals an MHA model whose K/V head weights are tied copies, causality, cached decoding equals full forward and `generate`, compact cache shapes, invalid group sizes rejected.
+
+```bash
+PYTHONPATH=src python -m tinygpt.train --heads 8 --kv-heads 2 --steps 300
+PYTHONPATH=src python experiments/gqa_vs_mha.py          # MHA vs GQA vs MQA, same seed/hparams
+```
+
+Held-out loss (nats/char, 8 query heads, 2.6k-char corpus, block 32; the validation tail is from a small repetitive corpus, so absolute losses are low):
+
+| kv heads | variant | params | KV cache | seed 0 (300 steps) | seed 1 (300) | seed 2 (500) |
+|---|---|---|---|---|---|---|
+| 8 | MHA | 106,917 | 32.0 KiB (1x) | 0.202 | 0.178 | 0.164 |
+| 4 | GQA | 98,597 | 16.0 KiB (0.5x) | 0.261 | 0.212 | 0.183 |
+| 2 | GQA | 94,437 | 8.0 KiB (0.25x) | 0.261 | 0.209 | 0.148 |
+| 1 | MQA | 92,357 | 4.0 KiB (0.125x) | 0.239 | 0.248 | 0.145 |
+
+Honest reading: the cache and parameter savings are exact. Quality is mixed: at 300 steps MHA was ahead by 0.03-0.08 nats on both seeds, while at 500 steps GQA/MQA matched or beat it (seed 2). Three single-seed runs on a tiny corpus cannot rank the variants; the order between 4, 2 and 1 kv heads is noise. What the evidence does support is that cutting the cache 4-8x costs little at this scale, which is the usual motivation for GQA.

@@ -38,6 +38,7 @@ def main(argv=None):
     ap.add_argument("--clip", type=float, default=0.0, help="clip global gradient norm to this value (0 = off)")
     ap.add_argument("--label-smoothing", type=float, default=0.0, help="label smoothing epsilon in [0,1) for the training loss")
     ap.add_argument("--dropout", type=float, default=0.0, help="dropout prob on embeddings, attention and residuals (train only)")
+    ap.add_argument("--kv-heads", type=int, default=0, help="grouped-query attention: number of key/value heads (0 = --heads, 1 = multi-query)")
     ap.add_argument("--rope", action="store_true", help="rotary position embeddings instead of learned positions")
     ap.add_argument("--tie-weights", action="store_true", help="share token embedding with the output head")
     ap.add_argument("--patience", type=int, default=0, help="early stopping: evals without val improvement before stopping (0 = off)")
@@ -61,7 +62,8 @@ def main(argv=None):
     val = data[len(data) - n_val:] if n_val > a.block + 1 else None
     if val is not None:
         data = data[:len(data) - n_val]
-    model = GPT(GPTConfig(tok.vocab_size, a.block, a.layers, a.heads, a.embd, a.dropout, a.tie_weights, a.rope))
+    model = GPT(GPTConfig(tok.vocab_size, a.block, a.layers, a.heads, a.embd, a.dropout, a.tie_weights, a.rope,
+                           n_kv_head=a.kv_heads))
     opt = Adam(model.params, lr=a.lr, weight_decay=a.weight_decay)
     if a.find_lr:
         r = find_lr(model, data, a.batch, a.block, steps=min(a.steps, 100), get_batch=get_batch)
