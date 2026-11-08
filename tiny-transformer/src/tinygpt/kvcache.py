@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from .model import GPT, ln_fwd, softmax, gelu_fwd
+from .model import GPT, ln_fwd, softmax, gelu_fwd, rope_tables, rope_fwd
 
 
 def _step(model: GPT, tok: int, pos: int, cache: list):
@@ -15,11 +15,15 @@ def _step(model: GPT, tok: int, pos: int, cache: list):
     P, cfg = model.params, model.cfg
     H, C = cfg.n_head, cfg.n_embd
     D = C // H
-    x = P["wte"][tok] + P["wpe"][pos]
+    x = P["wte"][tok] + (0 if cfg.rope else P["wpe"][pos])
+    if cfg.rope:
+        rc = rope_tables(1, D, cfg.rope_base, offset=pos, dtype=x.dtype)
     for i in range(cfg.n_layer):
         h, _ = ln_fwd(x, P[f"h{i}.ln1_g"], P[f"h{i}.ln1_b"])
         qkv = h @ P[f"h{i}.qkv_W"] + P[f"h{i}.qkv_b"]
         q, k, v = (t.reshape(H, D) for t in np.split(qkv, 3))
+        if cfg.rope:  # keys are cached already rotated for their own position
+            q, k = rope_fwd(q[:, None], *rc)[:, 0], rope_fwd(k[:, None], *rc)[:, 0]
         cache[i][0].append(k)
         cache[i][1].append(v)
         K = np.stack(cache[i][0], 1)  # (H,T,D)

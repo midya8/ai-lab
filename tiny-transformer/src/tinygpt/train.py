@@ -38,6 +38,7 @@ def main(argv=None):
     ap.add_argument("--clip", type=float, default=0.0, help="clip global gradient norm to this value (0 = off)")
     ap.add_argument("--label-smoothing", type=float, default=0.0, help="label smoothing epsilon in [0,1) for the training loss")
     ap.add_argument("--dropout", type=float, default=0.0, help="dropout prob on embeddings, attention and residuals (train only)")
+    ap.add_argument("--rope", action="store_true", help="rotary position embeddings instead of learned positions")
     ap.add_argument("--tie-weights", action="store_true", help="share token embedding with the output head")
     ap.add_argument("--patience", type=int, default=0, help="early stopping: evals without val improvement before stopping (0 = off)")
     ap.add_argument("--eval-every", type=int, default=50, help="validation interval in steps when --patience is set")
@@ -60,7 +61,7 @@ def main(argv=None):
     val = data[len(data) - n_val:] if n_val > a.block + 1 else None
     if val is not None:
         data = data[:len(data) - n_val]
-    model = GPT(GPTConfig(tok.vocab_size, a.block, a.layers, a.heads, a.embd, a.dropout, a.tie_weights))
+    model = GPT(GPTConfig(tok.vocab_size, a.block, a.layers, a.heads, a.embd, a.dropout, a.tie_weights, a.rope))
     opt = Adam(model.params, lr=a.lr, weight_decay=a.weight_decay)
     if a.find_lr:
         r = find_lr(model, data, a.batch, a.block, steps=min(a.steps, 100), get_batch=get_batch)

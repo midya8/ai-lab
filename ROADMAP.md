@@ -97,13 +97,14 @@
 - docqa: answer cache + request metrics (LRU+TTL cache with X-Cache header, /stats JSON, /metrics Prometheus histogram, --cache-size/--cache-ttl; 16 new tests, 41 total)
 - agentflow v0.4: llm-router backend (RouterBackend/RouterLLM, per-agent routing strategies, serialized thread-safe routing, per-agent/model cost report, spend cap, json_or_text verifier, real-router integration test; 10 new tests, 40 total)
 - lora-lab: LoRA on tiny-transformer attention (GPTLoRA: adapters on qkv/proj[/fc/out] reusing the GPT's hand-written backprop via chain rule, merge/unmerge, adapter on/off, .npz adapter files; r=4 cuts domain-B NLL 5.69 -> 1.50 with 3.7% of weights vs full fine-tune 0.38 at 100% but heavy forgetting; 10 new tests, 17 total)
+- tiny-transformer: rotary position embeddings (--rope; no wpe, inverse-rotation backward, pre-rotated KV cache, runs past block_size; finite-difference + parity tested; experiments/rope_vs_learned.py shows parity in-window and honest non-extrapolation at this scale; 89 tests)
 
 
 ## Next
 
 1. rag-evals: (done hard benchmark) (done chunk sweep) -> next: dense embeddings beyond LSA
 2. llm-eval-harness: (done) (done matrix) (done per-tag matrix) -> next: HTTP-model matrix specs
-3. tiny-transformer follow-ups: (done v0.5, top-p, grad accumulation); (done clipping); (done dropout); (done weight tying); (done early stopping); (done repetition penalty); (done LR finder); (done label smoothing); (done per-position eval); (done sliding-window eval); (done lora-lab on its attention) -> next: rotary embeddings or grouped-query attention
+3. tiny-transformer follow-ups: (done v0.5, top-p, grad accumulation); (done clipping); (done dropout); (done weight tying); (done early stopping); (done repetition penalty); (done LR finder); (done label smoothing); (done per-position eval); (done sliding-window eval); (done lora-lab on its attention) (done RoPE) -> next: grouped-query attention or position interpolation for length extrapolation
 4. agentflow follow-ups: (done shared memory) (done TTL) (done memory-aware Supervisor) (done failure fallback retries) (done circuit breaker) (done run metrics) (done Supervisor-in-DAG adapter) (done llm-router backend) -> next: async/streaming workers or a persistent run log
 5. lora-lab: (done rank sweep) (done LoRA on tiny-transformer attention) -> next: multi-adapter hub (swap/blend adapters), QLoRA-style int8 base
 6. logsentry: (done v0.6 Grafana dashboard)

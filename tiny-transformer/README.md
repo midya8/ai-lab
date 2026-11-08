@@ -2,7 +2,7 @@
 
 A GPT-style decoder-only transformer written in **pure NumPy, including hand-derived backpropagation**. No autograd, no PyTorch.
 
-- Pre-LayerNorm blocks, causal multi-head attention, GELU MLP, learned positional embeddings
+- Pre-LayerNorm blocks, causal multi-head attention, GELU MLP, learned positional embeddings, or rotary embeddings (`--rope`)
 - Manual backward pass for every op, verified against finite differences in the test suite
 - LR range test (`--find-lr`), Adam with gradient clipping, char tokenizer, temperature / top-k / top-p (nucleus) sampling (`--top-p`), CTRL-style repetition penalty (`--repetition-penalty`), save/load
 
@@ -72,3 +72,21 @@ context shows loss falling with position; `evaluate_by_position` exposes the ful
 `eval ckpt.npz --data corpus.txt --stride 4` also prints sliding-window perplexity: windows of
 `block_size` advance by `stride` and only newly covered tokens are scored, so each token gets as much
 context as possible. `--stride block_size` equals plain eval; smaller strides lower perplexity.
+
+## Rotary position embeddings (RoPE)
+
+`--rope` (`GPTConfig.rope`) replaces the learned absolute position table with rotary embeddings: each head's q and k are rotated, pair-wise across the two halves of the head dimension, by an angle proportional to the token position, so attention scores depend only on relative distance. There is no `wpe` parameter (fewer params), the backward pass applies the inverse rotation to `dq`/`dk`, and the KV cache stores keys already rotated for their own position. Requires an even head dimension. Verified in `tests/test_rope.py`: finite-difference gradients (also with tied weights and dropout masks), norm preservation, relative-position-only scores, causality, KV-cache parity past `block_size`, checkpoint round trip, and old configs still loading as learned positions.
+
+```bash
+PYTHONPATH=src python -m tinygpt.train --rope --block 32 --steps 300
+PYTHONPATH=src python experiments/rope_vs_learned.py     # same seed/hparams, positions differ
+```
+
+Held-out loss (nats/char, trained with block 32, 2.6k-char corpus; one seed, small numbers, treat as indicative only):
+
+| positions | params | len 16 | len 32 | len 64 | len 96 |
+|---|---|---|---|---|---|
+| learned | 106,917 | 0.392 | 0.235 | n/a | n/a |
+| rope | 104,869 | 0.376 | 0.217 | 0.508 | 1.223 |
+
+RoPE matches learned positions inside the training window (a second run, seed 1 / 500 steps, gave 0.340/0.197 vs 0.339/0.196). It *can* be run past `block_size` (a learned table cannot), but at this scale it does **not** extrapolate gracefully: loss climbs on unseen lengths. The script reports that rather than hiding it; length extrapolation usually needs position interpolation or training on varied lengths.

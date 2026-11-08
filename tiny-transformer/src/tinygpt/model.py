@@ -20,6 +20,8 @@ class GPTConfig:
     n_embd: int = 64
     dropout: float = 0.0  # applied to embeddings, attention probs and both residual branches (train only)
     tie_weights: bool = False  # share the token embedding matrix with the output head (saves V*C params)
+    rope: bool = False  # rotary position embeddings on q/k instead of learned absolute positions (no wpe)
+    rope_base: float = 10000.0
 
 
 # ---- primitives (each returns output + cache; *_bwd returns input grad) ----
@@ -69,6 +71,31 @@ def drop_bwd(dy, mask):
     return dy if mask is None else dy * mask
 
 
+def rope_tables(T, D, base=10000.0, offset=0, dtype=np.float64):
+    """cos/sin tables of shape (T, D/2) for positions offset..offset+T-1."""
+    inv = base ** (-np.arange(0, D, 2) / D)
+    ang = np.arange(offset, offset + T)[:, None] * inv[None, :]
+    return np.cos(ang).astype(dtype), np.sin(ang).astype(dtype)
+
+
+def rope_fwd(x, cos, sin):
+    """Rotate the two halves of the last dim as (x1, x2) pairs by position-dependent angles.
+
+    x: (..., T, D); cos/sin: (T, D/2). A rotation is orthogonal, so the dot product of a
+    rotated q at position m and rotated k at position n depends only on m - n.
+    """
+    h = x.shape[-1] // 2
+    x1, x2 = x[..., :h], x[..., h:]
+    return np.concatenate([x1 * cos - x2 * sin, x1 * sin + x2 * cos], -1)
+
+
+def rope_bwd(dy, cos, sin):
+    """Gradient of rope_fwd: the inverse (transposed) rotation."""
+    h = dy.shape[-1] // 2
+    d1, d2 = dy[..., :h], dy[..., h:]
+    return np.concatenate([d1 * cos + d2 * sin, -d1 * sin + d2 * cos], -1)
+
+
 def softmax(x):
     e = np.exp(x - x.max(-1, keepdims=True))
     return e / e.sum(-1, keepdims=True)
@@ -77,6 +104,7 @@ def softmax(x):
 class GPT:
     def __init__(self, cfg: GPTConfig, seed: int = 0, dtype=np.float32):
         assert cfg.n_embd % cfg.n_head == 0
+        assert not cfg.rope or (cfg.n_embd // cfg.n_head) % 2 == 0, "rope needs an even head dimension"
         self.cfg = cfg
         self.label_smoothing = 0.0  # training-time only; evaluate() reports plain NLL
         rng = np.random.default_rng(seed)
@@ -86,6 +114,8 @@ class GPT:
         o = lambda *s: np.ones(s, dtype)
         p = {"wte": n(V, C), "wpe": n(cfg.block_size, C, std=0.01),
              "lnf_g": o(C), "lnf_b": z(C), "head_b": z(V)}
+        if cfg.rope:
+            del p["wpe"]  # positions enter through q/k rotations, not an additive table
         if not cfg.tie_weights:
             p["head_W"] = n(C, V)
         proj_std = 0.02 / np.sqrt(2 * cfg.n_layer)
@@ -112,17 +142,21 @@ class GPT:
         D = C // H
         qkv, xin = lin_fwd(x, P[f"h{i}.qkv_W"], P[f"h{i}.qkv_b"])
         q, k, v = (t.reshape(B, T, H, D).transpose(0, 2, 1, 3) for t in np.split(qkv, 3, -1))
+        rc = None
+        if self.cfg.rope:
+            rc = rope_tables(T, D, self.cfg.rope_base, dtype=q.dtype)
+            q, k = rope_fwd(q, *rc), rope_fwd(k, *rc)
         s = q @ k.transpose(0, 1, 3, 2) / np.sqrt(D)
         s = np.where(np.tril(np.ones((T, T), bool)), s, -1e30)
         a = softmax(s)
         ad, ma = drop_fwd(a, self.cfg.dropout, rng)
         y = (ad @ v).transpose(0, 2, 1, 3).reshape(B, T, C)
         out, yin = lin_fwd(y, P[f"h{i}.proj_W"], P[f"h{i}.proj_b"])
-        return out, (xin, q, k, v, a, ad, ma, yin)
+        return out, (xin, q, k, v, a, ad, ma, yin, rc)
 
     def _attn_bwd(self, dout, cache, i, G):
         P, H = self.params, self.cfg.n_head
-        xin, q, k, v, a, ad, ma, yin = cache
+        xin, q, k, v, a, ad, ma, yin, rc = cache
         B, T, C = xin.shape
         D = C // H
         dy, G[f"h{i}.proj_W"], G[f"h{i}.proj_b"] = lin_bwd(dout, yin, P[f"h{i}.proj_W"])
@@ -132,6 +166,8 @@ class GPT:
         da = drop_bwd(da, ma)
         ds = a * (da - (da * a).sum(-1, keepdims=True)) / np.sqrt(D)
         dq, dk = ds @ k, ds.transpose(0, 1, 3, 2) @ q
+        if rc is not None:
+            dq, dk = rope_bwd(dq, *rc), rope_bwd(dk, *rc)
         m = lambda t: t.transpose(0, 2, 1, 3).reshape(B, T, C)
         dqkv = np.concatenate([m(dq), m(dk), m(dv)], -1)
         dx, G[f"h{i}.qkv_W"], G[f"h{i}.qkv_b"] = lin_bwd(dqkv, xin, P[f"h{i}.qkv_W"])
@@ -145,9 +181,9 @@ class GPT:
         """
         P, cfg = self.params, self.cfg
         B, T = idx.shape
-        assert T <= cfg.block_size
+        assert cfg.rope or T <= cfg.block_size  # RoPE has no position table, so it can run longer than it trained
         p_drop = cfg.dropout
-        x, me = drop_fwd(P["wte"][idx] + P["wpe"][:T], p_drop, rng)
+        x, me = drop_fwd(P["wte"][idx] + (0 if cfg.rope else P["wpe"][:T]), p_drop, rng)
         caches = []
         for i in range(cfg.n_layer):
             h, c1 = ln_fwd(x, P[f"h{i}.ln1_g"], P[f"h{i}.ln1_b"])
@@ -198,8 +234,9 @@ class GPT:
             dl, G[f"h{i}.ln1_g"], G[f"h{i}.ln1_b"] = ln_bwd(dh, c1)
             dx = dx + dl
         dx = drop_bwd(dx, me)
-        G["wpe"] = np.zeros_like(P["wpe"])
-        G["wpe"][:T] = dx.sum(0)
+        if not cfg.rope:
+            G["wpe"] = np.zeros_like(P["wpe"])
+            G["wpe"][:T] = dx.sum(0)
         G["wte"] = np.zeros_like(P["wte"])
         np.add.at(G["wte"], idx, dx)
         if cfg.tie_weights:
