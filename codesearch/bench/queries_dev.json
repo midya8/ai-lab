@@ -1,0 +1,181 @@
+{
+ "root": "../..",
+ "include": [
+  "agentflow",
+  "agentkit",
+  "docqa",
+  "guardkit",
+  "llm-router",
+  "promptlab",
+  "ragkit",
+  "reviewkit"
+ ],
+ "queries": [
+  {
+   "query": "per-model failure tracker that stops sending traffic after repeated errors and probes again after a cooldown",
+   "relevant": [
+    "agentflow/src/agentflow/extras.py::CircuitBreaker",
+    "llm-router/llmrouter/breaker.py::CircuitBreaker"
+   ]
+  },
+  {
+   "query": "split a document into overlapping pieces on sentence boundaries",
+   "relevant": [
+    "ragkit/ragkit/chunk.py::split_text"
+   ]
+  },
+  {
+   "query": "verify a credit card number checksum",
+   "relevant": [
+    "guardkit/guardkit/detectors.py::luhn_ok"
+   ]
+  },
+  {
+   "query": "exact p-value for paired binary outcomes",
+   "relevant": [
+    "promptlab/promptlab/stats.py::mcnemar_exact"
+   ]
+  },
+  {
+   "query": "confidence interval for a proportion with small samples",
+   "relevant": [
+    "promptlab/promptlab/stats.py::wilson"
+   ]
+  },
+  {
+   "query": "write the cache to disk atomically and reload it after a restart",
+   "relevant": [
+    "llm-router/llmrouter/semantic.py::SemanticCache.save",
+    "llm-router/llmrouter/semantic.py::SemanticCache.load"
+   ]
+  },
+  {
+   "query": "put original values back after redaction",
+   "relevant": [
+    "guardkit/guardkit/redact.py::RedactionVault.restore"
+   ]
+  },
+  {
+   "query": "order tasks so dependencies run first and detect circular dependencies",
+   "relevant": [
+    "agentflow/src/agentflow/core.py::Orchestrator.plan"
+   ]
+  },
+  {
+   "query": "edit distance between two words allowing transposition",
+   "relevant": [
+    "docqa/docqa/spell.py::osa_distance"
+   ]
+  },
+  {
+   "query": "turn a grader model reply into a score and reason, rejecting malformed output",
+   "relevant": [
+    "promptlab/promptlab/judge.py::parse_judge_reply"
+   ]
+  },
+  {
+   "query": "roughly how many tokens will this prompt use",
+   "relevant": [
+    "llm-router/llmrouter/models.py::estimate_tokens"
+   ]
+  },
+  {
+   "query": "journal of finished tasks so an interrupted workflow can continue",
+   "relevant": [
+    "agentflow/src/agentflow/runlog.py::RunLog",
+    "agentflow/src/agentflow/runlog.py::RunLog.completed",
+    "agentflow/src/agentflow/runlog.py::RunLog.record"
+   ]
+  },
+  {
+   "query": "prevent reading files outside an allowed directory",
+   "relevant": [
+    "agentkit/agentkit/tools.py::make_read_file"
+   ]
+  },
+  {
+   "query": "evaluate arithmetic safely without calling eval",
+   "relevant": [
+    "agentkit/agentkit/tools.py::calculator",
+    "agentkit/agentkit/tools.py::_eval_node"
+   ]
+  },
+  {
+   "query": "load a policy file and fail if it is invalid",
+   "relevant": [
+    "guardkit/guardkit/policy.py::load_policy"
+   ]
+  },
+  {
+   "query": "avoid posting a review comment that was already posted",
+   "relevant": [
+    "reviewkit/src/reviewkit/github.py::existing_fingerprints",
+    "reviewkit/src/reviewkit/github.py::post_review"
+   ]
+  },
+  {
+   "query": "percentile of latency measurements",
+   "relevant": [
+    "docqa/docqa/metrics.py::percentile"
+   ]
+  },
+  {
+   "query": "correlation between two rankings",
+   "relevant": [
+    "promptlab/promptlab/stats.py::spearman"
+   ]
+  },
+  {
+   "query": "Prometheus text exposition of request counters and histograms",
+   "relevant": [
+    "docqa/docqa/metrics.py::Metrics.prometheus"
+   ]
+  },
+  {
+   "query": "stable hash of a prompt template that ignores trailing whitespace",
+   "relevant": [
+    "promptlab/promptlab/template.py::Template.digest"
+   ]
+  },
+  {
+   "query": "cache key that ignores capitalization and extra spaces",
+   "relevant": [
+    "llm-router/llmrouter/cache.py::cache_key",
+    "docqa/docqa/cache.py::normalize"
+   ]
+  },
+  {
+   "query": "mask phone numbers and emails found in text with placeholder tokens",
+   "relevant": [
+    "guardkit/guardkit/redact.py::redact_spans",
+    "guardkit/guardkit/detectors.py::PiiSecretScanner.scan"
+   ]
+  },
+  {
+   "query": "drop expired entries from agent memory",
+   "relevant": [
+    "agentflow/src/agentflow/memory.py::SharedMemory.purge"
+   ]
+  },
+  {
+   "query": "ask the grader several times and take the conservative middle score",
+   "relevant": [
+    "promptlab/promptlab/judge.py::judge_score"
+   ]
+  },
+  {
+   "query": "decide which worker should handle a task",
+   "relevant": [
+    "agentflow/src/agentflow/extras.py::Supervisor.route"
+   ]
+  },
+  {
+   "query": "neutralise untrusted text so it cannot close the prompt section",
+   "relevant": [
+    "promptlab/promptlab/judge.py::_defang",
+    "promptlab/promptlab/pairwise.py::_defang",
+    "reviewkit/src/reviewkit/llm.py::neutralize"
+   ]
+  }
+ ]
+}

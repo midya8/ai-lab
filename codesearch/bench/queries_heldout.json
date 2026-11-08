@@ -1,0 +1,192 @@
+{
+ "root": "../..",
+ "include": [
+  "agentflow",
+  "agentkit",
+  "docqa",
+  "guardkit",
+  "llm-router",
+  "promptlab",
+  "ragkit",
+  "reviewkit"
+ ],
+ "queries": [
+  {
+   "query": "choose the cheapest model that meets the quality needed for this prompt",
+   "relevant": [
+    "llm-router/llmrouter/router.py::Router.plan",
+    "llm-router/llmrouter/router.py::Router._order"
+   ]
+  },
+  {
+   "query": "cosine similarity between hashed text vectors",
+   "relevant": [
+    "llm-router/llmrouter/semantic.py::cosine",
+    "llm-router/llmrouter/semantic.py::embed"
+   ]
+  },
+  {
+   "query": "stop spending when the budget window is used up and degrade to cheaper models",
+   "relevant": [
+    "llm-router/llmrouter/budget.py::Budget.degraded",
+    "llm-router/llmrouter/budget.py::Budget.can_afford",
+    "llm-router/llmrouter/budget.py::Budget.pressure"
+   ]
+  },
+  {
+   "query": "agreement statistic between two raters that corrects for chance",
+   "relevant": [
+    "promptlab/promptlab/stats.py::cohen_kappa"
+   ]
+  },
+  {
+   "query": "bootstrap resampling of paired differences",
+   "relevant": [
+    "promptlab/promptlab/stats.py::paired_bootstrap"
+   ]
+  },
+  {
+   "query": "suggest the nearest known vocabulary word for a misspelling",
+   "relevant": [
+    "docqa/docqa/spell.py::SpellCorrector.suggest",
+    "docqa/docqa/spell.py::SpellCorrector.correct"
+   ]
+  },
+  {
+   "query": "convert unified diff text into per-file hunks with line numbers",
+   "relevant": [
+    "reviewkit/src/reviewkit/diff.py::parse_diff"
+   ]
+  },
+  {
+   "query": "call an HTTP chat completions endpoint and retry when rate limited",
+   "relevant": [
+    "reviewkit/src/reviewkit/llm.py::OpenAICompatProvider.complete",
+    "agentkit/agentkit/providers.py::OpenAICompatibleProvider.complete",
+    "ragkit/ragkit/answer.py::OpenAICompatibleAnswerer.answer"
+   ]
+  },
+  {
+   "query": "fraction of attacks the guardrail caught",
+   "relevant": [
+    "guardkit/guardkit/eval.py::EvalReport.attack_recall"
+   ]
+  },
+  {
+   "query": "markdown summary of the regression gate for a CI job page",
+   "relevant": [
+    "promptlab/promptlab/compare.py::render_check_markdown"
+   ]
+  },
+  {
+   "query": "sliding window of observed response times used to correct latency estimates",
+   "relevant": [
+    "llm-router/llmrouter/latency.py::LatencyTracker.factor",
+    "llm-router/llmrouter/latency.py::LatencyTracker.record"
+   ]
+  },
+  {
+   "query": "fake model that fails at random for tests",
+   "relevant": [
+    "llm-router/llmrouter/providers.py::SimProvider",
+    "llm-router/llmrouter/providers.py::SimProvider.complete"
+   ]
+  },
+  {
+   "query": "decide whether the answer is supported by the document or abstain",
+   "relevant": [
+    "docqa/docqa/qa.py::DocQA.ask",
+    "docqa/docqa/qa.py::DocQA.coverage",
+    "docqa/docqa/qa.py::DocQA._ask"
+   ]
+  },
+  {
+   "query": "limit the number of steps an agent may take and stop when it repeats the same call",
+   "relevant": [
+    "agentkit/agentkit/runner.py::AgentRunner.run",
+    "agentkit/agentkit/model.py::ToolCall.canonical",
+    "agentkit/agentkit/runner.py::AgentRunner._check_call"
+   ]
+  },
+  {
+   "query": "time-to-live expiry check on stored entries",
+   "relevant": [
+    "llm-router/llmrouter/semantic.py::SemanticCache._expired",
+    "agentflow/src/agentflow/memory.py::SharedMemory._expired"
+   ]
+  },
+  {
+   "query": "line numbers of added lines in a patch",
+   "relevant": [
+    "reviewkit/src/reviewkit/diff.py::FileDiff.added",
+    "reviewkit/src/reviewkit/diff.py::FileDiff.visible"
+   ]
+  },
+  {
+   "query": "count the decision points of a function",
+   "relevant": [
+    "reviewkit/src/reviewkit/rules.py::cyclomatic"
+   ]
+  },
+  {
+   "query": "substitute variables in a template and fail when one is missing",
+   "relevant": [
+    "promptlab/promptlab/template.py::Template.render"
+   ]
+  },
+  {
+   "query": "fingerprint of a finding that survives when code moves to a different line",
+   "relevant": [
+    "reviewkit/src/reviewkit/rules.py::Finding.fp"
+   ]
+  },
+  {
+   "query": "check tool call arguments against a JSON schema",
+   "relevant": [
+    "agentkit/agentkit/model.py::Tool.validate_args"
+   ]
+  },
+  {
+   "query": "drop reviewer comments that point at lines that do not exist",
+   "relevant": [
+    "reviewkit/src/reviewkit/llm.py::parse_reply"
+   ]
+  },
+  {
+   "query": "wrap a text function so that input and output are both checked",
+   "relevant": [
+    "guardkit/guardkit/guard.py::Guard.wrap"
+   ]
+  },
+  {
+   "query": "summarise past workflow runs one line each",
+   "relevant": [
+    "agentflow/src/agentflow/runlog.py::RunLog.runs",
+    "agentflow/src/agentflow/runlog.py::RunLog.format_runs"
+   ]
+  },
+  {
+   "query": "critical path and parallelism computed from task timings",
+   "relevant": [
+    "agentflow/src/agentflow/metrics.py::compute_metrics",
+    "agentflow/src/agentflow/metrics.py::RunMetrics"
+   ]
+  },
+  {
+   "query": "read a jsonl file of labelled items skipping comment lines",
+   "relevant": [
+    "promptlab/promptlab/runner.py::load_cases",
+    "promptlab/promptlab/judge.py::load_calibration_items",
+    "promptlab/promptlab/pairwise.py::load_pair_items",
+    "guardkit/guardkit/eval.py::load_cases"
+   ]
+  },
+  {
+   "query": "attach a label to a stored prompt version and look it up later",
+   "relevant": [
+    "promptlab/promptlab/registry.py::Registry.tag",
+    "promptlab/promptlab/registry.py::Registry.resolve"
+   ]
+  }
+ ]
+}
