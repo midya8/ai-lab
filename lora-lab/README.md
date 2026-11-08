@@ -91,3 +91,39 @@ Pretrain on Shakespeare (A) in fp32, quantize, then train rank-4 attention adapt
 Reading it honestly: the model is 4.3x smaller (embeddings, biases and LayerNorm stay fp32; the linear weights alone shrink ~3.8x at 8 bit and ~7x at 4 bit, scales included). int8 is lossless in practice (0.6% weight error). At 4 bits the plain base degrades on A (int4 0.368 → 0.396) and NF4 loses less than uniform int4 at the same size (0.373), matching the codebook's design goal. LoRA on the quantized base reaches the fp32 adapter's domain-B NLL within noise (all four land in 1.42-1.45; one seed, so differences of a few hundredths are not meaningful). Training adapters on A closes the quantization gap completely, but note that fp32 improves too (0.368 → 0.249): that column shows the adapters absorbing the precision loss, not a recovery beyond the fp32 baseline. A 62k-parameter model is a forgiving test: its weights are over-trained on a small corpus, and bigger models tolerate 4 bits better still.
 
 Tests (`tests/test_quant.py`, 20): NF4 codebook shape, int8 half-step error bound, error ordering int8 < nf4 < int4 on Gaussian weights, block-size monotonicity, an outlier only damaging its own block, zero blocks and padding, exact reproduction of codebook levels, nibble pack/unpack, stored-byte ratios, only targeted tensors change, parameters equal dequantized codes, finite-difference adapter gradients through an int4 base, frozen codes after training, save/load round trip for every scheme, demo smoke test.
+
+## LoftQ-style init: adapters that start by repairing the quantization error
+
+QLoRA quantizes `W` to `Q` and starts the adapter at zero, so training begins from the damaged model. `loralab.loftq.loftq_init(lora, scheme, block, iters)` instead alternates `Q ← quantize(W − s·A·B)` and `A,B ← rank-r SVD of (W − dequant(Q))` (Li et al., 2023), so `Q + s·A·B` approximates the fp32 weight better than `Q` alone. `iters=1` is the plain "SVD init" (quantize, then fit the best rank-r correction to the residual); more iterations also let the quantizer see only what the adapter does not cover. It reuses `QuantizedBase` (new optional `source=` argument says which array to quantize) and `GPTLoRA` unchanged; training, merge and the frozen-base check work as before.
+
+```
+PYTHONPATH=src python -m loralab.loftq_demo [--rank 4] [--iters 5] [--schemes nf4,int4] [--block 64]
+```
+
+Semantics worth knowing: with a LoftQ adapter, "adapter off" is the plain quantized base, not the original model, and the adapted model at step 0 is *not* equal to the quantized base (it is closer to fp32).
+
+Demo (seed 0, rank 4, adapters on qkv/proj/fc/out, 62k-parameter GPT pretrained on Shakespeare = domain A, block 64, ~35 s on CPU; domain B is synthetic template text; the fp32 model scores 0.368 on A):
+
+| scheme | init | weight err | NLL A (step 0) | NLL B (trained 150 steps) | NLL A (after B) |
+|---|---|---|---|---|---|
+| nf4 | qlora (B=0) | 0.0940 | 0.373 | 0.896 | 3.925 |
+| nf4 | svd (1 iter) | 0.0843 | 0.373 | 0.952 | 3.874 |
+| nf4 | loftq (5 iters) | 0.0760 | 0.374 | 0.906 | 3.801 |
+| int4 | qlora (B=0) | 0.1131 | 0.396 | 0.922 | 3.817 |
+| int4 | svd (1 iter) | 0.1014 | 0.387 | 0.872 | 3.737 |
+| int4 | loftq (5 iters) | 0.0920 | 0.377 | 0.875 | 3.760 |
+
+Rank and block sweep for int4 (weight error of Q + adapter vs fp32 W, and NLL on A before any training; `loftq` = 5 iterations; plain int4 is 0.1131 / 0.396 at block 64 and 0.1392 / 0.404 at block 256):
+
+| block | rank | weight err svd / loftq | NLL A step 0 svd / loftq |
+|---|---|---|---|
+| 64 | 2 | 0.1070 / 0.1001 | 0.391 / 0.376 |
+| 64 | 8 | 0.0912 / 0.0816 | 0.381 / 0.380 |
+| 64 | 16 | 0.0730 / 0.0676 | 0.377 / 0.381 |
+| 256 | 2 | 0.1320 / 0.1232 | 0.398 / 0.405 |
+| 256 | 8 | 0.1132 / 0.1019 | 0.391 / 0.389 |
+| 256 | 16 | 0.0907 / 0.0848 | 0.387 / 0.389 |
+
+Reading it honestly: the weight-space claim holds cleanly and monotonically: the adapter absorbs part of the quantization error, more rank absorbs more, and several alternating iterations beat a single SVD every time (about 20% lower error than plain quantization at rank 4 for both nf4 and int4). The downstream effect is much smaller and mostly inside noise. The only visible step-0 gain is int4 on domain A (0.396 → 0.377 at rank 4, close to the fp32 0.368); nf4 is already within 0.005 of fp32 so there is nothing to repair, and after fine-tuning on B the three inits land within a few hundredths of each other (one seed, so no ranking is claimed). Where LoftQ is meant to shine, very low bit widths (2-bit) on large models, this 62k-parameter, 4-bit setup does not reach. Weight error is also an indirect proxy: error in a few high-impact directions matters more than the Frobenius norm says.
+
+Tests (`tests/test_loftq.py`, 16): the SVD factors are the best rank-r approximation (scale-correct, padded when rank exceeds the matrix), one iteration is never worse than plain quantization for nf4/int4/int8, per-iteration errors are recorded, the reported error matches an independent recomputation, the stored codes are exactly the quantization of `W − s·A·B` from the previous iteration and the final adapter is the SVD of that Q's residual, untargeted tensors are quantized plainly, the adapted model's logits start closer to fp32 than the quantized base's, finite-difference gradients from a LoftQ start, frozen codes after training, merge equivalence, input validation, demo smoke test.

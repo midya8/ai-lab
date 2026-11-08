@@ -99,9 +99,10 @@ class QuantizedBase:
     The model's own parameters become the dequantized tensors, so everything downstream
     (forward, ``GPTLoRA``, the hand-written backward) works unchanged. The base must stay
     frozen: ``verify_frozen()`` checks the parameters still equal the dequantized codes.
+    ``source`` (optional ``{name: array}``) overrides what gets quantized for those tensors.
     """
 
-    def __init__(self, model, scheme="nf4", block=64, targets=DEFAULT_TARGETS, embeddings=False):
+    def __init__(self, model, scheme="nf4", block=64, targets=DEFAULT_TARGETS, embeddings=False, source=None):
         if scheme not in SCHEMES:
             raise ValueError(f"unknown scheme {scheme!r}; choose from {SCHEMES}")
         self.model, self.scheme, self.block = model, scheme, block
@@ -114,7 +115,9 @@ class QuantizedBase:
         self.q, self.original_bytes, self.sq_err, self.sq_norm = {}, {}, {}, {}
         for n in names:
             w = model.params[n]
-            self.q[n] = quantize(w, scheme, block)
+            # ``source`` lets a caller quantize something other than the weight itself (LoftQ quantizes
+            # W - adapter); error and size accounting stay relative to the real weight ``w``.
+            self.q[n] = quantize(source[n] if source and n in source else w, scheme, block)
             deq = dequantize(self.q[n], w.dtype)
             self.sq_err[n] = float(((w.astype(np.float64) - deq) ** 2).sum())
             self.sq_norm[n] = float((w.astype(np.float64) ** 2).sum())
