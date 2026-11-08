@@ -17,7 +17,7 @@ Midya's AI lab: small, tested, runnable AI projects.
 | [lora-lab](lora-lab) | LoRA low-rank adaptation from scratch in NumPy: manual backprop, gradcheck, merge/unmerge |
 | [llm-router](llm-router) | Cost/latency-aware LLM router: complexity scoring, 4 strategies, fallback chains, circuit breakers, exact + semantic cache, budget guardrails, cascade, outage simulator — 53 tests |
 | [promptlab](promptlab) | Prompt versioning + paired A/B testing (exact McNemar, Wilson/bootstrap CIs) + baseline regression gate + GitHub Action for CI — 31 tests |
-| [docqa](docqa) | Grounded document Q&A: verbatim cited sentences, coverage-based abstention ("I don't know") — 9 tests |
+| [docqa](docqa) | Grounded document Q&A: verbatim cited sentences, coverage-based abstention ("I don't know"), synonym-aware paraphrase matching — 12 tests |
 
 Notes on overlap: `rag-evals` is retrieval-only evaluation; `ragkit` adds answering with citations on top of retrieval. `evalkit` is a general prompt/model eval harness; `rag-evals` is RAG-specific, and `llm-eval-harness` is the pluggable-backend variant. `guardkit` is runtime input/output guardrails; `promptguard` (separate repo) is the static file linter for prompt files.
 

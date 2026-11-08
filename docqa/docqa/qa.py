@@ -21,6 +21,37 @@ QUANTITY_RE = re.compile(r"\b(how\s+(long|many|much|fast|often|soon|late|early)|
 DIGIT_RE = re.compile(r"\d")
 
 
+# Paraphrase handling: groups of interchangeable terms (post-tokenize forms).
+# A question term counts as covered when the sentence has the term or a
+# group-mate, at SYNONYM_CREDIT of full weight.
+SYNONYM_GROUPS = [
+    {"return", "send", "refund"},
+    {"bike", "bicycle", "cycle"},
+    {"money", "refund", "payment", "reimburse"},
+    {"charge", "fee", "cost", "price"},
+    {"restock", "restocking"},
+    {"fix", "repair", "service", "tune"},
+    {"ship", "deliver", "delivery", "dispatch", "shipping"},
+    {"limit", "window", "deadline", "cutoff"},
+    {"reward", "bonus", "perk"},
+    {"buy", "purchase", "order"},
+    {"standard", "basic", "regular"},
+]
+SYNONYM_CREDIT = 0.8
+
+
+def _syn_map() -> dict[str, set[str]]:
+    m: dict[str, set[str]] = {}
+    for g in SYNONYM_GROUPS:
+        toks = {t for w in g for t in tokenize(w)}
+        for t in toks:
+            m.setdefault(t, set()).update(toks - {t})
+    return m
+
+
+SYN = _syn_map()
+
+
 @dataclass(frozen=True)
 class Evidence:
     sentence: str
@@ -53,7 +84,8 @@ class QAResult:
 
 class DocQA:
     def __init__(self, chunks, min_coverage: float = 0.6, max_sentences: int = 2,
-                 top_k: int = 4):
+                 top_k: int = 4, paraphrase: bool = True):
+        self.paraphrase = paraphrase
         if not 0 <= min_coverage <= 1:
             raise ValueError("min_coverage must be in [0, 1]")
         self.min_coverage = min_coverage
@@ -81,12 +113,18 @@ class DocQA:
         total = sum(self._weight(t) for t in q_terms)
         if total == 0:
             return 0.0
-        hit = sum(self._weight(t) for t in q_terms & set(tokenize(sentence)))
+        s_terms = set(tokenize(sentence))
+        hit = 0.0
+        for t in q_terms:
+            if t in s_terms:
+                hit += self._weight(t)
+            elif self.paraphrase and SYN.get(t, set()) & s_terms:
+                hit += SYNONYM_CREDIT * self._weight(t)
         return hit / total
 
     def ask(self, question: str) -> QAResult:
         quantity = bool(QUANTITY_RE.search(question))
-        q_terms = {t for t in tokenize(question) if t not in FILLER}
+        q_terms = {t for t in tokenize(question) if t not in FILLER and len(t) > 1}
         if not q_terms:
             return QAResult(question, False)
         cands: list[Evidence] = []

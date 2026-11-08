@@ -60,3 +60,19 @@ def test_cli(capsys):
     assert json.loads(capsys.readouterr().out)["answered"]
     assert main(["ask", str(DOCS), "What is the capital of France?"]) == 1
     assert main(["ask", "/nonexistent", "x"]) == 2
+
+
+def test_paraphrase_eval(qa):
+    res = run_eval(qa, ROOT / "eval" / "paraphrase.json")
+    assert res["answer_rate"] == 1.0 and res["abstain_rate"] == 1.0, res["failures"]
+
+
+def test_paraphrase_off_is_worse():
+    strict = DocQA.from_dir(DOCS, paraphrase=False)
+    res = run_eval(strict, ROOT / "eval" / "paraphrase.json")
+    assert res["answer_rate"] < 1.0
+
+
+def test_paraphrase_does_not_break_original_eval():
+    res = run_eval(DocQA.from_dir(DOCS), ROOT / "eval" / "questions.json")
+    assert res["answer_rate"] == 1.0 and res["abstain_rate"] == 1.0

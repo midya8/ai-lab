@@ -14,3 +14,11 @@ python -m pytest
 ```
 
 Eval on the bundled 6-question set (3 answerable, 3 not): 3/3 answered correctly, 3/3 abstained. The set is tiny and tuned alongside the code, so treat it as a smoke test, not a benchmark. Lexical matching cannot handle paraphrase; see the dense-retrieval item in the roadmap.
+
+## Paraphrase handling
+
+Question terms match document terms through small synonym groups
+(`SYNONYM_GROUPS` in `qa.py`), at 0.8 credit versus an exact match. Disable with
+`DocQA(..., paraphrase=False)`. `eval/paraphrase.json` holds reworded questions;
+abstention on unanswerable ones is still enforced. Generic words ("back",
+"within") are deliberately not synonyms: they produced a confidently wrong answer.

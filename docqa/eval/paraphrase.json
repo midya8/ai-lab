@@ -1,0 +1,31 @@
+[
+ {
+  "question": "What does a basic tune-up cost?",
+  "must_contain": [
+   "$89"
+  ],
+  "source": "repairs.md"
+ },
+ {
+  "question": "How quickly will I get my money back?",
+  "must_contain": [
+   "5 business days"
+  ],
+  "source": "returns.md"
+ },
+ {
+  "question": "Do you charge to restock returned goods?",
+  "must_contain": [
+   "no restocking fee"
+  ],
+  "source": "returns.md"
+ },
+ {
+  "question": "What's the capital city of Spain?",
+  "answerable": false
+ },
+ {
+  "question": "Does the shop sell titanium scooters?",
+  "answerable": false
+ }
+]
