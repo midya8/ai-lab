@@ -120,6 +120,8 @@ router = Router(models, provider, cache=SemanticCache(threshold=0.85))
 ```
 Lower thresholds raise hit rate but risk serving a wrong answer; tune on your traffic.
 
+Persistence: `cache.save("cache.json")` (atomic, JSON, live entries only) and `cache.load("cache.json")` at startup. Entries keep their *age*, so TTLs stay correct across restarts even though the default clock is monotonic.
+
 ## Learned complexity classifier
 
 `LearnedComplexity` is a stdlib logistic regression over hashed word/bigram features, with the

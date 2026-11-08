@@ -8,7 +8,10 @@ and similarity >= ``threshold``. Exact normalised matches always hit.
 from __future__ import annotations
 
 import hashlib
+import json
 import math
+import os
+import tempfile
 import re
 from collections import OrderedDict
 from typing import Any
@@ -85,6 +88,58 @@ class SemanticCache:
         self._next += 1
         while len(self._data) > self.max_entries:
             self._data.popitem(last=False)
+
+    def save(self, path: str) -> int:
+        """Atomically write live entries as JSON; returns how many were saved.
+
+        Entries are stored with their *age* (the clock may be monotonic, so
+        absolute timestamps would be meaningless after a restart). Values must
+        be JSON-serialisable (the router's cache entries are plain dicts).
+        """
+        now = self._clock.now()
+        rows = [{"age": max(0.0, now - t), "max_tokens": mt, "prompt_vec": {str(k): v for k, v in vec.items()}, "value": val}
+                for t, mt, vec, val in self._data.values() if not self._expired(t)]
+        doc = {"version": 1, "dim": self.dim, "entries": rows}
+        d = os.path.dirname(os.path.abspath(path))
+        fd, tmp = tempfile.mkstemp(dir=d, suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w") as f:
+                json.dump(doc, f)
+            os.replace(tmp, path)
+        except BaseException:
+            if os.path.exists(tmp):
+                os.unlink(tmp)
+            raise
+        return len(rows)
+
+    def load(self, path: str) -> int:
+        """Merge entries saved by :meth:`save`; returns how many were loaded.
+
+        A missing file loads nothing. Entries already past the TTL are skipped,
+        and the oldest are dropped if the file exceeds ``max_entries``.
+        A file saved with a different ``dim`` raises ValueError.
+        """
+        if not os.path.exists(path):
+            return 0
+        with open(path) as f:
+            doc = json.load(f)
+        if doc.get("version") != 1:
+            raise ValueError("unsupported cache file version")
+        if doc.get("dim") != self.dim:
+            raise ValueError(f"cache dim {doc.get('dim')} != {self.dim}")
+        now = self._clock.now()
+        n = 0
+        for r in sorted(doc["entries"], key=lambda r: -r["age"]):  # oldest first
+            stored_at = now - float(r["age"])
+            if self._expired(stored_at):
+                continue
+            vec = {int(k): float(v) for k, v in r["prompt_vec"].items()}
+            self._data[self._next] = (stored_at, int(r["max_tokens"]), vec, r["value"])
+            self._next += 1
+            n += 1
+        while len(self._data) > self.max_entries:
+            self._data.popitem(last=False)
+        return n
 
     def __len__(self) -> int:
         return len(self._data)
