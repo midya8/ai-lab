@@ -4,7 +4,7 @@ Midya's AI lab: small, tested, runnable AI projects.
 
 | Project | Pitch |
 |---|---|
-| [RatingLab](https://github.com/midya8/ratinglab) | Observed-only manual ALS with exact ridge oracles, normal-equation audits and independently selected bias control that slightly wins. 23 Python/five Node tests. [Live rating inspector](https://midya8.github.io/ratinglab/). Missing is not zero; RMSE is not ranking utility. |
+| [RatingLab](https://github.com/midya8/ratinglab) | Observed-only ALS, strong winning bias control and finite conditional ridge edit/deletion responses with saved-vs-re-solved baselines, leverage and independent direct refits. 30 Python/nine Node tests. [Conditional response inspector](https://midya8.github.io/ratinglab/influence.html). Frozen-factor response, not full retraining, unlearning or causal influence. |
 | [MarginLab](https://github.com/midya8/marginlab) | Manual linear/RBF dual SVM and exact represented-linear weak-duality proofs after equality repair; independent Fraction/BigInt readers and separate source matching. 29 Python/nine Node tests. [Live proof inspector](https://midya8.github.io/marginlab/certificate.html). Historical educational data, not clinical validation or authentication. |
 | [rag-evals](rag-evals) | From-scratch BM25, LSA and RRF-hybrid RAG retrieval with chunking and Recall/MRR/nDCG evaluation harness |
 | [agentkit](agentkit) | Dependency-free LLM agent runner: tool-calling loop, bounded steps, loop detection, dry-run, JSON trace — 46 tests |
