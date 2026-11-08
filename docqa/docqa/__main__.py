@@ -15,11 +15,13 @@ def main(argv=None) -> int:
         s.add_argument("arg", help="question (ask) or labelled JSON file (eval)")
         s.add_argument("--min-coverage", type=float, default=0.6)
         s.add_argument("--json", action="store_true")
+        s.add_argument("--no-spell", action="store_true", help="disable corpus-grounded spelling correction")
     sv = sub.add_parser("serve", help="run the HTTP service")
     sv.add_argument("docs")
     sv.add_argument("--host", default="127.0.0.1")
     sv.add_argument("--port", type=int, default=8000)
     sv.add_argument("--min-coverage", type=float, default=0.6)
+    sv.add_argument("--no-spell", action="store_true", help="disable corpus-grounded spelling correction")
     sv.add_argument("--cache-size", type=int, default=256, help="answer cache entries (0 disables)")
     sv.add_argument("--cache-ttl", type=float, default=300.0, help="cache TTL seconds (0 = no expiry)")
     a = p.parse_args(argv)
@@ -29,7 +31,7 @@ def main(argv=None) -> int:
         try:
             cache = (AnswerCache(a.cache_size, a.cache_ttl or None)
                      if a.cache_size > 0 else None)
-            srv = make_server(DocQA.from_dir(a.docs, min_coverage=a.min_coverage),
+            srv = make_server(DocQA.from_dir(a.docs, min_coverage=a.min_coverage, spell=not a.no_spell),
                               a.host, a.port, cache=cache)
         except (ValueError, OSError) as e:
             print(f"error: {e}", file=sys.stderr)
@@ -41,9 +43,11 @@ def main(argv=None) -> int:
             pass
         return 0
     try:
-        qa = DocQA.from_dir(a.docs, min_coverage=a.min_coverage)
+        qa = DocQA.from_dir(a.docs, min_coverage=a.min_coverage, spell=not a.no_spell)
         if a.cmd == "ask":
             r = qa.ask(a.arg)
+            if r.corrections and not a.json:
+                print("(interpreting as: " + ", ".join(f"{c.original} -> {c.corrected}" for c in r.corrections) + ")")
             print(json.dumps(r.to_dict(), indent=2) if a.json else r.text)
             return 0 if r.answered else 1
         res = run_eval(qa, a.arg)

@@ -14,6 +14,8 @@ from pathlib import Path
 from ragkit.ingest import load_documents
 from ragkit.retrieve import Retriever, tokenize
 
+from .spell import Correction, SpellCorrector
+
 SPLIT = re.compile(r"(?<=[.!?])\s+")
 # question words that carry the answer's *type*, not content to look up
 FILLER = {"long", "fast", "quickly", "much", "many", "often", "soon", "late", "early",
@@ -68,6 +70,7 @@ class QAResult:
     answered: bool
     evidence: list[Evidence] = field(default_factory=list)
     confidence: float = 0.0
+    corrections: list[Correction] = field(default_factory=list)
 
     @property
     def text(self) -> str:
@@ -76,19 +79,23 @@ class QAResult:
         return " ".join(f"{e.sentence} {e.citation}" for e in self.evidence)
 
     def to_dict(self) -> dict:
-        return {
+        d = {
             "question": self.question,
             "answered": self.answered,
             "confidence": round(self.confidence, 3),
             "answer": self.text,
             "evidence": [e.__dict__ for e in self.evidence],
         }
+        if self.corrections:  # only present when spelling was repaired
+            d["corrections"] = [c.__dict__ for c in self.corrections]
+        return d
 
 
 class DocQA:
     def __init__(self, chunks, min_coverage: float = 0.6, max_sentences: int = 2,
-                 top_k: int = 4, paraphrase: bool = True):
+                 top_k: int = 4, paraphrase: bool = True, spell: bool = True):
         self.paraphrase = paraphrase
+        self.spell = spell
         if not 0 <= min_coverage <= 1:
             raise ValueError("min_coverage must be in [0, 1]")
         self.min_coverage = min_coverage
@@ -97,6 +104,7 @@ class DocQA:
         self.retriever = Retriever(list(chunks))
         n = max(len(self.retriever.chunks), 1)
         self._idf = {t: math.log(1 + n / df) for t, df in self.retriever._df.items()}
+        self._speller = SpellCorrector(c.text for c in self.retriever.chunks) if spell else None
 
     @classmethod
     def from_dir(cls, docs_dir: str | Path, **kw) -> "DocQA":
@@ -126,6 +134,15 @@ class DocQA:
         return hit / total
 
     def ask(self, question: str) -> QAResult:
+        if self._speller is None:
+            return self._ask(question)
+        fixed, fixes = self._speller.correct(question)
+        r = self._ask(fixed if fixes else question)
+        r.question = question
+        r.corrections = fixes
+        return r
+
+    def _ask(self, question: str) -> QAResult:
         quantity = bool(QUANTITY_RE.search(question))
         q_terms = {t for t in tokenize(question) if t not in FILLER and len(t) > 1}
         if not q_terms:

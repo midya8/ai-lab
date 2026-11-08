@@ -32,6 +32,35 @@ were fixed by treating vague quantifiers ("certain", "amount") as filler and let
 the fix was made while looking at it, so expect it not to generalise fully; unsupported
 yes/no questions ("open on Mars?") still abstain (tested).
 
+## Typo-tolerant questions (corpus-grounded spelling)
+
+Lexical matching turns a typo into a missing term. Worse than abstaining, it can
+produce a confidently wrong answer: on the bundled docs, "How long do I have to
+*retrun* a bike?" without correction answers with the loaner-bike sentence.
+`SpellCorrector` (`docqa/spell.py`) repairs the question before retrieval, using
+only words that occur in the indexed documents (or their stems), so it cannot
+invent vocabulary:
+
+- words already in the corpus, stopwords, numbers and words under 4 letters are never touched;
+- candidates are within optimal-string-alignment (Damerau-Levenshtein) distance 1
+  (2 for words of 9+ letters); 4-letter words are fixed only for an adjacent swap ("opne" -> "open");
+- ties break by corpus frequency, then alphabetically, so output is deterministic;
+- every change is reported: `corrections` in the JSON result, and an
+  `(interpreting as: retrun -> returns)` line in the CLI. `result.question` stays the caller's text.
+
+```bash
+python -m docqa ask ../ragkit/examples/docs "How long do I have to retrun a bike?"
+python -m docqa eval ../ragkit/examples/docs eval/typos.json [--no-spell]
+```
+
+`eval/typos.json` (12 answerable questions with one typo each, plus 8 unanswerable
+including typo'd and near-vocabulary ones): spelling off answers 7/12 correctly, spelling on 12/12;
+abstention is 8/8 both ways, and the three clean benchmarks are unchanged. Caveat: the set was
+written alongside the code (the "opne" rule came from a failure on it), so treat the lift as
+a demonstration, not a generalisation estimate. Limits: it fixes single-word typos
+against the corpus vocabulary, not word splits/joins ("shop hours" typed "shophours") or
+a typo that lands on another valid corpus word. Disable with `DocQA(..., spell=False)` or `--no-spell`.
+
 ## Use as an agentkit tool
 
 ```python

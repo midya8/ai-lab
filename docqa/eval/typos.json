@@ -1,0 +1,22 @@
+[
+ {"question": "How many poinst do I need for a $10 rewrad?", "must_contain": ["200 points"], "source": "loyalty.md"},
+ {"question": "Do Spoke Club points expier?", "must_contain": ["12 months"], "source": "loyalty.md"},
+ {"question": "How much does a standrad tune-up cost?", "must_contain": ["$89"], "source": "repairs.md"},
+ {"question": "How much is a loaner bike per dya?", "must_contain": ["$15"], "source": "repairs.md"},
+ {"question": "Is shiping free over a certian amount?", "must_contain": ["$150"], "source": "shipping.md"},
+ {"question": "Can bicycels be shipped to a PO box?", "must_contain": ["PO box"], "source": "shipping.md"},
+ {"question": "What time does the shop opne on Saturday?", "must_contain": ["9am to 5pm"], "source": "store-hours.md"},
+ {"question": "Is the shop open on Sundasy?", "must_contain": ["closed on Sundays"], "source": "store-hours.md"},
+ {"question": "Does the frame warrnaty transfer to a new owner?", "must_contain": ["does not transfer"], "source": "warranty.md"},
+ {"question": "Can custom-built bikes be retruned?", "must_contain": ["cannot be returned"], "source": "returns.md"},
+ {"question": "How long do I have to retrun a bike?", "must_contain": ["30 days"], "source": "returns.md"},
+ {"question": "Is there a restocking fee for unsued items?", "must_contain": ["restocking"], "source": "returns.md"},
+ {"question": "What is the weather forcast for tomorrow?", "answerable": false},
+ {"question": "Do you offer studnet discounts on helmets?", "answerable": false},
+ {"question": "How many employess work at the shop?", "answerable": false},
+ {"question": "Who is the presidnet of France?", "answerable": false},
+ {"question": "Do you sell electric scooters or skateboards?", "answerable": false},
+ {"question": "Can I rent a tandem bicycle for the weekend?", "answerable": false},
+ {"question": "Does the shop repair motorcycles and cars?", "answerable": false},
+ {"question": "Where is the nearest train station?", "answerable": false}
+]
