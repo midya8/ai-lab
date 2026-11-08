@@ -101,6 +101,7 @@
 - agentflow v0.5: persistent run log + resume (append-only JSONL journal, dependency-chained task fingerprints so edits invalidate only downstream work, crash-tolerant reads, compact, `python -m agentflow log`; demo_resume.py; 10 new tests, 50 total)
 - lora-lab: adapter hub (swap/blend/route/compose; named adapters over one frozen GPT, delta blending, label-free routing by prompt NLL, SVD composition, save/load hub; second synthetic 'kitchen' domain; tech/kitchen specialists NLL 5.6 -> ~1.4, routing 1.000, 50/50 blend is a compromise; 13 new tests, 30 total)
 - docqa: corpus-grounded spelling correction (OSA distance 1-2 against document vocabulary only, never invents words, deterministic ties, reported corrections, --no-spell; typo benchmark answered 7/12 -> 12/12 with abstention 8/8 unchanged and clean benchmarks identical; 23 new tests, 64 total)
+- lora-lab: QLoRA-style quantized base (block-wise absmax int8 / uniform int4 / NF4 codebook, nibble-packed save files, `QuantizedBase` keeps codes and verifies the base stays frozen; GPTLoRA trains through dequantized weights unchanged; 4.3x smaller model, int8 weight error 0.6%, NF4 degrades base less than int4 (0.373 vs 0.396 NLL), adapter quality on domain B matches fp32 within noise; 20 new tests, 50 total)
 
 
 ## Next
@@ -109,7 +110,7 @@
 2. llm-eval-harness: (done) (done matrix) (done per-tag matrix) -> next: HTTP-model matrix specs
 3. tiny-transformer follow-ups: (done v0.5, top-p, grad accumulation); (done clipping); (done dropout); (done weight tying); (done early stopping); (done repetition penalty); (done LR finder); (done label smoothing); (done per-position eval); (done sliding-window eval); (done lora-lab on its attention) (done RoPE) -> next: grouped-query attention or position interpolation for length extrapolation
 4. agentflow follow-ups: (done shared memory) (done TTL) (done memory-aware Supervisor) (done failure fallback retries) (done circuit breaker) (done run metrics) (done Supervisor-in-DAG adapter) (done llm-router backend) (done persistent run log + resume) -> next: async/streaming workers
-5. lora-lab: (done rank sweep) (done LoRA on tiny-transformer attention) -> (done adapter hub) next: QLoRA-style int8 base
+5. lora-lab: (done rank sweep) (done LoRA on tiny-transformer attention) (done adapter hub) (done QLoRA-style quantized base) -> next: LoftQ-style quantization-aware adapter init, or double quantization
 6. logsentry: (done v0.6 Grafana dashboard)
 7. ticket-triage: (done urgency head) (done active learning) (done multi-label tags) (done tag-aware routing) (done SLA-breach simulation) -> next: feed live router output into the simulator
 8. llm-router: (done v0.1) -> (done latency tracking) (done semantic cache) (done learned complexity classifier) (done persistence)

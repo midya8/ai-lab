@@ -70,3 +70,24 @@ Demo: pretrain on Shakespeare (A), then train a `tech` adapter (B) and a `kitche
 What to take from it, honestly: each specialist wins its own domain and cuts NLL from ~5.6 to ~1.4. Routing picks the right adapter from a 48-character snippet 100% of the time on these two very different grammars (harder, closer domains would be harder). A 50/50 blend is a compromise, not a union: about halfway on both new domains, so blending is for interpolating behaviour, and routing is the better tool when you know which domain you are in. The SVD-composed adapter reproduces the blend to ~1e-7 relative error, so a blend can be shipped as one ordinary adapter file.
 
 Tests (`tests/test_hub.py`, 13): bit-exact base and weight restoration, single adapter equals `GPTLoRA`, linear delta blending, factor-averaging is *not* the blend, exact compose at sum of ranks and monotone truncation error, registry errors, merged-adapter refusal, mixed-rank save/load round-trip, prompt NLL vs manual windows (odd lengths), domain generator, training reduces loss, end-to-end routing/specialisation.
+
+## QLoRA-style: adapters on a quantized base
+
+`loralab.quant` quantizes the frozen GPT's linear weights block-wise (absmax scale per `--block` weights, default 64) in three schemes: `int8`, uniform `int4`, and `nf4` (QLoRA's 4-bit NormalFloat codebook, whose levels sit at normal quantiles and spend the few 4-bit levels where Gaussian-ish weights actually are). `QuantizedBase` swaps the model's `qkv/proj/fc/out` weights for their dequantized values and keeps the integer codes (4-bit codes nibble-packed in `.save()` files), so `GPTLoRA` trains fp32 adapters on top with no other change: the hand-written backward flows through the dequantized weights, which is the QLoRA recipe. `verify_frozen()` proves training never touched the base.
+
+```
+PYTHONPATH=src python -m loralab.qlora_demo [--rank 4] [--block 64] [--schemes fp32,int8,nf4,int4]
+```
+
+Pretrain on Shakespeare (A) in fp32, quantize, then train rank-4 attention adapters on the synthetic tech domain (B). Held-out NLL in nats/char, seed 0, ~40 s on CPU. The last column trains fresh adapters on A itself over the same quantized base:
+
+| base | model KiB | weight err | NLL A (base) | NLL B (base) | NLL B (+LoRA) | NLL A (+LoRA on A) |
+|---|---|---|---|---|---|---|
+| fp32 | 241.6 | 0.0000 | 0.368 | 5.690 | 1.422 | 0.249 |
+| int8 | 83.0 | 0.0062 | 0.368 | 5.690 | 1.448 | 0.249 |
+| nf4 | 56.0 | 0.0940 | 0.373 | 5.621 | 1.442 | 0.253 |
+| int4 | 56.0 | 0.1131 | 0.396 | 5.677 | 1.421 | 0.251 |
+
+Reading it honestly: the model is 4.3x smaller (embeddings, biases and LayerNorm stay fp32; the linear weights alone shrink ~3.8x at 8 bit and ~7x at 4 bit, scales included). int8 is lossless in practice (0.6% weight error). At 4 bits the plain base degrades on A (int4 0.368 → 0.396) and NF4 loses less than uniform int4 at the same size (0.373), matching the codebook's design goal. LoRA on the quantized base reaches the fp32 adapter's domain-B NLL within noise (all four land in 1.42-1.45; one seed, so differences of a few hundredths are not meaningful). Training adapters on A closes the quantization gap completely, but note that fp32 improves too (0.368 → 0.249): that column shows the adapters absorbing the precision loss, not a recovery beyond the fp32 baseline. A 62k-parameter model is a forgiving test: its weights are over-trained on a small corpus, and bigger models tolerate 4 bits better still.
+
+Tests (`tests/test_quant.py`, 20): NF4 codebook shape, int8 half-step error bound, error ordering int8 < nf4 < int4 on Gaussian weights, block-size monotonicity, an outlier only damaging its own block, zero blocks and padding, exact reproduction of codebook levels, nibble pack/unpack, stored-byte ratios, only targeted tensors change, parameters equal dequantized codes, finite-difference adapter gradients through an int4 base, frozen codes after training, save/load round trip for every scheme, demo smoke test.
