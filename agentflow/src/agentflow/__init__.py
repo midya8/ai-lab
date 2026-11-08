@@ -10,3 +10,5 @@ from .metrics import RunMetrics, compute_metrics
 __all__ += ["RunMetrics", "compute_metrics"]
 from .integration import SupervisedAgent
 __all__ += ["SupervisedAgent"]
+from .router_backend import RouterBackend, RouterLLM, BudgetExhausted, json_or_text
+__all__ += ["RouterBackend", "RouterLLM", "BudgetExhausted", "json_or_text"]

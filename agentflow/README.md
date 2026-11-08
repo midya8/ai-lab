@@ -29,3 +29,11 @@ python -m pytest
 
 ## Supervisor inside a DAG
 `SupervisedAgent(supervisor, name="auto")` wraps a Supervisor as an Agent, so any Orchestrator task addressed to `auto` is routed to the best worker (with memory, fallbacks and circuit breaking). `routing_summary()` counts routes; `decisions` keeps per-call metadata such as `failed_attempts`. A total failure marks the task failed and skips downstream tasks as usual.
+
+## llm-router backend (v0.4)
+`RouterBackend(router, max_cost=None)` lets every agent in a pipeline run on one `llm-router` `Router` (duck-typed, so agentflow still has no dependencies). `backend.llm(name, strategy="cheapest"|"quality"|..., max_tokens=, verifier=)` returns a normal agentflow LLM, so a planner can ask for quality while parallel scrapers ask for the cheapest model. Router calls are serialized behind a lock (the router's stats aren't thread-safe), every call is recorded, and `backend.report()` / `format_report()` give cost, cache hits and fallbacks per agent and per model. `max_cost` refuses further calls with `BudgetExhausted` once spend is reached, which the Orchestrator treats as an ordinary task failure. `json_or_text` is a ready-made verifier that rejects malformed protocol messages so a router cascade escalates to a stronger model.
+
+```
+python demo_router.py   # planner -> 3 parallel scrapers -> writer; prints spend per agent
+```
+Demo prices come from llm-router's illustrative catalogue, so the savings figure shows the mechanism, not a vendor bill.
