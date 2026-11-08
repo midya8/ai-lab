@@ -4,7 +4,7 @@ Midya's AI lab: small, tested, runnable AI projects.
 
 | Project | Pitch |
 |---|---|
-| [MarginLab](https://github.com/midya8/marginlab) | Manual linear/RBF dual SVM, complete pair replay, 60 exact tiny oracles and editable 30-feature browser; 20 Python/five Node tests. Historical educational data, not clinical validation. |
+| [MarginLab](https://github.com/midya8/marginlab) | Manual linear/RBF dual SVM and exact represented-linear weak-duality proofs after equality repair; independent Fraction/BigInt readers and separate source matching. 29 Python/nine Node tests. [Live proof inspector](https://midya8.github.io/marginlab/certificate.html). Historical educational data, not clinical validation or authentication. |
 | [rag-evals](rag-evals) | From-scratch BM25, LSA and RRF-hybrid RAG retrieval with chunking and Recall/MRR/nDCG evaluation harness |
 | [agentkit](agentkit) | Dependency-free LLM agent runner: tool-calling loop, bounded steps, loop detection, dry-run, JSON trace — 46 tests |
 | [ragkit](ragkit) | Local RAG over your own docs: chunking, TF-IDF/BM25 retrieval, answers with citations, eval — 59 tests |
