@@ -42,3 +42,31 @@ Demo: pretrain a 2-layer char GPT (61,862 params) on Shakespeare, then adapt it 
 Reading it honestly: full fine-tuning fits the new domain best but wipes out the old one (A: 0.37 → 5.47) and needs a whole new checkpoint. LoRA closes most of the gap on B with a few percent of the weights and forgets far less; "forgets less" is measured with the adapter on, and switching it off returns the exact base model (A: 0.368), which is the practical win: one frozen base, many tiny swappable adapters. More rank/targets buy a better fit on B at the cost of more drift on A.
 
 Tests (`tests/test_gpt_lora.py`, 10): zero-init equals base logits, finite-difference gradient check on every adapter incl. MLP targets, base weights untouched after training, loss decreases, merge ≡ adapted forward and unmerge restores, adapter-off is bit-exact base, parameter counts, adapter save/load round-trip with mismatch rejection, deterministic domain text, end-to-end adaptation.
+
+## Adapter hub: swap, blend, route, compose
+
+`loralab.hub.AdapterHub` keeps one frozen GPT and any number of named adapters (same targets, ranks may differ):
+
+- **swap**: `hub.active("tech")` loads one adapter; `hub.active(None)` is the bit-exact base model. Weights are restored on exit.
+- **blend**: `hub.active({"tech": .5, "kitchen": .5})` uses `W + Σ wᵢ·ΔWᵢ`. It blends the *deltas*, not the A/B factors (`mean(A)·mean(B) ≠ mean(A·B)`, and a test pins that).
+- **route**: `hub.route(ids)` scores a short snippet under each adapter (and the base) and returns the lowest-NLL one. No labels, no classifier.
+- **compose**: `hub.compose(spec, "mix", rank=k)` folds a blend into a single new adapter with a per-weight truncated SVD, and reports the relative error. It is exact when `k` ≥ the sum of the parts' ranks.
+- `hub.save(dir)` / `AdapterHub.load(model, dir)`: one `.npz` per adapter plus `hub.json`.
+
+```
+PYTHONPATH=src python -m loralab.hub_demo [--rank 4] [--save DIR]
+```
+
+Demo: pretrain on Shakespeare (A), then train a `tech` adapter (B) and a `kitchen` adapter (C) independently from the same frozen base (rank 4, 2,304 params = 3.7% each). Held-out NLL in nats/char, seed 0, ~15 s on CPU. B and C are synthetic template text.
+
+| config | NLL A (Shakespeare) | NLL B (tech) | NLL C (kitchen) |
+|---|---|---|---|
+| base (no adapter) | 0.368 | 5.690 | 5.497 |
+| tech adapter | 3.500 | 1.393 | 3.145 |
+| kitchen adapter | 3.537 | 2.995 | 1.444 |
+| blend 50/50 | 3.346 | 2.428 | 2.898 |
+| composed 50/50 (SVD, rank 8) | 3.346 | 2.428 | 2.898 |
+
+What to take from it, honestly: each specialist wins its own domain and cuts NLL from ~5.6 to ~1.4. Routing picks the right adapter from a 48-character snippet 100% of the time on these two very different grammars (harder, closer domains would be harder). A 50/50 blend is a compromise, not a union: about halfway on both new domains, so blending is for interpolating behaviour, and routing is the better tool when you know which domain you are in. The SVD-composed adapter reproduces the blend to ~1e-7 relative error, so a blend can be shipped as one ordinary adapter file.
+
+Tests (`tests/test_hub.py`, 13): bit-exact base and weight restoration, single adapter equals `GPTLoRA`, linear delta blending, factor-averaging is *not* the blend, exact compose at sum of ranks and monotone truncation error, registry errors, merged-adapter refusal, mixed-rank save/load round-trip, prompt NLL vs manual windows (odd lengths), domain generator, training reduces loss, end-to-end routing/specialisation.
