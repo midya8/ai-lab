@@ -78,7 +78,7 @@
 5. lora-lab: LoRA on tiny-transformer attention, rank sweep
 6. logsentry: (done v0.6 Grafana dashboard)
 7. ticket-triage: (done urgency head) -> next: multi-label tags, active-learning review queue
-8. llm-router: (done v0.1) -> (done latency tracking) (done semantic cache) next: learned complexity classifier
+8. llm-router: (done v0.1) -> (done latency tracking) (done semantic cache) (done learned complexity classifier) next: semantic-cache persistence
 9. promptlab: (done v0.1) -> v0.2 multi-sample done; next: LLM-judge check via evalkit, GitHub Action for check
 10. docqa: document Q&A CLI built on ragkit + agentkit, citations, no-hallucination mode
 11. autojob: agentic job-application assistant (only Midya's real resume data, never invents experience)

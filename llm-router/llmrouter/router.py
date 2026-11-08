@@ -83,6 +83,7 @@ class Router:
         balance_weights: tuple[float, float] = (0.6, 0.4),
         allow_downgrade_on_failure: bool = False,
         latency_tracker: "LatencyTracker | None" = None,
+        scorer=None,
     ) -> None:
         if not models:
             raise ValueError("at least one model is required")
@@ -98,6 +99,7 @@ class Router:
         self.balance_weights = balance_weights
         self.allow_downgrade = allow_downgrade_on_failure
         self.latency_tracker = latency_tracker
+        self.scorer = scorer or score_prompt
         self.breakers = {
             m.name: CircuitBreaker(breaker_threshold, breaker_cooldown_s, self.clock)
             for m in self.models
@@ -115,7 +117,7 @@ class Router:
         strategy = strategy or self.strategy
         if strategy not in STRATEGIES:
             raise ValueError(f"unknown strategy {strategy!r}; choose from {STRATEGIES}")
-        complexity = score_prompt(prompt)
+        complexity = self.scorer(prompt)
         required = complexity.required_quality()
         degraded = bool(self.budget and self.budget.degraded)
         if degraded:

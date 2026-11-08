@@ -119,3 +119,17 @@ from llmrouter import Router, SemanticCache
 router = Router(models, provider, cache=SemanticCache(threshold=0.85))
 ```
 Lower thresholds raise hit rate but risk serving a wrong answer; tune on your traffic.
+
+## Learned complexity classifier
+
+`LearnedComplexity` is a stdlib logistic regression over hashed word/bigram features, with the
+heuristic score as a prior feature. Train it on (prompt, difficulty) pairs from your own traffic
+(1 = needed the top model) and plug it in; untrained, it falls back to the heuristic.
+
+```python
+from llmrouter import LearnedComplexity, Router
+clf = LearnedComplexity(); clf.fit([("say hello", 0.0), ("plan a sharding migration", 1.0)])
+clf.save("complexity.json")            # LearnedComplexity.load("complexity.json")
+router = Router(models, provider, scorer=clf.score)
+```
+Needs a reasonable number of labelled prompts to beat the heuristic; the unit-test data is tiny and synthetic.
