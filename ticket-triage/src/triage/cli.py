@@ -54,6 +54,8 @@ def main(argv=None):
         print(" ".join(f"{t}:{x:.2f}" for t, x in zip(TAGS, m["per_tag_f1"])))
         if a.text:
             print("tags:", tc.predict_tags(a.text))
+            from .routing import TaggedTriage
+            print("tagged route:", TaggedTriage().fit(td[:c1], td[c1:c2]).route(a.text))
     if a.text:
         print(Triage().fit(tr).route(a.text))
 

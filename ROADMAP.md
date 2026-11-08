@@ -78,6 +78,7 @@
 - rag-evals v0.5: chunk-size sweep (--sweep, Markdown table, best-by-MRR helper; 4 new tests)
 
 - ticket-triage: multi-label tags (OvR logistic, per-tag tuned thresholds, micro/macro F1, Hamming, exact-match, --tags; 7 new tests)
+- ticket-triage: tag-aware routing (queue + priority + SLA from category, urgency, tags; overridable rules; 7 new tests)
 
 ## Next
 
@@ -87,7 +88,7 @@
 4. agentflow follow-ups: (done shared memory) -> next: memory-aware Supervisor, TTL
 5. lora-lab: (done rank sweep) -> next: harder task so ranks separate, LoRA on tiny-transformer attention
 6. logsentry: (done v0.6 Grafana dashboard)
-7. ticket-triage: (done urgency head) (done active learning) (done multi-label tags) -> next: tag-aware routing queues
+7. ticket-triage: (done urgency head) (done active learning) (done multi-label tags) (done tag-aware routing) -> next: SLA-breach simulation
 8. llm-router: (done v0.1) -> (done latency tracking) (done semantic cache) (done learned complexity classifier) (done persistence)
 9. promptlab: (done v0.1) -> v0.2 multi-sample done; (done GitHub Action + summary); next: LLM-judge check via evalkit
 10. docqa: document Q&A CLI built on ragkit + agentkit, citations, no-hallucination mode
