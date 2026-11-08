@@ -21,6 +21,10 @@ class Layer:
     def grads(self) -> dict:
         return {}
 
+    def buffers(self) -> dict:
+        """Non-trainable state that must survive save/load (e.g. running statistics)."""
+        return {}
+
     def forward(self, x):  # pragma: no cover - interface
         raise NotImplementedError
 
@@ -172,3 +176,72 @@ class Dropout(Layer):
 
     def backward(self, g):
         return g if self._mask is None else g * self._mask
+
+
+class BatchNorm2D(Layer):
+    """Per-channel batch normalisation (Ioffe & Szegedy) for NCHW tensors.
+
+    Training mode normalises with the batch statistics and updates exponential running
+    averages; eval mode uses the running averages, so it is a fixed per-channel affine map
+    (its backward is then just a scale, which attacks and Grad-CAM rely on).
+    """
+
+    def __init__(self, ch, momentum=0.1, eps=1e-5, dtype=np.float32):
+        self.ch, self.momentum, self.eps = ch, float(momentum), float(eps)
+        self.gamma = np.ones(ch, dtype=dtype)
+        self.beta = np.zeros(ch, dtype=dtype)
+        self.dgamma = np.zeros_like(self.gamma)
+        self.dbeta = np.zeros_like(self.beta)
+        self.running_mean = np.zeros(ch, dtype=dtype)
+        self.running_var = np.ones(ch, dtype=dtype)
+        self._cache = None
+
+    def params(self):
+        return {"gamma": self.gamma, "beta": self.beta}
+
+    def grads(self):
+        return {"gamma": self.dgamma, "beta": self.dbeta}
+
+    def buffers(self):
+        return {"running_mean": self.running_mean, "running_var": self.running_var}
+
+    def forward(self, x):
+        if self.training:
+            mean = x.mean(axis=(0, 2, 3))
+            var = x.var(axis=(0, 2, 3))
+            m = self.momentum
+            n = x.size / self.ch
+            self.running_mean *= 1 - m
+            self.running_mean += m * mean
+            self.running_var *= 1 - m
+            self.running_var += m * var * (n / max(n - 1, 1))   # unbiased estimate for inference
+        else:
+            mean, var = self.running_mean, self.running_var
+        inv = 1.0 / np.sqrt(var + self.eps)
+        xhat = (x - mean[None, :, None, None]) * inv[None, :, None, None]
+        self._cache = (xhat, inv, self.training)
+        return xhat * self.gamma[None, :, None, None] + self.beta[None, :, None, None]
+
+    def backward(self, g):
+        xhat, inv, was_training = self._cache
+        self.dgamma[...] = (g * xhat).sum(axis=(0, 2, 3))
+        self.dbeta[...] = g.sum(axis=(0, 2, 3))
+        gx = g * self.gamma[None, :, None, None]
+        if not was_training:
+            return gx * inv[None, :, None, None]
+        m = g.shape[0] * g.shape[2] * g.shape[3]
+        return (inv[None, :, None, None] / m) * (
+            m * gx - gx.sum(axis=(0, 2, 3), keepdims=True)
+            - xhat * (gx * xhat).sum(axis=(0, 2, 3), keepdims=True))
+
+
+class GlobalAvgPool(Layer):
+    """Mean over the spatial dimensions: (N,C,H,W) -> (N,C). Gives translation invariance."""
+
+    def forward(self, x):
+        self._shape = x.shape
+        return x.mean(axis=(2, 3))
+
+    def backward(self, g):
+        n, c, h, w = self._shape
+        return np.broadcast_to((g / (h * w))[:, :, None, None], self._shape).copy()

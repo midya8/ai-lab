@@ -10,7 +10,7 @@ A convolutional neural network, its trainer, three attribution methods and two a
 
 | Module | What it does |
 |---|---|
-| `layers.py` | `Conv2D` (im2col via strided window view + one matmul), `MaxPool2D` (one-argmax gradient routing), `Dense`, `ReLU`, inverted `Dropout`, `Flatten`, fixed `Normalize` |
+| `layers.py` | `Conv2D` (im2col via strided window view + one matmul), `MaxPool2D` (one-argmax gradient routing), `Dense`, `BatchNorm2D` (batch stats in training, running stats in eval, saved with the model), `GlobalAvgPool`, `ReLU`, inverted `Dropout`, `Flatten`, fixed `Normalize` |
 | `model.py` | `Sequential` that records every layer's activation and output-gradient (used by Grad-CAM), softmax CE with label smoothing, `.npz` save/load with the architecture embedded |
 | `optim.py` | SGD + momentum, AdamW-style decoupled weight decay |
 | `data.py` | Procedural, anti-aliased, seeded dataset: disk, ring, square, triangle, cross, stripes at random size/position/rotation/brightness/noise |
@@ -30,7 +30,8 @@ python -m visionlab eval --model model.npz                  # accuracy + Wilson 
 python -m visionlab explain --model model.npz --faithfulness 150
 python -m visionlab robust --model model.npz
 python -m visionlab show --model model.npz -n 2             # ASCII-art predictions
-python -m pytest -q                                         # 41 tests, ~10 s
+python -m visionlab train --head gap --batchnorm --width 16   # translation-robust head (see below)
+python -m pytest -q                                         # 49 tests, ~10 s
 ```
 
 ## Results (all on synthetic shapes, test set disjoint from training)
@@ -60,12 +61,25 @@ Occlusion wins because it measures the effect of removing pixels directly, which
 
 Clean accuracy is unchanged within seed noise (+-0.01); robustness at and below the training budget roughly doubles. Noise/shift robustness did not improve (noise 0.3: 0.757 vs 0.750; shift 2 px: 0.795 vs 0.805), and contrast-0.5 accuracy dropped (0.910 -> 0.865). Robustness does not transfer across perturbation types, and eps = 0.1 stays largely broken. Only 3 seeds, so differences of ~0.01-0.02 are noise.
 
+**Where the dense head breaks, and a global-average-pool head** (`experiments/heads_shift.py`, mean of 3 seeds, 1,000 test images; shifts are diagonal with zero fill). `--head gap` replaces flatten + MLP with a third conv and a global average pool, so evidence is summed over positions instead of being tied to them; `--batchnorm` adds `BatchNorm2D` after every conv.
+
+| head | params | clean | shift 1px | 2px | 3px | 4px | noise 0.3 | contrast 0.5 |
+|---|---|---|---|---|---|---|---|---|
+| dense | 38,566 | 0.984 (±0.008) | 0.944 | 0.792 | 0.557 | 0.366 | 0.745 | 0.902 |
+| dense + BN | 38,614 | 0.966 (±0.003) | 0.929 | 0.746 | 0.498 | 0.310 | 0.730 | 0.880 |
+| GAP | 6,086 | 0.894 (±0.013) | 0.884 | 0.858 | 0.833 | 0.787 | 0.447 | 0.369 |
+| GAP + BN | 6,198 | 0.937 (±0.009) | 0.937 | 0.918 | 0.901 | 0.873 | 0.597 | 0.523 |
+| GAP + BN, width 16 | 23,910 | 0.978 (±0.003) | 0.978 | 0.970 | 0.961 | 0.928 | 0.716 | 0.656 |
+
+The dense head loses 62 points between 0 and 4 px of shift; the width-16 GAP + BN model loses 5 and, with 38 % fewer parameters, is within noise of the dense model on clean data. BatchNorm is what makes the small GAP net trainable in 12 epochs (+4 points clean) but it does *not* help the dense head (-2 points, one fewer point of noise robustness). The price of the GAP head is photometric brittleness: at contrast 0.5 it keeps 0.656 against the dense model's 0.902, and noise 0.3 is about the same. A plausible cause is that averaging over the whole image makes the decision depend on global activation level, which dimming changes; I did not test this explanation. The comparison is not parameter-matched except for the last row, only 12 epochs and 3 seeds were run, and "clean" is equal for dense and the last GAP row only within seed noise.
+
 ## How it is tested
 
 - Gradient checks (float64 finite differences) for `Conv2D` at several paddings/kernel sizes, `Dense`, `ReLU`, `MaxPool2D` (even and odd sizes), `Normalize`, the cross-entropy + label-smoothing gradient, the whole network w.r.t. every parameter *and* its input, and the loss gradient used by the attacks.
 - `Conv2D` equals a naive 4-loop convolution; max-pool ties send the gradient to exactly one pixel.
 - Saliency equals the finite-difference logit gradient; Grad-CAM uses the right layer and is class-specific; occlusion of blank background is zero; the deletion curve starts at the clean probability and an informative map beats a random one.
 - FGSM/PGD stay inside the eps ball and the valid pixel range and raise the loss; adversarial training improves FGSM accuracy; optimisers converge on a quadratic.
+- `BatchNorm2D` gradient-checked in training and eval mode, running statistics converge to the data's and do not move in eval mode; `GlobalAvgPool` gradient-checked and invariant to any spatial permutation; whole-network gradient check for the GAP + BN architecture in both modes; BN running statistics survive save/load; the default architecture's parameter count is pinned (38,566) so the new options cannot silently change it.
 - Dataset determinism, class balance, label-preserving augmentation, PNG round trip, save/load round trip.
 
 ## Limits

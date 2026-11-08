@@ -18,7 +18,8 @@ from .train import train
 def cmd_train(a):
     Xtr, ytr = make_dataset(a.train, seed=a.seed * 10 + 1, noise=a.noise)
     Xva, yva = make_dataset(a.val, seed=a.seed * 10 + 2, noise=a.noise)
-    model = build_cnn(ModelConfig(width=a.width, hidden=a.hidden, dropout=a.dropout, seed=a.seed))
+    model = build_cnn(ModelConfig(width=a.width, hidden=a.hidden, dropout=a.dropout, seed=a.seed,
+                                  head=a.head, batchnorm=a.batchnorm))
     print(f"{model.n_params():,} parameters, {a.train} train / {a.val} val images")
     train(model, Xtr, ytr, Xva, yva, epochs=a.epochs, batch=a.batch, lr=a.lr, seed=a.seed,
           adv_eps=a.adv_eps, label_smoothing=a.label_smoothing)
@@ -95,6 +96,9 @@ def main(argv=None):
     t.add_argument("--width", type=int, default=8)
     t.add_argument("--hidden", type=int, default=64)
     t.add_argument("--dropout", type=float, default=0.0)
+    t.add_argument("--head", choices=["dense", "gap"], default="dense",
+                   help="dense: flatten+MLP; gap: third conv + global average pool (translation-robust)")
+    t.add_argument("--batchnorm", action="store_true", help="BatchNorm2D after every conv")
     t.add_argument("--adv-eps", type=float, default=0.0, help="FGSM adversarial training strength")
     t.add_argument("--label-smoothing", type=float, default=0.0)
     t.add_argument("--noise", type=float, default=0.2)

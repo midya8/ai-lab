@@ -6,7 +6,7 @@ from dataclasses import asdict, dataclass
 
 import numpy as np
 
-from .layers import Conv2D, Dense, Dropout, Flatten, MaxPool2D, Normalize, ReLU
+from .layers import BatchNorm2D, Conv2D, Dense, Dropout, Flatten, GlobalAvgPool, MaxPool2D, Normalize, ReLU
 
 
 class Sequential:
@@ -60,6 +60,14 @@ class Sequential:
                 out.append((f"{i}.{type(layer).__name__}.{name}", p, g[name]))
         return out
 
+    def buffers(self):
+        """List of (name, array) for non-trainable state such as BatchNorm running statistics."""
+        out = []
+        for i, layer in enumerate(self.layers):
+            for name, b in layer.buffers().items():
+                out.append((f"{i}.{type(layer).__name__}.{name}", b))
+        return out
+
     def n_params(self) -> int:
         return int(sum(p.size for _, p, _ in self.parameters()))
 
@@ -81,6 +89,7 @@ class Sequential:
     # --- persistence --------------------------------------------------
     def save(self, path):
         arrays = {name: p for name, p, _ in self.parameters()}
+        arrays.update({name: b for name, b in self.buffers()})
         arrays["__config__"] = np.frombuffer(json.dumps(asdict(self.config)).encode(), dtype=np.uint8)
         np.savez(path, **arrays)
 
@@ -91,6 +100,8 @@ class Sequential:
             model = build_cnn(cfg)
             for name, p, _ in model.parameters():
                 p[...] = z[name]
+            for name, b in model.buffers():
+                b[...] = z[name]
         return model
 
 
@@ -121,24 +132,38 @@ class ModelConfig:
     mean: float = 0.25
     std: float = 0.3
     seed: int = 0
+    head: str = "dense"       # "dense": flatten -> hidden -> classes; "gap": third conv + global average pool
+    batchnorm: bool = False
 
 
 def build_cnn(cfg: ModelConfig | None = None, **overrides) -> Sequential:
-    """conv-relu-pool x2 -> dense -> dense. ``img`` must be divisible by 4."""
+    """conv-relu-pool x2 followed by a dense head or (``head="gap"``) a third conv + global
+    average pool + linear classifier. ``batchnorm`` inserts BatchNorm2D after every conv.
+    ``img`` must be divisible by 4."""
     cfg = cfg or ModelConfig(**overrides)
     if cfg.img % 4:
         raise ValueError("img must be divisible by 4")
+    if cfg.head not in ("dense", "gap"):
+        raise ValueError("head must be 'dense' or 'gap'")
     rng = np.random.default_rng(cfg.seed)
     dt = np.dtype(cfg.dtype)
     w = cfg.width
     side = cfg.img // 4
-    layers = [
-        Normalize(cfg.mean, cfg.std),
-        Conv2D(1, w, 3, 1, rng, dt), ReLU(), MaxPool2D(),
-        Conv2D(w, 2 * w, 3, 1, rng, dt), ReLU(), MaxPool2D(),
-        Flatten(),
-        Dropout(cfg.dropout, np.random.default_rng(cfg.seed + 1)),
-        Dense(2 * w * side * side, cfg.hidden, rng, dt), ReLU(),
-        Dense(cfg.hidden, cfg.n_classes, rng, dt),
-    ]
+
+    def block(cin, cout, pool):
+        out = [Conv2D(cin, cout, 3, 1, rng, dt)]
+        if cfg.batchnorm:
+            out.append(BatchNorm2D(cout, dtype=dt))
+        out.append(ReLU())
+        return out + ([MaxPool2D()] if pool else [])
+
+    layers = [Normalize(cfg.mean, cfg.std)] + block(1, w, True) + block(w, 2 * w, True)
+    if cfg.head == "gap":
+        layers += block(2 * w, 4 * w, False)
+        layers += [GlobalAvgPool(), Dropout(cfg.dropout, np.random.default_rng(cfg.seed + 1)),
+                   Dense(4 * w, cfg.n_classes, rng, dt)]
+    else:
+        layers += [Flatten(), Dropout(cfg.dropout, np.random.default_rng(cfg.seed + 1)),
+                   Dense(2 * w * side * side, cfg.hidden, rng, dt), ReLU(),
+                   Dense(cfg.hidden, cfg.n_classes, rng, dt)]
     return Sequential(layers, cfg)

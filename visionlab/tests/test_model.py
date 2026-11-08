@@ -71,3 +71,51 @@ def test_predict_restores_training_flags():
     m.train()
     m.predict(np.zeros((1, 1, 8, 8)))
     assert all(l.training for l in m.layers)
+
+
+def test_gap_batchnorm_network_gradcheck_in_train_and_eval_mode():
+    rng = np.random.default_rng(20)
+    m = tiny(head="gap", batchnorm=True)
+    # non-trivial running stats and affine params so eval mode is not the identity
+    for layer in m.layers:
+        if hasattr(layer, "running_mean"):
+            layer.running_mean[...] = rng.standard_normal(layer.ch) * 0.1
+            layer.running_var[...] = rng.uniform(0.5, 1.5, layer.ch)
+            layer.gamma[...] = rng.uniform(0.7, 1.3, layer.ch)
+            layer.beta[...] = rng.standard_normal(layer.ch) * 0.1
+    x = rng.random((4, 1, 8, 8))
+    y = np.array([0, 1, 2, 1])
+    for mode in ("train", "eval"):
+        getattr(m, mode)()
+        f = lambda: cross_entropy(m.forward(x), y)[0]
+        loss, dl = cross_entropy(m.forward(x), y)
+        dx = m.backward(dl)
+        np.testing.assert_allclose(dx, num_grad(f, x), atol=1e-6, rtol=1e-4, err_msg=mode)
+        m.forward(x)
+        m.backward(cross_entropy(m.forward(x), y)[1])
+        for name, p, g in m.parameters():
+            np.testing.assert_allclose(g, num_grad(f, p), atol=1e-6, rtol=1e-4, err_msg=f"{mode} {name}")
+
+
+def test_save_load_round_trip_keeps_batchnorm_running_stats(tmp_path):
+    rng = np.random.default_rng(21)
+    m = build_cnn(ModelConfig(img=8, width=2, n_classes=3, head="gap", batchnorm=True))
+    m.train()
+    for _ in range(5):
+        m.forward(rng.random((8, 1, 8, 8)).astype(np.float32))
+    assert any(np.abs(b).sum() > 0 for _, b in m.buffers())
+    path = tmp_path / "m.npz"
+    m.save(path)
+    m2 = Sequential.load(path)
+    assert m2.config.head == "gap" and m2.config.batchnorm
+    x = rng.random((6, 1, 8, 8)).astype(np.float32)
+    np.testing.assert_allclose(m.predict_logits(x), m2.predict_logits(x), atol=1e-6)
+
+
+def test_head_validation_and_default_architecture_unchanged():
+    with pytest.raises(ValueError):
+        build_cnn(ModelConfig(head="nope"))
+    d = build_cnn(ModelConfig())
+    assert d.n_params() == 38566            # published parameter count of the default model
+    assert not d.buffers()
+    assert build_cnn(ModelConfig(head="gap", batchnorm=True)).buffers()

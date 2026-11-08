@@ -107,3 +107,62 @@ def test_dropout_train_vs_eval_and_scaling():
     np.testing.assert_array_equal(d.backward(np.ones_like(x)), y)  # same mask on the way back
     d.training = False
     np.testing.assert_array_equal(d.forward(x), x)
+
+
+def test_batchnorm_gradcheck_training_mode():
+    from visionlab.layers import BatchNorm2D
+    rng = np.random.default_rng(10)
+    bn = BatchNorm2D(3, dtype=np.float64)
+    bn.gamma[...] = rng.uniform(0.5, 1.5, 3)
+    bn.beta[...] = rng.standard_normal(3)
+    bn.training = True
+    check_layer(bn, rng.standard_normal((4, 3, 3, 3)), rng)
+
+
+def test_batchnorm_gradcheck_eval_mode_uses_running_stats():
+    from visionlab.layers import BatchNorm2D
+    rng = np.random.default_rng(11)
+    bn = BatchNorm2D(2, dtype=np.float64)
+    bn.running_mean[...] = [0.3, -0.2]
+    bn.running_var[...] = [1.7, 0.6]
+    bn.gamma[...] = [1.2, 0.8]
+    bn.training = False
+    check_layer(bn, rng.standard_normal((3, 2, 4, 4)), rng)
+
+
+def test_batchnorm_training_output_is_standardised_per_channel():
+    from visionlab.layers import BatchNorm2D
+    rng = np.random.default_rng(12)
+    bn = BatchNorm2D(3, dtype=np.float64)
+    x = rng.standard_normal((16, 3, 5, 5)) * [[[[2.0]], [[0.5]], [[3.0]]]] + [[[[1.0]], [[-4.0]], [[0.0]]]]
+    out = bn.forward(x)
+    np.testing.assert_allclose(out.mean(axis=(0, 2, 3)), 0, atol=1e-9)
+    np.testing.assert_allclose(out.var(axis=(0, 2, 3)), 1, atol=1e-3)
+
+
+def test_batchnorm_running_stats_converge_and_eval_matches_them():
+    from visionlab.layers import BatchNorm2D
+    rng = np.random.default_rng(13)
+    bn = BatchNorm2D(2, momentum=0.2, dtype=np.float64)
+    for _ in range(200):
+        bn.forward(rng.standard_normal((32, 2, 4, 4)) * 2.0 + 3.0)
+    np.testing.assert_allclose(bn.running_mean, 3.0, atol=0.15)
+    np.testing.assert_allclose(bn.running_var, 4.0, rtol=0.1)
+    bn.training = False
+    x = rng.standard_normal((5, 2, 4, 4))
+    expect = (x - bn.running_mean[None, :, None, None]) / np.sqrt(bn.running_var[None, :, None, None] + bn.eps)
+    np.testing.assert_allclose(bn.forward(x), expect, atol=1e-12)
+    # eval mode must not move the statistics
+    before = bn.running_mean.copy()
+    bn.forward(x + 10)
+    np.testing.assert_array_equal(bn.running_mean, before)
+
+
+def test_global_avg_pool_gradcheck_and_spatial_permutation_invariance():
+    from visionlab.layers import GlobalAvgPool
+    rng = np.random.default_rng(14)
+    check_layer(GlobalAvgPool(), rng.standard_normal((2, 3, 4, 5)), rng)
+    x = rng.standard_normal((2, 3, 4, 4))
+    perm = rng.permutation(16)
+    xp = x.reshape(2, 3, 16)[:, :, perm].reshape(2, 3, 4, 4)
+    np.testing.assert_allclose(GlobalAvgPool().forward(x), GlobalAvgPool().forward(xp), atol=1e-12)
