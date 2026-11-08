@@ -8,6 +8,7 @@ from typing import Callable
 from .breaker import CircuitBreaker
 from .budget import Budget, BudgetExceeded
 from .cache import ResponseCache, cache_key
+from .semantic import SemanticCache
 from .clock import SystemClock
 from .complexity import Complexity, score_prompt
 from .latency import LatencyTracker
@@ -73,7 +74,7 @@ class Router:
         models: list[ModelSpec],
         provider: Provider,
         strategy: str = "balanced",
-        cache: ResponseCache | None = None,
+        cache: "ResponseCache | SemanticCache | None" = None,
         budget: Budget | None = None,
         clock=None,
         breaker_threshold: int = 3,
@@ -194,7 +195,11 @@ class Router:
 
         key = cache_key(prompt, max_tokens)
         if self.cache is not None and verifier is None:
-            hit = self.cache.get(key)
+            if hasattr(self.cache, "lookup"):
+                found = self.cache.lookup(prompt, max_tokens)
+                hit = found[0] if found else None
+            else:
+                hit = self.cache.get(key)
             if hit is not None:
                 self._stats["cache_hits"] += 1
                 self._stats["baseline_cost"] += self._top.cost(hit["in"], hit["out"])
@@ -253,8 +258,12 @@ class Router:
         self._stats["per_model"][spec.name] += 1
         self._stats["baseline_cost"] += self._top.cost(comp.input_tokens, comp.output_tokens)
         if self.cache is not None and verified is not False:
-            self.cache.put(key, {"text": comp.text, "model": spec.name,
-                                 "in": comp.input_tokens, "out": comp.output_tokens})
+            entry = {"text": comp.text, "model": spec.name,
+                     "in": comp.input_tokens, "out": comp.output_tokens}
+            if hasattr(self.cache, "store"):
+                self.cache.store(prompt, max_tokens, entry)
+            else:
+                self.cache.put(key, entry)
         return RouteResult(comp.text, spec.name, plan.strategy, plan.complexity,
                            plan.required_quality, False, total_cost, total_latency,
                            attempts, verified, plan.degraded)

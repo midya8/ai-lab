@@ -84,7 +84,7 @@ needs nothing else.
   classifier. It is easy to audit and tune but will misjudge short,
   deep questions. The cascade mode (`verifier=`) is the safety net.
 * Token counts are estimated at ~4 characters per token.
-* Caching is exact-match after normalisation; there is no semantic cache.
+* `ResponseCache` is exact-match after normalisation; `SemanticCache` is opt-in and uses hashed lexical vectors, not neural embeddings, so it catches rephrasings with shared words but not true synonyms.
 * `SimProvider` answers are placeholders; this repo measures routing
   behaviour, not answer quality.
 
@@ -107,3 +107,15 @@ router = Router(models, provider, strategy="fastest",
                 latency_tracker=LatencyTracker(window=20, min_samples=3))
 router.stats()["observed_latency"]   # {"fast": {"samples": 5, "factor": 8.0}, ...}
 ```
+
+## Semantic cache
+
+`SemanticCache` serves near-duplicate prompts ("How do I reset my password?" vs
+"how can I reset my password") from one entry. Dependency-free hashed word + char-trigram
+vectors, cosine threshold (default 0.85), same `max_tokens` required, LRU + TTL.
+
+```python
+from llmrouter import Router, SemanticCache
+router = Router(models, provider, cache=SemanticCache(threshold=0.85))
+```
+Lower thresholds raise hit rate but risk serving a wrong answer; tune on your traffic.
