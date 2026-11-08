@@ -10,6 +10,7 @@ from .budget import Budget, BudgetExceeded
 from .cache import ResponseCache, cache_key
 from .clock import SystemClock
 from .complexity import Complexity, score_prompt
+from .latency import LatencyTracker
 from .models import ModelSpec, estimate_tokens, expected_output_tokens
 from .providers import Provider, ProviderError
 
@@ -80,6 +81,7 @@ class Router:
         degrade_quality: float = 0.2,
         balance_weights: tuple[float, float] = (0.6, 0.4),
         allow_downgrade_on_failure: bool = False,
+        latency_tracker: "LatencyTracker | None" = None,
     ) -> None:
         if not models:
             raise ValueError("at least one model is required")
@@ -94,6 +96,7 @@ class Router:
         self.degrade_quality = degrade_quality
         self.balance_weights = balance_weights
         self.allow_downgrade = allow_downgrade_on_failure
+        self.latency_tracker = latency_tracker
         self.breakers = {
             m.name: CircuitBreaker(breaker_threshold, breaker_cooldown_s, self.clock)
             for m in self.models
@@ -139,16 +142,21 @@ class Router:
         return Plan(ordered, complexity, round(required, 4), strategy, degraded,
                     in_tok, out_tok)
 
+    def _lat(self, m, out_tok: int) -> float:
+        """Predicted latency, corrected by observed behaviour when tracked."""
+        base = m.latency(out_tok)
+        return base * self.latency_tracker.factor(m.name) if self.latency_tracker else base
+
     def _order(self, models, strategy, in_tok, out_tok):
         if strategy == "cheapest":
-            key = lambda m: (m.cost(in_tok, out_tok), m.latency(out_tok), m.name)
+            key = lambda m: (m.cost(in_tok, out_tok), self._lat(m, out_tok), m.name)
         elif strategy == "fastest":
-            key = lambda m: (m.latency(out_tok), m.cost(in_tok, out_tok), m.name)
+            key = lambda m: (self._lat(m, out_tok), m.cost(in_tok, out_tok), m.name)
         elif strategy == "quality":
             key = lambda m: (-m.quality, m.cost(in_tok, out_tok), m.name)
         else:  # balanced: min-max normalised weighted sum of cost and latency
             costs = {m.name: m.cost(in_tok, out_tok) for m in models}
-            lats = {m.name: m.latency(out_tok) for m in models}
+            lats = {m.name: self._lat(m, out_tok) for m in models}
             mc, ml = max(costs.values(), default=0) or 1.0, max(lats.values(), default=0) or 1.0
             wc, wl = self.balance_weights
             key = lambda m: (wc * costs[m.name] / mc + wl * lats[m.name] / ml, m.name)
@@ -215,6 +223,9 @@ class Router:
                 attempts.append(Attempt(spec.name, "error", str(exc)))
                 continue
             self.breakers[spec.name].record_success()
+            if self.latency_tracker is not None:
+                self.latency_tracker.record(spec.name, spec.latency(comp.output_tokens),
+                                            comp.latency_ms)
             cost = spec.cost(comp.input_tokens, comp.output_tokens)
             if self.budget is not None:
                 self.budget.record(cost)
@@ -265,4 +276,5 @@ class Router:
             "provider_failures": s["failures"],
             "budget_degraded_requests": s["degraded"],
             "per_model": dict(s["per_model"]),
+            **({"observed_latency": self.latency_tracker.snapshot()} if self.latency_tracker else {}),
         }

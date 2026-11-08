@@ -93,3 +93,17 @@ needs nothing else.
 ```bash
 python -m pytest        # or: python -m unittest discover -s tests
 ```
+
+## Observed-latency tracking
+
+Catalogue latencies are static guesses. Pass a `LatencyTracker` and the router learns
+the ratio of observed to predicted latency per model (sliding window, median, so one
+outlier is ignored; neutral until `min_samples`). `fastest` and `balanced` then route
+around a model that is currently slow and return to it once it recovers.
+
+```python
+from llmrouter import LatencyTracker, Router
+router = Router(models, provider, strategy="fastest",
+                latency_tracker=LatencyTracker(window=20, min_samples=3))
+router.stats()["observed_latency"]   # {"fast": {"samples": 5, "factor": 8.0}, ...}
+```

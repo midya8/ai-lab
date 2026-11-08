@@ -66,6 +66,7 @@
 - tiny-transformer: label smoothing (--label-smoothing, train-only, eval stays plain NLL; finite-difference-checked; 63 tests)
 - tiny-transformer: per-position loss eval (--by-position, context gain; 67 tests)
 - tiny-transformer: sliding-window perplexity (--stride, each token counted once; exact vs manual full-context scoring; 72 tests)
+- llm-router: observed-latency tracking (sliding-window median correction for fastest/balanced; 46 tests)
 
 ## Next
 
@@ -76,7 +77,7 @@
 5. lora-lab: LoRA on tiny-transformer attention, rank sweep
 6. logsentry: (done v0.6 Grafana dashboard)
 7. ticket-triage: (done urgency head) -> next: multi-label tags, active-learning review queue
-8. llm-router: (done v0.1) -> next: sliding-window latency tracking from real observations, semantic cache, learned complexity classifier
+8. llm-router: (done v0.1) -> (done latency tracking) next: semantic cache, learned complexity classifier
 9. promptlab: (done v0.1) -> v0.2 multi-sample done; next: LLM-judge check via evalkit, GitHub Action for check
 10. docqa: document Q&A CLI built on ragkit + agentkit, citations, no-hallucination mode
 11. autojob: agentic job-application assistant (only Midya's real resume data, never invents experience)
