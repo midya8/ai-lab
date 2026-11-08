@@ -1,0 +1,15 @@
+[
+ {"question": "How many points do I need for a $10 reward?", "must_contain": ["200 points"], "source": "loyalty.md"},
+ {"question": "Do Spoke Club points expire?", "must_contain": ["12 months"], "source": "loyalty.md"},
+ {"question": "How much does a standard tune-up cost?", "must_contain": ["$89"], "source": "repairs.md"},
+ {"question": "How much is a loaner bike per day?", "must_contain": ["$15"], "source": "repairs.md"},
+ {"question": "Is shipping free over a certain amount?", "must_contain": ["$150"], "source": "shipping.md"},
+ {"question": "Can bicycles be shipped to a PO box?", "must_contain": ["PO box"], "source": "shipping.md"},
+ {"question": "What time does the shop open on Saturday?", "must_contain": ["9am to 5pm"], "source": "store-hours.md"},
+ {"question": "Is the shop open on Sundays?", "must_contain": ["closed on Sundays"], "source": "store-hours.md"},
+ {"question": "Does the frame warranty transfer to a new owner?", "must_contain": ["does not transfer"], "source": "warranty.md"},
+ {"question": "Can custom-built bikes be returned?", "must_contain": ["cannot be returned"], "source": "returns.md"},
+ {"question": "What is the weather forecast for tomorrow?", "answerable": false},
+ {"question": "Do you offer student discounts on helmets?", "answerable": false},
+ {"question": "How many employees work at the shop?", "answerable": false}
+]

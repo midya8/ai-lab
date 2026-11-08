@@ -22,3 +22,11 @@ Question terms match document terms through small synonym groups
 `DocQA(..., paraphrase=False)`. `eval/paraphrase.json` holds reworded questions;
 abstention on unanswerable ones is still enforced. Generic words ("back",
 "within") are deliberately not synonyms: they produced a confidently wrong answer.
+
+## Broad benchmark (eval/broad.json)
+
+13 questions across all six demo docs (10 answerable, 3 not). Current result:
+answer rate 0.80 (8/10), abstain rate 1.00. The two misses are yes/no phrasings
+("Is shipping free over...", "Is the shop open on Sundays?") where the question
+words ("free", "open") don't lexically match the evidence ("closed", "free shipping on orders").
+Kept unsaturated on purpose as a target for dense retrieval.

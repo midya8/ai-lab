@@ -76,3 +76,14 @@ def test_paraphrase_off_is_worse():
 def test_paraphrase_does_not_break_original_eval():
     res = run_eval(DocQA.from_dir(DOCS), ROOT / "eval" / "questions.json")
     assert res["answer_rate"] == 1.0 and res["abstain_rate"] == 1.0
+
+
+def test_broad_eval_documented_baseline(qa):
+    res = run_eval(qa, ROOT / "eval" / "broad.json")
+    assert res["abstain_rate"] == 1.0
+    assert res["answer_rate"] >= 0.8
+    # known misses (lexical matching): negation/yes-no phrasing
+    assert set(res["failures"]) <= {
+        "Is shipping free over a certain amount?",
+        "Is the shop open on Sundays?",
+    }
