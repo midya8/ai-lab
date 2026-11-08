@@ -74,6 +74,7 @@
 - llm-eval-harness: multi-model comparison matrix (--matrix, winner + disagreement count; 14 tests)
 - lora-lab: rank sweep (--sweep, ranks 1-16 vs full fine-tune; task saturates at 1.000, documented; 7 tests)
 - agentflow v0.3: SharedMemory + attach_memory tools (search, atomic persistence, thread-safe; 15 tests)
+- ticket-triage: active-learning review queue (--active; uncertainty sampling vs random; 10 new tests)
 
 ## Next
 
@@ -83,7 +84,7 @@
 4. agentflow follow-ups: (done shared memory) -> next: memory-aware Supervisor, TTL
 5. lora-lab: (done rank sweep) -> next: harder task so ranks separate, LoRA on tiny-transformer attention
 6. logsentry: (done v0.6 Grafana dashboard)
-7. ticket-triage: (done urgency head) -> next: multi-label tags, active-learning review queue
+7. ticket-triage: (done urgency head) (done active learning) -> next: multi-label tags
 8. llm-router: (done v0.1) -> (done latency tracking) (done semantic cache) (done learned complexity classifier) (done persistence)
 9. promptlab: (done v0.1) -> v0.2 multi-sample done; (done GitHub Action + summary); next: LLM-judge check via evalkit
 10. docqa: document Q&A CLI built on ragkit + agentkit, citations, no-hallucination mode

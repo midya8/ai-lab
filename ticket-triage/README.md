@@ -7,3 +7,5 @@ PYTHONPATH=src python -m triage.cli "I was charged twice for my plan"
 python -m pytest
 ```
 Data is a deterministic synthetic generator (`triage.data`), so results are reproducible. k-fold CV, ECE and temperature-scaling calibration (`--cv 5`) in `triage.calibration`. Urgency head (`triage.urgency`): class-weighted logistic regression, recall-targeted threshold tuning, and `Triage.route()` combining category + urgency into a queue like `bug:urgent`.
+
+Active learning (`triage.active`, `--active`): uncertainty sampling (least-confidence, margin, entropy) vs random picks the tickets a human should label next; `review_queue()` returns the ranked queue and `compare()` replays labeling budgets. Synthetic 5-seed run, accuracy at 8 -> 32 labels: entropy 0.614 -> 0.916, random 0.614 -> 0.880 (small, noisy gap; margin/least-confidence are mixed on this easy synthetic data).

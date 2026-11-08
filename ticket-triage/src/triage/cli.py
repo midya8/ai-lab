@@ -2,6 +2,7 @@ import argparse
 from .data import generate
 from .calibration import cross_validate, expected_calibration_error, CalibratedClassifier
 from .urgency import Triage, UrgencyClassifier, precision_recall_f1
+from .active import compare as active_compare, review_queue
 from .model import TicketClassifier, confusion, macro_f1
 
 
@@ -9,6 +10,7 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description="Train/evaluate ticket triage and classify text")
     ap.add_argument("text", nargs="?", help="ticket text to classify")
     ap.add_argument("--cv", type=int, default=0, help="run k-fold cross-validation")
+    ap.add_argument("--active", action="store_true", help="active-learning demo: strategy learning curves + review queue")
     ap.add_argument("--n", type=int, default=800)
     a = ap.parse_args(argv)
     data = generate(a.n)
@@ -32,6 +34,13 @@ def main(argv=None):
     um = UrgencyClassifier().fit([d["text"] for d in tr], [d["urgent"] for d in tr])
     r = precision_recall_f1([d["urgent"] for d in te], um.predict(texts))
     print(f"urgency precision={r['precision']:.3f} recall={r['recall']:.3f} f1={r['f1']:.3f}")
+    if a.active:
+        res = active_compare(data[:300], data[300:500], seeds=(0, 1, 2, 3, 4))
+        for name, curve in res.items():
+            print(f"{name:17s}" + " ".join(f"{n}:{acc:.3f}" for n, acc in curve))
+        small = TicketClassifier().fit([d["text"] for d in data[:24]], [d["category"] for d in data[:24]])
+        for r in review_queue(small, [d["text"] for d in data[24:300]], k=5, strategy="entropy"):
+            print(f"review #{r['index']} ({r['predicted']} {r['confidence']:.2f}): {r['text']}")
     if a.text:
         print(Triage().fit(tr).route(a.text))
 
