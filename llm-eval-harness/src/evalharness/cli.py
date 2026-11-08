@@ -4,6 +4,7 @@ import sys
 
 from .backends import get_backend
 from .report import compare, render_html, render_markdown
+from .matrix import render_matrix_markdown, run_matrix
 from .runner import load_suite, run_suite
 
 
@@ -16,7 +17,16 @@ def main(argv=None):
     p.add_argument("--baseline", help="prior run JSON; exit 1 on regression")
     p.add_argument("--summary-file", help="append Markdown report here (e.g. $GITHUB_STEP_SUMMARY)")
     p.add_argument("--html", help="write a self-contained HTML report here")
+    p.add_argument("--matrix", help="comma-separated offline backends (echo,rules) to compare side by side")
     a = p.parse_args(argv)
+    if a.matrix:
+        md = render_matrix_markdown(run_matrix(
+            [get_backend(n.strip()) for n in a.matrix.split(",")], load_suite(a.suite)))
+        if a.summary_file:
+            with open(a.summary_file, "a") as f:
+                f.write(md + "\n")
+        print(md)
+        return 0
     kw = {"url": a.url, "model": a.model, "api_key": a.api_key} if a.backend == "http" else {}
     run = run_suite(get_backend(a.backend, **kw), load_suite(a.suite))
     diff = None

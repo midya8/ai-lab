@@ -4,3 +4,4 @@ from .runner import run_suite, load_suite
 from .report import compare, render_markdown
 from .passk import pass_at_k, evaluate_pass_at_k
 from .scorers import judge_scorer
+from .matrix import run_matrix, matrix_table, render_matrix_markdown

@@ -28,3 +28,6 @@ CLI flag `--summary-file PATH` appends the report to any file.
 
 ## HTML report
 `--html report.html` writes a self-contained page (score bars, per-tag table, latency, regressions highlighted when `--baseline` is given). All model output is HTML-escaped.
+
+## Multi-model matrix
+`--matrix echo,rules` runs the suite on several backends and prints a case x model score table with per-model means, the winner, and how many cases the models disagree on. Library: `run_matrix(backends, suite)`, `matrix_table`, `render_matrix_markdown`. Backend names must be unique.
