@@ -17,7 +17,7 @@ Midya's AI lab: small, tested, runnable AI projects.
 | [ragkit](ragkit) | Local RAG over your own docs: chunking, TF-IDF/BM25 retrieval, answers with citations, eval — 59 tests |
 | [evalkit](evalkit) | LLM eval harness: golden sets, scorers, regression compare, Markdown/JSON reports — 36 tests |
 | [guardkit](guardkit) | Runtime guardrails for LLM pipelines: injection scoring, PII/secret redaction, policy file, audit log, adversarial eval — 62 tests |
-| [tiny-transformer](tiny-transformer) | GPT from scratch in pure NumPy with hand-written backprop (gradient-checked), trainer and sampler; RoPE option vs learned positions, grouped-query/multi-query attention with a compact KV cache (107 tests) |
+| [tiny-transformer](tiny-transformer) | GPT from scratch in pure NumPy with hand-written backprop (gradient-checked), trainer and sampler; RoPE option vs learned positions, grouped-query/multi-query attention with a compact KV cache, RoPE context extension via position interpolation / NTK scaling (131 tests) |
 | [llm-eval-harness](llm-eval-harness) | Pluggable LLM eval harness with scorers, prompt suites and a CI regression gate |
 | [agentflow](agentflow) | Multi-agent orchestration framework: tool-using agents, task DAG, parallel runs, retries, supervisor routing, shared memory, circuit breakers, run on llm-router with per-agent cost reports, crash-safe run log with fingerprint-based resume — 50 tests |
 | [logsentry](logsentry) | Log anomaly detection: template mining, robust volume spikes, error bursts, new-pattern alerts, per-template spikes, streaming mode, Prometheus exporter, webhook alerts |

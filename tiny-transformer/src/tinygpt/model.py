@@ -23,10 +23,17 @@ class GPTConfig:
     rope: bool = False  # rotary position embeddings on q/k instead of learned absolute positions (no wpe)
     rope_base: float = 10000.0
     n_kv_head: int = 0  # grouped-query attention: number of key/value heads (0 = n_head, i.e. plain MHA; 1 = MQA)
+    rope_scale: float = 1.0  # context-extension factor vs the length the weights were trained at (RoPE only)
+    rope_scaling: str = "linear"  # how rope_scale acts: "linear" position interpolation, or "ntk" base rescaling
+    train_len: int = 0  # window the weights were trained at, recorded by extend_context (0 = block_size)
 
     @property
     def kv_heads(self) -> int:
         return self.n_kv_head or self.n_head
+
+    @property
+    def rope_kw(self) -> dict:
+        return {"scale": self.rope_scale, "mode": self.rope_scaling}
 
     @property
     def kv_dim(self) -> int:
@@ -81,10 +88,35 @@ def drop_bwd(dy, mask):
     return dy if mask is None else dy * mask
 
 
-def rope_tables(T, D, base=10000.0, offset=0, dtype=np.float64):
-    """cos/sin tables of shape (T, D/2) for positions offset..offset+T-1."""
-    inv = base ** (-np.arange(0, D, 2) / D)
-    ang = np.arange(offset, offset + T)[:, None] * inv[None, :]
+def rope_inv_freq(D, base=10000.0, scale=1.0, mode="linear"):
+    """Per-pair rotation frequencies, shape (D/2,).
+
+    mode "linear" leaves the frequencies alone (the scale is applied to positions instead, see
+    rope_tables). mode "ntk" enlarges the base by scale**(D/(D-2)) so the slowest pair stretches
+    by exactly `scale` while the fastest pair barely changes (NTK-aware scaling).
+    """
+    if mode == "ntk" and scale != 1.0:
+        assert D > 2, "ntk scaling needs head_dim > 2"
+        base = base * scale ** (D / (D - 2))
+    return base ** (-np.arange(0, D, 2) / D)
+
+
+def rope_tables(T, D, base=10000.0, offset=0, dtype=np.float64, scale=1.0, mode="linear"):
+    """cos/sin tables of shape (T, D/2) for positions offset..offset+T-1.
+
+    scale > 1 extends the usable context: "linear" divides every position by `scale`
+    (position interpolation, so an unseen length L maps back into the trained range
+    [0, L/scale)); "ntk" rescales the frequency base instead. scale == 1 is plain RoPE.
+    """
+    if mode not in ("linear", "ntk"):
+        raise ValueError(f"unknown rope scaling mode {mode!r}")
+    if scale <= 0:
+        raise ValueError("rope scale must be positive")
+    inv = rope_inv_freq(D, base, scale, mode)
+    pos = np.arange(offset, offset + T, dtype=np.float64)
+    if mode == "linear":
+        pos = pos / scale
+    ang = pos[:, None] * inv[None, :]
     return np.cos(ang).astype(dtype), np.sin(ang).astype(dtype)
 
 
@@ -133,6 +165,9 @@ class GPT:
         assert 0 <= cfg.n_kv_head <= cfg.n_head and cfg.n_head % cfg.kv_heads == 0, \
             "n_kv_head must divide n_head"
         assert not cfg.rope or (cfg.n_embd // cfg.n_head) % 2 == 0, "rope needs an even head dimension"
+        assert cfg.rope_scaling in ("linear", "ntk"), "rope_scaling must be 'linear' or 'ntk'"
+        assert cfg.rope_scale > 0, "rope_scale must be positive"
+        assert cfg.rope or cfg.rope_scale == 1.0, "rope_scale needs rope=True"
         self.cfg = cfg
         self.label_smoothing = 0.0  # training-time only; evaluate() reports plain NLL
         rng = np.random.default_rng(seed)
@@ -176,7 +211,7 @@ class GPT:
         v = qkv[..., C + kd:].reshape(B, T, Hk, D).transpose(0, 2, 1, 3)
         rc = None
         if self.cfg.rope:
-            rc = rope_tables(T, D, self.cfg.rope_base, dtype=q.dtype)
+            rc = rope_tables(T, D, self.cfg.rope_base, dtype=q.dtype, **self.cfg.rope_kw)
             q, k = rope_fwd(q, *rc), rope_fwd(k, *rc)
         if Hk != H:  # query head h reads kv head h // (H // Hk); the compact k/v stay in the cache
             k, v = expand_kv(k, H // Hk), expand_kv(v, H // Hk)

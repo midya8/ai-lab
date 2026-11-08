@@ -2,7 +2,7 @@
 
 A GPT-style decoder-only transformer written in **pure NumPy, including hand-derived backpropagation**. No autograd, no PyTorch.
 
-- Pre-LayerNorm blocks, causal multi-head / grouped-query / multi-query attention (`--kv-heads`), GELU MLP, learned positional embeddings, or rotary embeddings (`--rope`)
+- Pre-LayerNorm blocks, causal multi-head / grouped-query / multi-query attention (`--kv-heads`), GELU MLP, learned positional embeddings, or rotary embeddings (`--rope`, with training-free context extension (position interpolation / NTK scaling)`
 - Manual backward pass for every op, verified against finite differences in the test suite
 - LR range test (`--find-lr`), Adam with gradient clipping, char tokenizer, temperature / top-k / top-p (nucleus) sampling (`--top-p`), CTRL-style repetition penalty (`--repetition-penalty`), save/load
 
@@ -90,6 +90,41 @@ Held-out loss (nats/char, trained with block 32, 2.6k-char corpus; one seed, sma
 | rope | 104,869 | 0.376 | 0.217 | 0.508 | 1.223 |
 
 RoPE matches learned positions inside the training window (a second run, seed 1 / 500 steps, gave 0.340/0.197 vs 0.339/0.196). It *can* be run past `block_size` (a learned table cannot), but at this scale it does **not** extrapolate gracefully: loss climbs on unseen lengths. The script reports that rather than hiding it; length extrapolation usually needs position interpolation or training on varied lengths.
+
+## Context extension (position interpolation / NTK scaling)
+
+A RoPE model has no position table, so it *can* be run past its training window, but attention quality collapses on angles it never saw (see the RoPE section). `tinygpt.extend_context(model, new_len, mode)` stretches the window by changing how positions become angles, not the weights:
+
+- `linear`: position interpolation. Every position is divided by `new_len / trained_len`, squeezing the longer window back into the angle range the weights know.
+- `ntk`: NTK-aware scaling. The frequency base is multiplied by `scale^(D/(D-2))`, so the slowest rotation pair stretches by exactly `scale` while the fastest (local, token-to-token) pair is untouched.
+- `none`: plain extrapolation with the longer window, kept as the baseline.
+
+It returns a *view*: a model sharing the same parameter arrays with `block_size = new_len` and the scaling recorded in its config (`rope_scale`, `rope_scaling`, `train_len`), so `evaluate`, sliding-window eval, `generate`, KV-cache decoding, GQA and checkpoints all work unchanged. Scale is always measured against the length the weights were trained at, so extending twice does not compound errors and extending back to the trained length restores the original function exactly. `finetune_extended` runs a brief fine-tune at the new length, which interpolation is designed to be paired with.
+
+```bash
+python -m tinygpt.cli extend model.npz --len 96 --mode ntk --out model96.npz
+python -m tinygpt.cli extend model.npz --len 96 --mode linear --data data/corpus.txt --finetune-steps 60 --out model96.npz
+PYTHONPATH=src python experiments/context_extension.py     # extrapolate vs linear vs NTK, 3 seeds
+```
+
+Verified in `tests/test_extend.py`: scale 1 reproduces plain RoPE bit for bit, linear scaling maps position `p` to `p/scale`, NTK stretches the slowest frequency by exactly `scale` and the stretch grows monotonically toward low frequencies, relative-position-only scores survive scaling, finite-difference gradients under both modes, causality, KV-cache decoding equals full-forward generation past the extended window (also with GQA), the view shares weights, checkpoints round-trip the scaling (and pre-extension checkpoints still load), and the CLI works end to end.
+
+Sliding-window loss in nats/char on the same held-out tokens, RoPE model trained at block 32 (300 steps), mean of 3 seeds; "fine-tune" is 60 steps at the target length; the last column re-scores the fine-tuned model on 32-token windows with its own angle schedule. In-window baseline (no extension): 0.040.
+
+| target len | method | zero-shot | after fine-tune | fine-tuned @ block 32 |
+|---|---|---|---|---|
+| 64 (2x) | none (extrapolate) | 1.439 | 0.028 | 0.010 |
+| 64 (2x) | linear (PI) | 2.760 | 0.065 | 0.043 |
+| 64 (2x) | ntk | 0.957 | 0.027 | 0.009 |
+| 96 (3x) | none (extrapolate) | 2.102 | 0.019 | 0.010 |
+| 96 (3x) | linear (PI) | 3.388 | 0.094 | 0.087 |
+| 96 (3x) | ntk | 2.255 | 0.029 | 0.010 |
+
+Honest reading:
+- Zero-shot, plain extrapolation costs 1.4 nats at 2x and 2.1 at 3x versus 0.04 in-window. NTK scaling roughly halves the 2x damage (0.96) but at 3x is no better than doing nothing (2.26 vs 2.10). Unfine-tuned linear interpolation is the *worst* (2.76 / 3.39): it compresses every rotation pair, including the local ones the model relies on, so it only pays off with the fine-tune it is designed for.
+- **The fine-tuned columns are not a fair generalisation test.** The bundled corpus is tiny and repetitive: every 20-gram of the held-out tail also occurs in the training portion, so after 60 steps every method simply refits memorised text (all <= 0.1) and the differences between them (hundredths) are noise at 3 seeds. Do not read "linear is worse after fine-tuning" out of it.
+- The retention column is the one fine-tuned signal worth a glance: linear PI left the model a little worse on short windows (0.04-0.09 vs 0.01), as expected since its angles changed at every length; none/NTK did not.
+- A key-value recall task (where long context is genuinely required) would be the right benchmark; a small model did not learn it in the time budget tried (accuracy stayed at chance after 2,600 steps), so it is not included. Wiring one up with a bigger model is a candidate next step.
 
 ## Grouped-query attention (GQA / MQA)
 

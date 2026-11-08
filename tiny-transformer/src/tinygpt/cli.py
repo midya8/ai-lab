@@ -9,7 +9,9 @@ import argparse
 import numpy as np
 
 from .checkpoint import evaluate, evaluate_by_position, evaluate_sliding, load_checkpoint
+from .extend import extend_context, finetune_extended
 from .kvcache import generate_cached
+from .checkpoint import save_checkpoint
 
 
 def main(argv=None):
@@ -24,6 +26,15 @@ def main(argv=None):
     g.add_argument("--top-p", type=float, default=None, help="nucleus sampling mass in (0,1)")
     g.add_argument("--repetition-penalty", type=float, default=1.0, help=">1 discourages repeating seen tokens")
     g.add_argument("--seed", type=int, default=0)
+    x = sub.add_parser("extend", help="stretch a RoPE checkpoint to a longer context window")
+    x.add_argument("ckpt")
+    x.add_argument("--len", type=int, required=True, help="new context length in tokens")
+    x.add_argument("--mode", choices=["linear", "ntk", "none"], default="linear")
+    x.add_argument("--data", help="corpus for the optional fine-tune at the new length")
+    x.add_argument("--finetune-steps", type=int, default=0)
+    x.add_argument("--lr", type=float, default=1e-3)
+    x.add_argument("--batch", type=int, default=8)
+    x.add_argument("--out", required=True)
     e = sub.add_parser("eval")
     e.add_argument("ckpt")
     e.add_argument("--data", required=True)
@@ -35,6 +46,22 @@ def main(argv=None):
     a = ap.parse_args(argv)
 
     model, tok = load_checkpoint(a.ckpt)
+    if a.cmd == "extend":
+        view = extend_context(model, a.len, a.mode)
+        text = open(a.data, encoding="utf-8").read() if a.data else None
+        if text:
+            cut = int(len(text) * 0.85)
+            print(f"before fine-tune: {evaluate(view, np.array(tok.encode(text[cut:])))['loss']:.4f} held-out loss at {a.len}")
+        if a.finetune_steps:
+            if not text:
+                ap.error("--finetune-steps needs --data")
+            ls = finetune_extended(view, np.array(tok.encode(text[:cut])), a.finetune_steps, a.batch, a.lr)
+            print(f"fine-tuned {a.finetune_steps} steps: train loss {ls[0]:.3f} -> {ls[-1]:.3f}")
+        if text:
+            print(f"held-out loss at {a.len}: {evaluate(view, np.array(tok.encode(text[cut:])))['loss']:.4f}")
+        save_checkpoint(a.out, view, tok)
+        print(f"saved {a.out} (block_size={a.len}, rope_scale={view.cfg.rope_scale:.3g}, {view.cfg.rope_scaling})")
+        return
     if a.cmd == "generate":
         ids = tok.encode(a.prompt) if a.prompt else [0]
         out = generate_cached(model, ids, a.n, temperature=a.temperature, top_k=a.top_k, top_p=a.top_p, seed=a.seed,

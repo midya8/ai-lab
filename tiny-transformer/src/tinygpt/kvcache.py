@@ -19,7 +19,7 @@ def _step(model: GPT, tok: int, pos: int, cache: list):
     grp = H // Hk
     x = P["wte"][tok] + (0 if cfg.rope else P["wpe"][pos])
     if cfg.rope:
-        rc = rope_tables(1, D, cfg.rope_base, offset=pos, dtype=x.dtype)
+        rc = rope_tables(1, D, cfg.rope_base, offset=pos, dtype=x.dtype, **cfg.rope_kw)
     for i in range(cfg.n_layer):
         h, _ = ln_fwd(x, P[f"h{i}.ln1_g"], P[f"h{i}.ln1_b"])
         qkv = h @ P[f"h{i}.qkv_W"] + P[f"h{i}.qkv_b"]
