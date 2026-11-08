@@ -46,3 +46,23 @@ def test_thread_safety():
     ts = [threading.Thread(target=lambda i=i: m.remember(f"k{i}", "v")) for i in range(50)]
     [t.start() for t in ts]; [t.join() for t in ts]
     assert len(m.keys()) == 50
+
+
+def test_ttl_expiry_and_purge():
+    now = [100.0]
+    m = SharedMemory(ttl=10, clock=lambda: now[0])
+    m.remember("a", "alpha thing")
+    m.remember("b", "beta thing", ttl=100)
+    assert m.recall("a") == "alpha thing"
+    now[0] = 111.0
+    assert m.recall("a") is None and m.recall("b") == "beta thing"
+    assert m.keys() == ["b"] and [e["key"] for e in m.search("thing")] == ["b"]
+    assert m.purge() == 1 and "a" not in m._data
+    assert not m.forget("a")
+
+
+def test_ttl_persists(tmp_path):
+    p = str(tmp_path / "m.json")
+    SharedMemory(p, clock=lambda: 0).remember("k", "v", ttl=5)
+    assert SharedMemory(p, clock=lambda: 4).recall("k") == "v"
+    assert SharedMemory(p, clock=lambda: 6).recall("k") is None

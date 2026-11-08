@@ -81,13 +81,14 @@
 - ticket-triage: tag-aware routing (queue + priority + SLA from category, urgency, tags; overridable rules; 7 new tests)
 - ticket-triage: SLA-breach simulation (priority queues, staffing sweep, smallest staffing for a breach target; 6 new tests, synthetic)
 - docqa v0.1: sentence-level cited answers on ragkit, coverage-based abstention, answer/abstain eval (9 tests)
+- agentflow: SharedMemory TTL (default + per-entry ttl, lazy expiry, purge(), persisted expires_at; 2 new tests)
 
 ## Next
 
 1. rag-evals: (done hard benchmark) (done chunk sweep) -> next: dense embeddings beyond LSA
 2. llm-eval-harness: (done) (done matrix) -> next: HTTP-model matrix specs, per-tag matrix
 3. tiny-transformer follow-ups: (done v0.5, top-p, grad accumulation); (done clipping); (done dropout); (done weight tying); (done early stopping); (done repetition penalty); (done LR finder); (done label smoothing); (done per-position eval); (done sliding-window eval); next: lora-lab on tiny-transformer attention
-4. agentflow follow-ups: (done shared memory) -> next: memory-aware Supervisor, TTL
+4. agentflow follow-ups: (done shared memory) -> (done TTL) -> next: memory-aware Supervisor
 5. lora-lab: (done rank sweep) -> next: harder task so ranks separate, LoRA on tiny-transformer attention
 6. logsentry: (done v0.6 Grafana dashboard)
 7. ticket-triage: (done urgency head) (done active learning) (done multi-label tags) (done tag-aware routing) (done SLA-breach simulation) -> next: feed live router output into the simulator

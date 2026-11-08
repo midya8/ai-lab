@@ -12,6 +12,7 @@ import os
 import re
 import tempfile
 import threading
+import time
 from typing import Dict, List, Optional
 
 from .core import Agent
@@ -22,7 +23,9 @@ def _tokens(s: str) -> set:
 
 
 class SharedMemory:
-    def __init__(self, path: Optional[str] = None):
+    def __init__(self, path: Optional[str] = None, ttl: Optional[float] = None, clock=time.time):
+        self.ttl = ttl  # default seconds-to-live for entries; None = never expire
+        self._clock = clock
         self._data: Dict[str, dict] = {}
         self._lock = threading.Lock()
         self.path = path
@@ -30,19 +33,37 @@ class SharedMemory:
             with open(path) as f:
                 self._data = json.load(f)
 
-    def remember(self, key: str, value: str, author: str = "") -> None:
+    def remember(self, key: str, value: str, author: str = "", ttl: Optional[float] = None) -> None:
+        ttl = self.ttl if ttl is None else ttl
+        entry = {"value": value, "author": author}
+        if ttl is not None:
+            entry["expires_at"] = self._clock() + ttl
         with self._lock:
-            self._data[key] = {"value": value, "author": author}
+            self._data[key] = entry
             self._save()
+
+    def _expired(self, e: dict) -> bool:
+        return "expires_at" in e and self._clock() >= e["expires_at"]
+
+    def purge(self) -> int:
+        """Drop expired entries; returns how many were removed."""
+        with self._lock:
+            dead = [k for k, e in self._data.items() if self._expired(e)]
+            for k in dead:
+                del self._data[k]
+            if dead:
+                self._save()
+            return len(dead)
 
     def recall(self, key: str) -> Optional[str]:
         with self._lock:
             e = self._data.get(key)
-            return e["value"] if e else None
+            return e["value"] if e and not self._expired(e) else None
 
     def forget(self, key: str) -> bool:
         with self._lock:
-            found = self._data.pop(key, None) is not None
+            e = self._data.pop(key, None)
+            found = e is not None and not self._expired(e)
             if found:
                 self._save()
             return found
@@ -52,6 +73,8 @@ class SharedMemory:
         scored = []
         with self._lock:
             for k, e in self._data.items():
+                if self._expired(e):
+                    continue
                 score = 2 * len(q & _tokens(k)) + len(q & _tokens(e["value"]))
                 if score:
                     scored.append((-score, k, {"key": k, **e}))
@@ -60,7 +83,7 @@ class SharedMemory:
 
     def keys(self) -> List[str]:
         with self._lock:
-            return sorted(self._data)
+            return sorted(k for k, e in self._data.items() if not self._expired(e))
 
     def _save(self) -> None:
         if not self.path:
