@@ -15,7 +15,25 @@ def main(argv=None) -> int:
         s.add_argument("arg", help="question (ask) or labelled JSON file (eval)")
         s.add_argument("--min-coverage", type=float, default=0.6)
         s.add_argument("--json", action="store_true")
+    sv = sub.add_parser("serve", help="run the HTTP service")
+    sv.add_argument("docs")
+    sv.add_argument("--host", default="127.0.0.1")
+    sv.add_argument("--port", type=int, default=8000)
+    sv.add_argument("--min-coverage", type=float, default=0.6)
     a = p.parse_args(argv)
+    if a.cmd == "serve":
+        from .server import make_server
+        try:
+            srv = make_server(DocQA.from_dir(a.docs, min_coverage=a.min_coverage), a.host, a.port)
+        except (ValueError, OSError) as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 2
+        print(f"docqa serving on http://{a.host}:{a.port}  (POST /ask)")
+        try:
+            srv.serve_forever()
+        except KeyboardInterrupt:
+            pass
+        return 0
     try:
         qa = DocQA.from_dir(a.docs, min_coverage=a.min_coverage)
         if a.cmd == "ask":

@@ -55,3 +55,13 @@ orch.run([Task("q", "docqa", "How long do I have to return a bike?")])
 ```
 
 `DocQAWorker` has agentflow's `name` + `run(prompt)` shape, so it slots into a DAG and downstream tasks receive the cited answer via `{q}`. With `strict=True` an abstention raises `Abstained`: the task fails after its retries and dependents are skipped instead of building on an unsupported answer.
+
+## HTTP service
+
+```bash
+python -m docqa serve path/to/docs --port 8000
+curl -s localhost:8000/ask -d '{"question": "How long do I have to return a bike?"}'
+curl -s localhost:8000/health
+```
+
+`POST /ask` returns the cited answer as JSON (an abstention is a normal 200 with `"answered": false`); malformed input gets 400, oversized bodies 413. Stdlib only, no extra dependencies.
