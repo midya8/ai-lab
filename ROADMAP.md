@@ -100,6 +100,7 @@
 - tiny-transformer: rotary position embeddings (--rope; no wpe, inverse-rotation backward, pre-rotated KV cache, runs past block_size; finite-difference + parity tested; experiments/rope_vs_learned.py shows parity in-window and honest non-extrapolation at this scale; 89 tests)
 - agentflow v0.5: persistent run log + resume (append-only JSONL journal, dependency-chained task fingerprints so edits invalidate only downstream work, crash-tolerant reads, compact, `python -m agentflow log`; demo_resume.py; 10 new tests, 50 total)
 - lora-lab: adapter hub (swap/blend/route/compose; named adapters over one frozen GPT, delta blending, label-free routing by prompt NLL, SVD composition, save/load hub; second synthetic 'kitchen' domain; tech/kitchen specialists NLL 5.6 -> ~1.4, routing 1.000, 50/50 blend is a compromise; 13 new tests, 30 total)
+- docqa: corpus-grounded spelling correction (OSA distance 1-2 against document vocabulary only, never invents words, deterministic ties, reported corrections, --no-spell; typo benchmark answered 7/12 -> 12/12 with abstention 8/8 unchanged and clean benchmarks identical; 23 new tests, 64 total)
 
 
 ## Next
@@ -113,5 +114,5 @@
 7. ticket-triage: (done urgency head) (done active learning) (done multi-label tags) (done tag-aware routing) (done SLA-breach simulation) -> next: feed live router output into the simulator
 8. llm-router: (done v0.1) -> (done latency tracking) (done semantic cache) (done learned complexity classifier) (done persistence)
 9. promptlab: (done v0.1) -> v0.2 multi-sample done; (done GitHub Action + summary); next: LLM-judge check via evalkit
-10. docqa: (done v0.1) -> (done paraphrase) (done broad benchmark) (done yes/no fixes) (done agentkit integration) (done agentflow worker) (done HTTP service) (done cache + metrics) next: docqa on llm-router / hybrid retrieval
+10. docqa: (done v0.1) -> (done paraphrase) (done broad benchmark) (done yes/no fixes) (done agentkit integration) (done agentflow worker) (done HTTP service) (done cache + metrics) (done typo-tolerant spelling) next: docqa on llm-router / dense or hybrid retrieval
 11. autojob: agentic job-application assistant (only Midya's real resume data, never invents experience)
