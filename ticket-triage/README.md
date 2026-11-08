@@ -13,3 +13,6 @@ Active learning (`triage.active`, `--active`): uncertainty sampling (least-confi
 Multi-label tags (`triage.tags`, `--tags`): one-vs-rest logistic regression with balanced per-tag weights and per-tag F1-tuned thresholds on a validation split (mobile / performance / security / enterprise, orthogonal to category). Reports micro/macro F1, Hamming loss and exact-match. On the synthetic generator it scores micro-F1 ~0.99 (the tags are phrase-based, so this is an easy, illustrative task).
 
 Tag-aware routing (`triage.routing`): `TaggedTriage.route()` merges category, urgency and tags into a queue, priority (low/normal/high/critical) and SLA hours via ordered, overridable rules (security -> `security-response`/critical, enterprise -> high, urgent + escalating tag stacks one level). `python -m triage.cli "..." --tags` prints the tagged route.
+
+
+SLA-breach simulation (`triage.sla_sim`): discrete-event, priority-first queues with N agents per routed queue and Poisson arrivals; reports breach rate, mean and p95 wait, plus `staffing_sweep` and `smallest_staffing` to find the fewest agents meeting a breach target. Run `PYTHONPATH=src python -m triage.sla_sim`. Numbers are synthetic and illustrate staffing effects only.
