@@ -23,3 +23,6 @@ python -m pytest
 
 ## Circuit breaker
 `Supervisor(..., max_attempts=3, breaker=CircuitBreaker(threshold=3, cooldown=30))` stops sending traffic to a worker after `threshold` consecutive failures. Open workers are skipped (reported as `skipped_open`) until `cooldown` seconds pass; then one trial call runs (half-open) and a success closes the breaker while a failure reopens it. If every worker is open, all are tried anyway rather than failing outright.
+
+## Run metrics
+`compute_metrics(tasks, results)` returns a `RunMetrics`: total work, critical path (and its task ids), ideal parallelism (work / critical path), and failed/skipped/retry counts. Each `Result` now carries a `duration`.

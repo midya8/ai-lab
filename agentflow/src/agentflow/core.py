@@ -99,6 +99,7 @@ class Result:
     output: Optional[str] = None
     error: Optional[str] = None
     attempts: int = 0
+    duration: float = 0.0  # wall seconds spent executing (incl. retries)
 
 
 class _Safe(dict):
@@ -133,6 +134,12 @@ class Orchestrator:
         return layers
 
     def _exec(self, task: Task, outputs: Dict[str, str]) -> Result:
+        t0 = time.perf_counter()
+        res = self._exec_inner(task, outputs)
+        res.duration = time.perf_counter() - t0
+        return res
+
+    def _exec_inner(self, task: Task, outputs: Dict[str, str]) -> Result:
         prompt = task.prompt.format_map(_Safe(outputs))
         err = None
         for attempt in range(1, task.retries + 2):

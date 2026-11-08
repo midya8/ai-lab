@@ -6,3 +6,5 @@ from .memory import SharedMemory, attach_memory
 __all__ += ["SharedMemory", "attach_memory"]
 from .extras import CircuitBreaker
 __all__ += ["CircuitBreaker"]
+from .metrics import RunMetrics, compute_metrics
+__all__ += ["RunMetrics", "compute_metrics"]
