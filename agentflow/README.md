@@ -37,3 +37,14 @@ python -m pytest
 python demo_router.py   # planner -> 3 parallel scrapers -> writer; prints spend per agent
 ```
 Demo prices come from llm-router's illustrative catalogue, so the savings figure shows the mechanism, not a vendor bill.
+
+## Persistent run log + resume (v0.5)
+`RunLog(path)` is an append-only JSONL journal: `orch.run(tasks, log=RunLog("run.jsonl"))` records every task result (status, output, error, attempts, duration) as it lands, so a crash loses at most the in-flight tasks. Re-run with `resume=True` and tasks that already finished `ok` are replayed from the journal (no LLM call, `Result.resumed=True`) while failed, skipped, or never-started tasks execute.
+
+Replays are keyed by a **fingerprint**: a hash of the task id, agent, prompt template and the fingerprints of its dependencies. Edit one prompt and only that task and its downstream tasks re-run; sibling branches stay cached. A truncated last line from a crash is skipped on read, writes are lock-serialized across worker threads, and `compact()` atomically drops superseded records.
+
+```
+python demo_resume.py                     # first run fails midway, the second resumes and finishes
+python -m agentflow log run.jsonl         # per-run table: tasks / ok / failed / skipped / resumed / work
+python -m agentflow log run.jsonl --compact
+```

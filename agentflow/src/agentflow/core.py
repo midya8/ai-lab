@@ -100,6 +100,7 @@ class Result:
     error: Optional[str] = None
     attempts: int = 0
     duration: float = 0.0  # wall seconds spent executing (incl. retries)
+    resumed: bool = False  # replayed from a RunLog instead of executed
 
 
 class _Safe(dict):
@@ -151,16 +152,32 @@ class Orchestrator:
                     time.sleep(self.backoff * 2 ** (attempt - 1))
         return Result("failed", error=err, attempts=task.retries + 1)
 
-    def run(self, tasks: List[Task]) -> Dict[str, Result]:
+    def run(self, tasks: List[Task], log=None, resume: bool = False,
+            run_id: Optional[str] = None) -> Dict[str, Result]:
+        """Run the DAG. With ``log`` (a RunLog) every result is journaled as it lands;
+        with ``resume=True`` tasks already completed in the log (same fingerprint)
+        are replayed instead of re-executed."""
         self.plan(tasks)
+        fps = {}
+        if log is not None:
+            from .runlog import fingerprints
+            fps = fingerprints(tasks)
+            run_id = run_id or log.new_run_id()
         pending = {t.id: t for t in tasks}
         results: Dict[str, Result] = {}
+        if log is not None and resume:
+            for tid, e in log.completed(tasks).items():
+                results[tid] = Result("ok", e["output"], attempts=0, duration=0.0, resumed=True)
+                log.record(run_id, tid, fps[tid], results[tid], resumed=True)
+                del pending[tid]
         running = {}
         with ThreadPoolExecutor(self.max_workers) as pool:
             while pending or running:
                 for tid, t in list(pending.items()):
                     if any(d in results and results[d].status != "ok" for d in t.deps):
                         results[tid] = Result("skipped", error="upstream failure")
+                        if log is not None:
+                            log.record(run_id, tid, fps[tid], results[tid])
                         del pending[tid]
                     elif all(d in results for d in t.deps):
                         outs = {k: r.output for k, r in results.items() if r.output is not None}
@@ -169,5 +186,8 @@ class Orchestrator:
                 if running:
                     finished, _ = wait(running, return_when=FIRST_COMPLETED)
                     for f in finished:
-                        results[running.pop(f)] = f.result()
+                        tid = running.pop(f)
+                        results[tid] = f.result()
+                        if log is not None:
+                            log.record(run_id, tid, fps[tid], results[tid])
         return results

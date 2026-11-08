@@ -16,7 +16,7 @@ Midya's AI lab: small, tested, runnable AI projects.
 | [guardkit](guardkit) | Runtime guardrails for LLM pipelines: injection scoring, PII/secret redaction, policy file, audit log, adversarial eval — 62 tests |
 | [tiny-transformer](tiny-transformer) | GPT from scratch in pure NumPy with hand-written backprop (gradient-checked), trainer and sampler; RoPE option vs learned positions (89 tests) |
 | [llm-eval-harness](llm-eval-harness) | Pluggable LLM eval harness with scorers, prompt suites and a CI regression gate |
-| [agentflow](agentflow) | Multi-agent orchestration framework: tool-using agents, task DAG, parallel runs, retries, supervisor routing, shared memory, circuit breakers, run on llm-router with per-agent cost reports — 40 tests |
+| [agentflow](agentflow) | Multi-agent orchestration framework: tool-using agents, task DAG, parallel runs, retries, supervisor routing, shared memory, circuit breakers, run on llm-router with per-agent cost reports, crash-safe run log with fingerprint-based resume — 50 tests |
 | [logsentry](logsentry) | Log anomaly detection: template mining, robust volume spikes, error bursts, new-pattern alerts, per-template spikes, streaming mode, Prometheus exporter, webhook alerts |
 | [ticket-triage](ticket-triage) | Support-ticket triage classifier from scratch: TF-IDF + softmax regression with confidence-based escalation |
 | [lora-lab](lora-lab) | LoRA from scratch in NumPy: manual backprop, gradcheck, merge/unmerge, rank sweep, plus adapters on the tiny-transformer GPT attention (3.7% of weights cuts new-domain NLL 5.69 → 1.50; 17 tests) |

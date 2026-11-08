@@ -12,3 +12,5 @@ from .integration import SupervisedAgent
 __all__ += ["SupervisedAgent"]
 from .router_backend import RouterBackend, RouterLLM, BudgetExhausted, json_or_text
 __all__ += ["RouterBackend", "RouterLLM", "BudgetExhausted", "json_or_text"]
+from .runlog import RunLog, fingerprints
+__all__ += ["RunLog", "fingerprints"]
