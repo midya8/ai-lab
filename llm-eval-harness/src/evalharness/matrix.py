@@ -26,6 +26,27 @@ def matrix_table(matrix):
             "winners": winners, "contested": contested}
 
 
+def tag_table(matrix):
+    """Mean score per tag per backend, plus the best backend(s) for each tag."""
+    runs = matrix["runs"]
+    names = [r["backend"] for r in runs]
+    per = []
+    for r in runs:
+        acc = {}
+        for x in r["results"]:
+            for t in x.get("tags", []):
+                acc.setdefault(t, []).append(x["score"])
+        per.append({t: sum(v) / len(v) for t, v in acc.items()})
+    tags = sorted({t for d in per for t in d})
+    rows = []
+    for t in tags:
+        scores = [d.get(t, 0.0) for d in per]
+        top = max(scores)
+        rows.append({"tag": t, "scores": scores,
+                     "best": [n for n, s in zip(names, scores) if s == top]})
+    return {"backends": names, "rows": rows}
+
+
 def render_matrix_markdown(matrix):
     t = matrix_table(matrix)
     out = [f"# Matrix: {matrix['suite']}", "",
@@ -36,4 +57,11 @@ def render_matrix_markdown(matrix):
     out.append("| **mean** | " + " | ".join(f"**{m:.3f}**" for m in t["means"]) + " |")
     out += ["", f"Best: {', '.join(t['winners'])}. "
             f"Cases where models disagree: {len(t['contested'])}/{len(t['rows'])}."]
+    tt = tag_table(matrix)
+    if tt["rows"]:
+        out += ["", "## By tag", "", "| tag | " + " | ".join(tt["backends"]) + " | best |",
+                "|---|" + "---|" * (len(tt["backends"]) + 1)]
+        for r in tt["rows"]:
+            out.append(f"| {r['tag']} | " + " | ".join(f"{x:.2f}" for x in r["scores"])
+                       + f" | {', '.join(r['best'])} |")
     return "\n".join(out)

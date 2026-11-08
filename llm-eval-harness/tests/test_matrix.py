@@ -33,3 +33,18 @@ def test_markdown_and_cli(capsys, tmp_path):
     out = capsys.readouterr().out
     assert "| case | echo | rules |" in out and "Best: rules" in out
     assert f.read_text().startswith("# Matrix")
+
+
+def test_tag_table_means_and_best():
+    from evalharness import tag_table
+    m = {"suite": "s", "runs": [
+        {"backend": "a", "results": [{"id": "1", "score": 1.0, "tags": ["x"]}, {"id": "2", "score": 0.0, "tags": ["x", "y"]}]},
+        {"backend": "b", "results": [{"id": "1", "score": 0.0, "tags": ["x"]}, {"id": "2", "score": 1.0, "tags": ["x", "y"]}]}]}
+    rows = {r["tag"]: r for r in tag_table(m)["rows"]}
+    assert rows["x"]["scores"] == [0.5, 0.5] and rows["x"]["best"] == ["a", "b"]
+    assert rows["y"]["scores"] == [0.0, 1.0] and rows["y"]["best"] == ["b"]
+
+
+def test_markdown_has_tag_section(capsys):
+    main([SUITE, "--matrix", "echo,rules"])
+    assert "## By tag" in capsys.readouterr().out
