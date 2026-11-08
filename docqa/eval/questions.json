@@ -1,0 +1,8 @@
+[
+ {"question": "How long do I have to return a bike?", "must_contain": ["30 days"], "source": "returns.md"},
+ {"question": "How fast do refunds arrive?", "must_contain": ["5 business days"], "source": "returns.md"},
+ {"question": "Is there a restocking fee for unused items?", "must_contain": ["no restocking fee"], "source": "returns.md"},
+ {"question": "What is the capital of France?", "answerable": false},
+ {"question": "Do you sell electric scooters made of titanium?", "answerable": false},
+ {"question": "Who is the CEO of Harbour & Spoke?", "answerable": false}
+]
