@@ -95,3 +95,51 @@ def evaluate_by_position(model: GPT, data, bins: int = 4, batch: int = 16) -> di
     out = [{"start": int(a), "end": int(b), "loss": float(per[a:b].mean())}
            for a, b in zip(edges[:-1], edges[1:])]
     return {"per_position": per.tolist(), "bins": out, "gain": out[0]["loss"] - out[-1]["loss"]}
+
+
+def evaluate_sliding(model: GPT, data, stride: int = None, batch: int = 16) -> dict:
+    """Sliding-window perplexity: every token is scored with as much context as possible.
+
+    Windows of block_size advance by `stride`; in each window only the tokens not already
+    scored by an earlier window are counted (the first window counts all). stride ==
+    block_size reproduces `evaluate`; smaller strides give each token more context and
+    typically a lower (more honest) perplexity. Returns {"loss","perplexity","tokens","stride"}.
+    """
+    data = np.asarray(data)
+    T = model.cfg.block_size
+    stride = T if stride is None else int(stride)
+    if not 1 <= stride <= T:
+        raise ValueError("stride must be in [1, block_size]")
+    if len(data) < 2:
+        raise ValueError("data too short")
+    last = len(data) - 1  # number of target tokens
+    starts = list(range(0, max(last - T, 0) + 1, stride))
+    if starts[-1] + T < last:
+        starts.append(last - T)
+    xs, ys, skip = [], [], []
+    scored = 0  # target positions [0, scored) already counted
+    for s in starts:
+        e = min(s + T, last)
+        x = data[s:e]
+        y = data[s + 1:e + 1]
+        if len(x) < T:  # only possible when data shorter than a window
+            pad = T - len(x)
+            x = np.concatenate([x, np.zeros(pad, dtype=x.dtype)])
+            y = np.concatenate([y, np.zeros(pad, dtype=y.dtype)])
+        xs.append(x); ys.append(y)
+        skip.append(scored - s)
+        scored = e
+    xs, ys = np.stack(xs), np.stack(ys)
+    total, count = 0.0, 0
+    for b in range(0, len(xs), batch):
+        logits, _, _ = model.forward(xs[b:b + batch])
+        z = logits - logits.max(-1, keepdims=True)
+        logp = z - np.log(np.exp(z).sum(-1, keepdims=True))
+        nll = -np.take_along_axis(logp, ys[b:b + batch][..., None], -1)[..., 0]
+        for j in range(len(nll)):
+            k = skip[b + j]
+            valid = min(T, last - starts[b + j]) 
+            seg = nll[j, k:valid]
+            total += seg.sum(); count += seg.size
+    mean = total / count
+    return {"loss": float(mean), "perplexity": float(np.exp(mean)), "tokens": int(count), "stride": stride}

@@ -8,7 +8,7 @@ import argparse
 
 import numpy as np
 
-from .checkpoint import evaluate, evaluate_by_position, load_checkpoint
+from .checkpoint import evaluate, evaluate_by_position, evaluate_sliding, load_checkpoint
 from .kvcache import generate_cached
 
 
@@ -30,6 +30,8 @@ def main(argv=None):
     e.add_argument("--tail", type=float, default=1.0, help="evaluate only the last fraction of the file")
     e.add_argument("--by-position", type=int, default=0, metavar="BINS",
                    help="also print mean loss per context-position bin")
+    e.add_argument("--stride", type=int, default=0,
+                   help="also print sliding-window perplexity with this stride (smaller = more context)")
     a = ap.parse_args(argv)
 
     model, tok = load_checkpoint(a.ckpt)
@@ -48,6 +50,9 @@ def main(argv=None):
             for b in bp["bins"]:
                 print(f"  pos {b['start']:>4}-{b['end']:<4} loss {b['loss']:.4f}")
             print(f"  context gain (first - last bin): {bp['gain']:.4f}")
+        if a.stride:
+            sw = evaluate_sliding(model, np.array(tok.encode(text)), stride=a.stride)
+            print(f"sliding(stride={sw['stride']}) loss {sw['loss']:.4f}  perplexity {sw['perplexity']:.3f}  tokens {sw['tokens']}")
 
 
 if __name__ == "__main__":

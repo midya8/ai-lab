@@ -66,3 +66,9 @@ PYTHONPATH=src python -m tinygpt.cli eval tinygpt.npz --data data/corpus.txt --t
 `python -m tinygpt.cli eval ckpt.npz --data corpus.txt --by-position 4` prints mean loss per
 context-position bin and the "context gain" (first bin minus last bin). A model that uses its
 context shows loss falling with position; `evaluate_by_position` exposes the full per-position curve.
+
+## Sliding-window perplexity
+
+`eval ckpt.npz --data corpus.txt --stride 4` also prints sliding-window perplexity: windows of
+`block_size` advance by `stride` and only newly covered tokens are scored, so each token gets as much
+context as possible. `--stride block_size` equals plain eval; smaller strides lower perplexity.
