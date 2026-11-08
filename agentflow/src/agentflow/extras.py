@@ -88,12 +88,16 @@ def trace_agent(agent: Agent, tracer: Tracer) -> Agent:
 
 
 class Supervisor:
-    def __init__(self, router_llm, workers: List[Agent], default: Optional[str] = None):
+    def __init__(self, router_llm, workers: List[Agent], default: Optional[str] = None,
+                 memory=None, recall_limit: int = 3, remember_results: bool = True):
         if not workers:
             raise ValueError("need at least one worker")
         self.router_llm = router_llm
         self.workers = {w.name: w for w in workers}
         self.default = default or workers[0].name
+        self.memory = memory
+        self.recall_limit = recall_limit
+        self.remember_results = remember_results
         if self.default not in self.workers:
             raise KeyError(f"unknown default agent {self.default}")
 
@@ -108,6 +112,22 @@ class Supervisor:
             choice = raw.strip()
         return choice if choice in self.workers else self.default
 
+    def _context(self, request: str) -> list:
+        if self.memory is None:
+            return []
+        return self.memory.search(request, self.recall_limit)
+
     def run(self, request: str) -> dict:
         name = self.route(request)
-        return {"agent": name, "output": self.workers[name].run(request)}
+        ctx = self._context(request)
+        prompt = request
+        if ctx:
+            notes = "\n".join(f"- {e['key']}: {e['value']}" for e in ctx)
+            prompt = f"Relevant shared memory:\n{notes}\n\nRequest: {request}"
+        out = self.workers[name].run(prompt)
+        if self.memory is not None and self.remember_results:
+            self.memory.remember(f"supervisor:{request[:60]}", out, author=name)
+        result = {"agent": name, "output": out}
+        if self.memory is not None:
+            result["memory_used"] = [e["key"] for e in ctx]
+        return result

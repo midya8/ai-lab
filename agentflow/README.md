@@ -17,3 +17,6 @@ python -m pytest
 
 ## Shared memory (v0.3)
 `SharedMemory` is a thread-safe key/value store with token-overlap `search` (key matches weigh double), author stamps, and optional atomic JSON persistence (`SharedMemory(path)`). `attach_memory(agent, memory)` gives an agent `remember`, `recall`, `search` and `forget` tools so agents in one Orchestrator run can hand off facts beyond templated task outputs.
+
+## Memory-aware Supervisor
+`Supervisor(router_llm, workers, memory=SharedMemory())` searches shared memory for each request, prepends the top `recall_limit` hits to the worker prompt, records the worker's output under `supervisor:<request>` (disable with `remember_results=False`), and returns `memory_used` keys in the result. Without `memory` behaviour is unchanged.

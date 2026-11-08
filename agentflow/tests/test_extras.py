@@ -43,3 +43,33 @@ def test_supervisor_validation():
         Supervisor(ScriptedLLM([]), [])
     with pytest.raises(KeyError):
         Supervisor(ScriptedLLM([]), [mk("a", [])], default="zz")
+
+
+def test_supervisor_memory_injects_context_and_records_result():
+    from agentflow import SharedMemory
+    seen = []
+
+    class Echo:
+        def complete(self, messages):
+            seen.append(messages[-1]["content"])
+            return json.dumps({"final": "ok:" + str(len(seen))})
+    m = SharedMemory()
+    m.remember("pricing", "enterprise tier costs more")
+    w = Agent("a", Echo(), ToolRegistry())
+    s = Supervisor(ScriptedLLM([{"route": "a"}, {"route": "a"}]), [w], memory=m)
+    r = s.run("what about pricing?")
+    assert r["memory_used"] == ["pricing"]
+    assert "enterprise tier costs more" in seen[0]
+    assert m.recall("supervisor:what about pricing?") == r["output"]
+    r2 = s.run("pricing again")
+    assert "supervisor:what about pricing?" in r2["memory_used"]
+
+
+def test_supervisor_memory_optional_and_no_write_flag():
+    from agentflow import SharedMemory
+    m = SharedMemory()
+    w = mk("a", [{"final": "x"}])
+    s = Supervisor(ScriptedLLM([{"route": "a"}]), [w], memory=m, remember_results=False)
+    assert s.run("hi")["memory_used"] == [] and m.keys() == []
+    plain = Supervisor(ScriptedLLM([{"route": "a"}]), [mk("a", [{"final": "x"}])])
+    assert "memory_used" not in plain.run("hi")
