@@ -72,6 +72,7 @@
 - rag-evals v0.4: harder paraphrase benchmark (8 docs, 19 questions; recall@3 0.84, no longer saturated; 16 tests)
 - promptlab: check --summary Markdown report + composite GitHub Action (31 tests)
 - llm-eval-harness: multi-model comparison matrix (--matrix, winner + disagreement count; 14 tests)
+- lora-lab: rank sweep (--sweep, ranks 1-16 vs full fine-tune; task saturates at 1.000, documented; 7 tests)
 
 ## Next
 
@@ -79,7 +80,7 @@
 2. llm-eval-harness: (done) (done matrix) -> next: HTTP-model matrix specs, per-tag matrix
 3. tiny-transformer follow-ups: (done v0.5, top-p, grad accumulation); (done clipping); (done dropout); (done weight tying); (done early stopping); (done repetition penalty); (done LR finder); (done label smoothing); (done per-position eval); (done sliding-window eval); next: lora-lab on tiny-transformer attention
 4. agentflow follow-ups: shared memory
-5. lora-lab: LoRA on tiny-transformer attention, rank sweep
+5. lora-lab: (done rank sweep) -> next: harder task so ranks separate, LoRA on tiny-transformer attention
 6. logsentry: (done v0.6 Grafana dashboard)
 7. ticket-triage: (done urgency head) -> next: multi-label tags, active-learning review queue
 8. llm-router: (done v0.1) -> (done latency tracking) (done semantic cache) (done learned complexity classifier) (done persistence)

@@ -24,11 +24,54 @@ def run(rank=2, steps=300, seed=0, rot=0.8):
     return out
 
 
+def rank_sweep(ranks=(1, 2, 4, 8, 16), steps=300, seed=0, rot=0.8):
+    """Adapt the same pretrained MLP at each LoRA rank, plus a full fine-tune reference.
+
+    Returns rows of {rank, trainable_params, acc_task_B}; the full fine-tune row has rank=None.
+    """
+    d, k, h = 32, 6, 64
+    xa, ya = make_task(2000, d, k, 1)
+    xb, yb = make_task(400, d, k, 2, rot); xbt, ybt = make_task(1000, d, k, 3, rot)
+
+    def pretrained():
+        m = MLP(d, h, k, np.random.default_rng(seed))
+        for _ in range(steps):
+            m.step_full(xa, ya, 0.3)
+        return m
+
+    rows = []
+    for r in ranks:
+        m = pretrained(); m.attach_lora(r)
+        for _ in range(steps):
+            m.step_lora(xb, yb, 0.3)
+        rows.append({"rank": r, "trainable_params": m.l1.n_trainable() + m.l2.n_trainable(),
+                     "acc_task_B": float((m.predict(xbt) == ybt).mean())})
+    m = pretrained()
+    for _ in range(steps):
+        m.step_full(xb, yb, 0.3)
+    rows.append({"rank": None, "trainable_params": m.W1.size + m.W2.size + h + k,
+                 "acc_task_B": float((m.predict(xbt) == ybt).mean())})
+    return rows
+
+
+def format_sweep(rows):
+    full = rows[-1]["trainable_params"]
+    out = ["rank  trainable  %of_full  acc_B"]
+    for r in rows:
+        name = "full" if r["rank"] is None else str(r["rank"])
+        out.append(f"{name:<5} {r['trainable_params']:<10} {100 * r['trainable_params'] / full:>7.1f}%  {r['acc_task_B']:.3f}")
+    return "\n".join(out)
+
+
 def main():
     ap = argparse.ArgumentParser(description="LoRA adaptation demo")
     ap.add_argument("--rank", type=int, default=2)
     ap.add_argument("--steps", type=int, default=300)
+    ap.add_argument("--sweep", action="store_true", help="sweep ranks 1..16 and compare to full fine-tuning")
     a = ap.parse_args()
+    if a.sweep:
+        print(format_sweep(rank_sweep(steps=a.steps)))
+        return
     for k, v in run(a.rank, a.steps).items():
         print(f"{k}: {v:.3f}" if isinstance(v, float) else f"{k}: {v}")
 

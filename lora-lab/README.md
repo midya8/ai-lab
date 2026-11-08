@@ -11,3 +11,8 @@ pip install -r requirements.txt
 PYTHONPATH=src python -m loralab.cli --rank 2
 python -m pytest
 ```
+
+## Rank sweep
+
+`PYTHONPATH=src python -m loralab.cli --sweep` adapts the same pretrained MLP at ranks 1/2/4/8/16 and a full fine-tune reference, printing trainable params, % of full, and task-B accuracy.
+On this synthetic Gaussian-blob task every setting reaches 1.000, so the sweep shows the parameter savings (rank 1 trains 6.6% of the weights) rather than an accuracy gap; the task is too easy to separate ranks. Numbers are synthetic.
