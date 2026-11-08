@@ -7,6 +7,7 @@ from pathlib import Path
 
 import numpy as np
 
+from . import certify
 from . import explain as ex
 from . import png, robust
 from .data import CLASSES, ascii_art, make_dataset
@@ -22,7 +23,8 @@ def cmd_train(a):
                                   head=a.head, batchnorm=a.batchnorm))
     print(f"{model.n_params():,} parameters, {a.train} train / {a.val} val images")
     train(model, Xtr, ytr, Xva, yva, epochs=a.epochs, batch=a.batch, lr=a.lr, seed=a.seed,
-          adv_eps=a.adv_eps, label_smoothing=a.label_smoothing)
+          adv_eps=a.adv_eps, label_smoothing=a.label_smoothing,
+          ibp_eps=a.ibp_eps, ibp_warmup=a.ibp_warmup, ibp_kappa=a.ibp_kappa)
     model.save(a.out)
     print(f"saved {a.out}")
 
@@ -43,6 +45,21 @@ def cmd_robust(a):
     print()
     print(robust.format_table(robust.attack_report(model, X[:a.attack_n], y[:a.attack_n]),
                               f"white-box attacks (L-inf eps, n={min(a.attack_n, len(y))})"))
+
+
+def cmd_certify(a):
+    model = Sequential.load(a.model)
+    X, y = make_dataset(a.test, seed=a.seed, noise=a.noise)
+    print(f"certified accuracy by interval bound propagation, n={len(y)} (a proof, not an attack: no L-inf "
+          f"perturbation of that size can change a certified prediction)")
+    print(f"{'eps':>7} {'certified':>10} {'naive':>8}   (naive = comparing logit intervals, looser)")
+    for e in a.eps:
+        print(f"{e:>7} {certify.certified_accuracy(model, X, y, e):>10.3f} "
+              f"{certify.certified_accuracy(model, X, y, e, 'naive'):>8.3f}")
+    if a.radius:
+        r = certify.certified_radius(model, X[:a.radius], y[:a.radius])
+        print(f"\ncertified L-inf radius over {len(r)} images: median {np.median(r):.4f}, "
+              f"mean {r.mean():.4f}, share with radius 0 (wrong or uncertifiable) {np.mean(r == 0):.2f}")
 
 
 def cmd_show(a):
@@ -101,20 +118,28 @@ def main(argv=None):
     t.add_argument("--batchnorm", action="store_true", help="BatchNorm2D after every conv")
     t.add_argument("--adv-eps", type=float, default=0.0, help="FGSM adversarial training strength")
     t.add_argument("--label-smoothing", type=float, default=0.0)
+    t.add_argument("--ibp-eps", type=float, default=0.0,
+                   help="interval-bound-propagation training radius (certified robustness; no BatchNorm)")
+    t.add_argument("--ibp-warmup", type=float, default=0.4, help="fraction of steps over which eps and kappa ramp")
+    t.add_argument("--ibp-kappa", type=float, default=0.5, help="final weight of the clean loss in the IBP mix")
     t.add_argument("--noise", type=float, default=0.2)
     t.add_argument("--seed", type=int, default=0)
     t.add_argument("--out", default="model.npz")
     t.set_defaults(fn=cmd_train)
 
-    for name, fn in [("eval", cmd_eval), ("robust", cmd_robust), ("show", cmd_show), ("explain", cmd_explain)]:
+    for name, fn in [("eval", cmd_eval), ("robust", cmd_robust), ("certify", cmd_certify),
+                     ("show", cmd_show), ("explain", cmd_explain)]:
         s = sub.add_parser(name)
         s.add_argument("--model", default="model.npz")
         s.add_argument("--seed", type=int, default=999, help="test-set seed (differs from training seeds)")
         s.add_argument("--noise", type=float, default=0.2)
-        if name in ("eval", "robust"):
+        if name in ("eval", "robust", "certify"):
             s.add_argument("--test", type=int, default=1000)
         if name == "robust":
             s.add_argument("--attack-n", type=int, default=400)
+        if name == "certify":
+            s.add_argument("--eps", type=float, nargs="+", default=[0.0, 0.01, 0.02, 0.03, 0.05])
+            s.add_argument("--radius", type=int, default=0, help="also bisect the certified radius of the first N images")
         if name == "show":
             s.add_argument("-n", type=int, default=3)
         if name == "explain":

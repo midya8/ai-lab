@@ -1,0 +1,29 @@
+  standard seed 0: 31s
+  standard seed 1: 30s
+  standard seed 2: 30s
+  FGSM adv-trained (0.05) seed 0: 56s
+  FGSM adv-trained (0.05) seed 1: 56s
+  FGSM adv-trained (0.05) seed 2: 55s
+  IBP-trained (eps 0.03) seed 0: 67s
+  IBP-trained (eps 0.03) seed 1: 68s
+  IBP-trained (eps 0.03) seed 2: 70s
+
+mean over 3 seeds (+- std of clean accuracy); n=800 test images, radius on the first 200
+model                        clean  cert@0.01   cert@0.02   cert@0.03   cert@0.05 
+standard                     0.988       0.000       0.000       0.000       0.000   (clean std 0.002)
+FGSM adv-trained (0.05)      0.982       0.037       0.000       0.000       0.000   (clean std 0.009)
+IBP-trained (eps 0.03)       0.839       0.766       0.667       0.561       0.305   (clean std 0.045)
+
+naive interval comparison
+standard                                 0.000       0.000       0.000       0.000
+FGSM adv-trained (0.05)                  0.005       0.000       0.000       0.000
+IBP-trained (eps 0.03)                   0.764       0.665       0.555       0.297
+PGD-20 accuracy (upper bound)
+standard                                 0.915       0.708       0.479       0.219
+FGSM adv-trained (0.05)                  0.960       0.924       0.859       0.714
+IBP-trained (eps 0.03)                   0.800       0.763       0.718       0.630
+
+median certified radius (first 200 test images, capped at 0.5)
+standard                    0.0011
+FGSM adv-trained (0.05)     0.0037
+IBP-trained (eps 0.03)      0.0363
