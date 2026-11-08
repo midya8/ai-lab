@@ -19,7 +19,7 @@ Midya's AI lab: small, tested, runnable AI projects.
 | [agentflow](agentflow) | Multi-agent orchestration framework: tool-using agents, task DAG, parallel runs, retries, supervisor routing, shared memory, circuit breakers, run on llm-router with per-agent cost reports — 40 tests |
 | [logsentry](logsentry) | Log anomaly detection: template mining, robust volume spikes, error bursts, new-pattern alerts, per-template spikes, streaming mode, Prometheus exporter, webhook alerts |
 | [ticket-triage](ticket-triage) | Support-ticket triage classifier from scratch: TF-IDF + softmax regression with confidence-based escalation |
-| [lora-lab](lora-lab) | LoRA low-rank adaptation from scratch in NumPy: manual backprop, gradcheck, merge/unmerge |
+| [lora-lab](lora-lab) | LoRA from scratch in NumPy: manual backprop, gradcheck, merge/unmerge, rank sweep, plus adapters on the tiny-transformer GPT attention (3.7% of weights cuts new-domain NLL 5.69 → 1.50; 17 tests) |
 | [llm-router](llm-router) | Cost/latency-aware LLM router: complexity scoring, 4 strategies, fallback chains, circuit breakers, exact + semantic cache, budget guardrails, cascade, outage simulator — 53 tests |
 | [promptlab](promptlab) | Prompt versioning + paired A/B testing (exact McNemar, Wilson/bootstrap CIs) + baseline regression gate + GitHub Action for CI — 31 tests |
 | [docqa](docqa) | Grounded document Q&A: verbatim cited sentences, coverage-based abstention ("I don't know"), synonym-aware paraphrase matching, HTTP service with answer cache + Prometheus metrics — 41 tests |
