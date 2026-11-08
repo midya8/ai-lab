@@ -75,10 +75,11 @@
 - lora-lab: rank sweep (--sweep, ranks 1-16 vs full fine-tune; task saturates at 1.000, documented; 7 tests)
 - agentflow v0.3: SharedMemory + attach_memory tools (search, atomic persistence, thread-safe; 15 tests)
 - ticket-triage: active-learning review queue (--active; uncertainty sampling vs random; 10 new tests)
+- rag-evals v0.5: chunk-size sweep (--sweep, Markdown table, best-by-MRR helper; 4 new tests)
 
 ## Next
 
-1. rag-evals: (done hard benchmark) -> next: dense embeddings beyond LSA, chunk-size sweep
+1. rag-evals: (done hard benchmark) (done chunk sweep) -> next: dense embeddings beyond LSA
 2. llm-eval-harness: (done) (done matrix) -> next: HTTP-model matrix specs, per-tag matrix
 3. tiny-transformer follow-ups: (done v0.5, top-p, grad accumulation); (done clipping); (done dropout); (done weight tying); (done early stopping); (done repetition penalty); (done LR finder); (done label smoothing); (done per-position eval); (done sliding-window eval); next: lora-lab on tiny-transformer attention
 4. agentflow follow-ups: (done shared memory) -> next: memory-aware Supervisor, TTL

@@ -33,3 +33,10 @@ PYTHONPATH=src python -m ragevals.cli --faithfulness data/answers.json
 PYTHONPATH=src python -m ragevals.cli --docs data/hard_docs --dataset data/hard_eval.json --method all --k 3
 ```
 Result (recall@3 / MRR): BM25 0.842 / 0.866, LSA 0.842 / 0.839, hybrid 0.842 / 0.866. Small hand-written corpus: treat as a regression canary, not a leaderboard. A test asserts the set stays unsaturated.
+
+## Chunk-size sweep (v0.5)
+`--sweep` re-indexes the corpus at several chunk sizes and prints a Markdown table (`ragevals.sweep.sweep/best` for programmatic use).
+```bash
+PYTHONPATH=src python -m ragevals.cli --docs data/hard_docs --dataset data/hard_eval.json --method all --sweep 15,25,40,60,100
+```
+On the hard set: MRR peaks at 40 words for BM25/hybrid (0.866) and drops to 0.784 at 15 words, where chunks lose context; recall@3 is flat-ish (0.84-0.89) because docs are short. Tiny corpus, so differences of one question (~0.05) are noise.

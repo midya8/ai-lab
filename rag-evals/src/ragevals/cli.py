@@ -30,7 +30,15 @@ def main(argv=None) -> int:
     ap.add_argument("--method", choices=[*METHODS, "all"], default="bm25")
     ap.add_argument("--query", help="run a single query instead of the eval")
     ap.add_argument("--faithfulness", metavar="ANSWERS_JSON", help="score answer faithfulness/relevance from a JSON file")
+    ap.add_argument("--sweep", metavar="SIZES", help="comma-separated chunk sizes (words) to compare, e.g. 15,40,100")
     a = ap.parse_args(argv)
+    if a.sweep:
+        from .sweep import sweep, to_markdown
+        sizes = [int(x) for x in a.sweep.split(",")]
+        data = json.loads(pathlib.Path(a.dataset).read_text())
+        methods = list(METHODS) if a.method == "all" else [a.method]
+        print(to_markdown(sweep(a.docs, data, sizes, methods, a.k), a.k))
+        return 0
     if a.faithfulness:
         from .faithfulness import evaluate_answers
         print(json.dumps(evaluate_answers(json.loads(pathlib.Path(a.faithfulness).read_text())), indent=2))
