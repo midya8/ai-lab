@@ -112,3 +112,16 @@ def check_regression(current: RunResult, baseline: RunResult, max_regressions: i
     if missing:
         reasons.append(f"{len(missing)} baseline case(s) not run: {', '.join(missing)}")
     return RegressionReport(regs, fixed, new, missing, current.pass_rate, baseline.pass_rate, not reasons, reasons)
+
+
+def render_check_markdown(rep: RegressionReport) -> str:
+    """Markdown summary of a regression gate, suitable for $GITHUB_STEP_SUMMARY."""
+    lines = [f"### Prompt regression gate: {'PASS' if rep.ok else 'FAIL'}", "",
+             f"Pass rate **{rep.pass_rate:.1%}** (baseline {rep.baseline_pass_rate:.1%}). "
+             f"{len(rep.regressions)} regressed, {len(rep.fixed)} fixed, {len(rep.new_cases)} new."]
+    for title, ids in (("Regressed", rep.regressions), ("Fixed", rep.fixed), ("New", rep.new_cases)):
+        if ids:
+            lines += ["", f"**{title}:** " + ", ".join(f"`{i}`" for i in ids)]
+    if rep.reasons:
+        lines += ["", "**Why it failed:**"] + [f"- {r}" for r in rep.reasons]
+    return "\n".join(lines) + "\n"

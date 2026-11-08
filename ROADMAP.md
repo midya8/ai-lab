@@ -70,6 +70,7 @@
 - llm-router: semantic cache (hashed lexical embeddings, cosine threshold, TTL/LRU; 53 tests)
 - llm-router: semantic-cache persistence (atomic JSON save/load, age-based TTL across restarts; 65 tests)
 - rag-evals v0.4: harder paraphrase benchmark (8 docs, 19 questions; recall@3 0.84, no longer saturated; 16 tests)
+- promptlab: check --summary Markdown report + composite GitHub Action (31 tests)
 
 ## Next
 
@@ -81,6 +82,6 @@
 6. logsentry: (done v0.6 Grafana dashboard)
 7. ticket-triage: (done urgency head) -> next: multi-label tags, active-learning review queue
 8. llm-router: (done v0.1) -> (done latency tracking) (done semantic cache) (done learned complexity classifier) (done persistence)
-9. promptlab: (done v0.1) -> v0.2 multi-sample done; next: LLM-judge check via evalkit, GitHub Action for check
+9. promptlab: (done v0.1) -> v0.2 multi-sample done; (done GitHub Action + summary); next: LLM-judge check via evalkit
 10. docqa: document Q&A CLI built on ragkit + agentkit, citations, no-hallucination mode
 11. autojob: agentic job-application assistant (only Midya's real resume data, never invents experience)

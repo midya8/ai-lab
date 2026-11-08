@@ -102,6 +102,18 @@ silently test the wrong prompt.
 | `compare.py` | A/B verdict, Markdown report, baseline regression gate |
 | `models.py` | `RuleModel` offline stand-in, `CommandModel` adapter |
 
+## GitHub Action
+
+`action/action.yml` is a composite action that runs `check` and writes a
+Markdown summary (`--summary`, here `$GITHUB_STEP_SUMMARY`) listing regressed,
+fixed and new cases. Use it from a checkout of this repo:
+
+```yaml
+- uses: actions/checkout@v4
+- uses: ./promptlab/action
+  with: {name: triage, cases: cases.jsonl, baseline: baseline.json}
+```
+
 ## Limitations
 
 Deterministic checks only (no LLM-as-judge here; see `llm-eval-harness` and

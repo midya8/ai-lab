@@ -1,0 +1,23 @@
+name: promptlab regression gate
+description: Run a prompt version over test cases and fail if anything that passed in the baseline now fails.
+inputs:
+  name: {description: Prompt name, required: true}
+  cases: {description: JSONL cases file, required: true}
+  baseline: {description: Baseline run JSON, required: true}
+  root: {description: Registry directory, default: prompts}
+  ref: {description: Version ref, default: latest}
+  model: {description: "rule | cmd:<command>", default: rule}
+  max-regressions: {description: Allowed regressions, default: "0"}
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v5
+      with: {python-version: "3.11"}
+    - shell: bash
+      env:
+        PYTHONPATH: ${{ github.action_path }}/..
+      run: >
+        python -m promptlab --root "${{ inputs.root }}" check "${{ inputs.name }}"
+        --ref "${{ inputs.ref }}" --cases "${{ inputs.cases }}" --baseline "${{ inputs.baseline }}"
+        --model "${{ inputs.model }}" --max-regressions "${{ inputs.max-regressions }}"
+        --summary "$GITHUB_STEP_SUMMARY"

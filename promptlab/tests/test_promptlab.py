@@ -80,6 +80,27 @@ class MultiSampleTests(unittest.TestCase):
             self.assertIn("[3/3]", buf.getvalue())
 
 
+    def test_check_summary_file(self):
+        with tempfile.TemporaryDirectory() as d:
+            pf, cf = Path(d, "p.txt"), Path(d, "c.jsonl")
+            pf.write_text("Say {{x}}")
+            cf.write_text(json.dumps({"id": "a", "vars": {"x": "hi"}, "checks": [{"type": "contains", "value": "hi"}]}) + "\n")
+            main(["--root", d + "/reg", "commit", "p", "--file", str(pf)])
+            main(["--root", d + "/reg", "baseline", "p", "--cases", str(cf), "--out", d + "/b.json"])
+            sm = Path(d, "sum.md")
+            with redirect_stdout(io.StringIO()):
+                rc = main(["--root", d + "/reg", "check", "p", "--cases", str(cf), "--baseline", d + "/b.json", "--summary", str(sm)])
+            self.assertEqual(rc, 0)
+            self.assertIn("PASS", sm.read_text())
+
+    def test_render_check_markdown_fail(self):
+        from promptlab import RegressionReport
+        from promptlab.compare import render_check_markdown
+        rep = RegressionReport(["t1"], ["t2"], [], [], 0.5, 0.75, False, ["1 regression(s) > allowed 0: t1"])
+        md = render_check_markdown(rep)
+        self.assertIn("FAIL", md); self.assertIn("`t1`", md); self.assertIn("Fixed", md)
+
+
 class TemplateTests(unittest.TestCase):
     def test_variables_and_required(self):
         t = Template("Hi {{ name }}, {{greeting|hello}} {{name}} {{x}}")

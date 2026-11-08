@@ -5,7 +5,7 @@ import os
 import sys
 from pathlib import Path
 
-from .compare import check_regression, compare_runs, render_markdown
+from .compare import check_regression, render_check_markdown, compare_runs, render_markdown
 from .models import make_model
 from .registry import Registry, RegistryError
 from .runner import RunResult, load_cases, run_prompt
@@ -38,7 +38,7 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("compare", help="paired A/B comparison"); p.add_argument("name"); p.add_argument("a"); p.add_argument("b"); add_run_opts(p); p.add_argument("--alpha", type=float, default=0.05); p.add_argument("--report", help="write Markdown report")
     p = sub.add_parser("baseline", help="save a run as the regression baseline"); p.add_argument("name"); p.add_argument("--ref", default="latest"); add_run_opts(p); p.add_argument("--out", required=True)
     p = sub.add_parser("check", help="gate a version against a baseline (exit 1 on failure)"); p.add_argument("name"); p.add_argument("--ref", default="latest"); add_run_opts(p)
-    p.add_argument("--baseline", required=True); p.add_argument("--max-regressions", type=int, default=0); p.add_argument("--min-pass-rate", type=float); p.add_argument("--max-drop", type=float)
+    p.add_argument("--baseline", required=True); p.add_argument("--max-regressions", type=int, default=0); p.add_argument("--min-pass-rate", type=float); p.add_argument("--max-drop", type=float); p.add_argument("--summary", help="append a Markdown summary to this file (e.g. $GITHUB_STEP_SUMMARY)")
 
     args = ap.parse_args(argv)
     reg = Registry(args.root)
@@ -92,6 +92,9 @@ def main(argv: list[str] | None = None) -> int:
                   f"{len(rep.regressions)} regressed, {len(rep.fixed)} fixed, {len(rep.new_cases)} new")
             for r in rep.reasons:
                 print(f"  - {r}")
+            if args.summary:
+                with open(args.summary, "a", encoding="utf-8") as f:
+                    f.write(render_check_markdown(rep))
             return 0 if rep.ok else 1
     except (RegistryError, ValueError, OSError) as e:
         print(f"error: {e}", file=sys.stderr)
