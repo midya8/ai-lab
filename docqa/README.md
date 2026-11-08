@@ -43,3 +43,15 @@ registry.call("ask_docs", {"question": "How long do I have to return a bike?"})
 ```
 
 The tool returns verbatim cited sentences or an explicit "I don't know", so an agent run can ground itself in documents and abstain when they are silent.
+
+## Use as an agentflow worker
+
+```python
+from agentflow import Orchestrator, Task
+from docqa.agentflow_worker import DocQAWorker
+
+orch = Orchestrator([DocQAWorker("path/to/docs", strict=True)])
+orch.run([Task("q", "docqa", "How long do I have to return a bike?")])
+```
+
+`DocQAWorker` has agentflow's `name` + `run(prompt)` shape, so it slots into a DAG and downstream tasks receive the cited answer via `{q}`. With `strict=True` an abstention raises `Abstained`: the task fails after its retries and dependents are skipped instead of building on an unsupported answer.
