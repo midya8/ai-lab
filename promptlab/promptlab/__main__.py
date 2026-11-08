@@ -8,6 +8,8 @@ from pathlib import Path
 from .compare import check_regression, render_check_markdown, compare_runs, render_markdown
 from .judge import calibrate_judge, load_calibration_items, render_calibration
 from .models import make_judge, make_model
+from .pairwise import (audit_judge, compare_outputs, load_pair_items, make_pair_judge, render_audit,
+                       render_pairwise)
 from .registry import Registry, RegistryError
 from .runner import RunResult, load_cases, run_prompt
 
@@ -48,6 +50,21 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--min-score", type=int, default=4, help="score at or above which an output passes")
     p.add_argument("--votes", type=int, default=1, help="judge calls per item (lower median)")
     p.add_argument("--min-kappa", type=float, help="exit 1 if Cohen's kappa is below this (or undefined)")
+
+    p = sub.add_parser("pairwise", help="pairwise LLM-judge A/B of two versions, each pair judged in both orders")
+    p.add_argument("name"); p.add_argument("a"); p.add_argument("b")
+    p.add_argument("--cases", required=True); p.add_argument("--model", default="rule")
+    p.add_argument("--rubric", help="grading rubric (default: the first judge check's rubric in each case)")
+    p.add_argument("--judge", default="rule", help="rule | rule-biased:<p>[:A|B] | cmd:<command>")
+    p.add_argument("--alpha", type=float, default=0.05)
+    p.add_argument("--max-inconsistent", type=float, help="exit 1 if more than this share of pairs flip when order is swapped")
+    p.add_argument("--out", help="write per-pair verdicts as JSON")
+
+    p = sub.add_parser("pair-audit", help="measure a pairwise judge against human preferences and check it for position bias")
+    p.add_argument("--labels", required=True, help="JSONL of {id, rubric, a, b, human: a|b|tie}")
+    p.add_argument("--judge", default="rule", help="rule | rule-biased:<p>[:A|B] | cmd:<command>")
+    p.add_argument("--min-accuracy", type=float, help="exit 1 if reconciled accuracy is below this")
+    p.add_argument("--max-inconsistent", type=float, help="exit 1 if the share of pairs answered differently in the two orders exceeds this")
 
     args = ap.parse_args(argv)
     reg = Registry(args.root)
@@ -100,6 +117,40 @@ def main(argv: list[str] | None = None) -> int:
             print(render_calibration(cal))
             if args.min_kappa is not None and (cal.kappa is None or cal.kappa < args.min_kappa):
                 print(f"FAIL: kappa {'undefined' if cal.kappa is None else f'{cal.kappa:.2f}'} < required {args.min_kappa}")
+                return 1
+        elif args.cmd == "pairwise":
+            cases = load_cases(args.cases)
+            outs = []
+            for ref in (args.a, args.b):
+                r = run_prompt(reg.resolve(args.name, ref), cases, make_model(args.model))
+                outs.append(r.by_id())
+            items = []
+            for c in cases:
+                rubric = args.rubric or next((ch.get("rubric") for ch in c.checks
+                                              if ch.get("type") == "judge" and ch.get("rubric")), None)
+                if not rubric:
+                    raise ValueError(f"case {c.id!r} has no judge rubric: pass --rubric")
+                items.append({"id": c.id, "rubric": rubric, "vars": c.vars,
+                              "a": outs[0][c.id].output, "b": outs[1][c.id].output})
+            summ = compare_outputs(make_pair_judge(args.judge), items, args.alpha)
+            print(render_pairwise(summ, f"{args.name}@{args.a}", f"{args.name}@{args.b}"))
+            if args.out:
+                import json
+                Path(args.out).write_text(json.dumps([v.to_dict() for v in summ.verdicts], indent=2) + "\n", encoding="utf-8")
+            if summ.errors:
+                print(f"FAIL: {summ.errors} pair(s) could not be judged")
+                return 1
+            if args.max_inconsistent is not None and summ.inconsistent_rate > args.max_inconsistent:
+                print(f"FAIL: {summ.inconsistent_rate:.1%} of pairs flip with order, above {args.max_inconsistent:.1%}")
+                return 1
+        elif args.cmd == "pair-audit":
+            a = audit_judge(load_pair_items(args.labels), make_pair_judge(args.judge))
+            print(render_audit(a))
+            if args.min_accuracy is not None and a.reconciled_accuracy < args.min_accuracy:
+                print(f"FAIL: reconciled accuracy {a.reconciled_accuracy:.1%} < required {args.min_accuracy:.1%}")
+                return 1
+            if args.max_inconsistent is not None and 1 - a.consistency > args.max_inconsistent:
+                print(f"FAIL: {1 - a.consistency:.1%} of pairs flip with order, above {args.max_inconsistent:.1%}")
                 return 1
         elif args.cmd == "check":
             cur = _run(reg, args, args.ref)

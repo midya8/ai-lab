@@ -9,4 +9,8 @@ from .models import RuleModel, CommandModel, RuleJudge, make_model, make_judge
 from .judge import (build_judge_prompt, parse_judge_reply, judge_score, calibrate_judge,
                     load_calibration_items, render_calibration, JudgeError)
 
-__version__ = "0.3.0"
+from .pairwise import (build_pairwise_prompt, parse_pairwise_reply, judge_pair, compare_outputs, summarize,
+                       audit_judge, load_pair_items, make_pair_judge, PairVerdict, PairwiseError,
+                       RulePairJudge, PositionBiasedJudge)
+
+__version__ = "0.4.0"

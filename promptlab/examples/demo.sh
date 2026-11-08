@@ -16,3 +16,6 @@ echo; $P compare triage v1 v3 --cases $CASES
 $P baseline triage --ref v2 --cases $CASES --out "$ROOT/baseline.json"
 $P check triage --ref v3 --cases $CASES --baseline "$ROOT/baseline.json" || true
 echo; python -m promptlab calibrate --labels examples/judge_labels.jsonl --judge rule
+echo; $P pairwise triage v1 v3 --cases $CASES --rubric 'The reply gives the "category" as JSON. Avoid chatty openers like "Thanks".'
+echo; python -m promptlab pair-audit --labels examples/pair_labels.jsonl --judge rule
+echo; python -m promptlab pair-audit --labels examples/pair_labels.jsonl --judge rule-biased:0.5

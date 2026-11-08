@@ -2,7 +2,7 @@
 
 Treat prompts like code: version them, A/B them with real statistics, and
 block a prompt change in CI when it breaks cases that used to work.
-Pure standard-library Python, 64 tests, no API keys needed.
+Pure standard-library Python, 94 tests, no API keys needed.
 
 Built in November 2026 as a portfolio project. The bundled `RuleModel` is a
 **deterministic stand-in for an LLM** whose error rate depends on prompt
@@ -120,6 +120,64 @@ single-class labels (kappa undefined) and items the judge could not score (count
 
 **About the bundled numbers.** `--judge rule` is a deterministic lexical stand-in (quoted rubric terms present/absent), not an LLM. The 32 labels in `examples/judge_labels.jsonl` were written by the repo author before running the judge and the judge was not tuned against them; they include paraphrases ("five working days") that the lexical judge scores too harshly and keyword-stuffed or negated-term outputs it scores too leniently. The moderate kappa is the expected, honest result: a real LLM judge should be calibrated the same way with a larger, independently labelled sample.
 
+## Pairwise judging and position-bias checks
+
+Asking a judge "which of these two replies is better?" is more sensitive than scoring each alone, but judges
+tend to favour a *slot* (often the first) regardless of content. `pairwise` judges every pair **twice, with the
+candidates swapped**, and only trusts what survives:
+
+| Both orders say | Verdict | Counted as |
+|---|---|---|
+| the same candidate wins | that candidate | a win |
+| tie | tie | `agree` |
+| *different* candidates (the judge chose the same slot twice) | tie | `position` flip, pure bias |
+| tie in one order, a winner in the other | tie | `hesitant` |
+
+```bash
+promptlab pairwise triage v1 v3 --cases cases.jsonl --rubric 'Gives the "category" as JSON.' \
+    --judge cmd:./my_pair_judge.sh --max-inconsistent 0.2        # exit 1 if >20% of pairs flip with order
+```
+
+The report gives wins/ties, the win rate of B (ties as half), the share of decisive pairs B wins with a Wilson interval, an exact
+sign test on the decisive wins, the consistency rate, and, when pairs flip, whether the flips lean to the first or second slot (exact sign test).
+Fewer than 6 decisive pairs is reported as underpowered, not as a result. Without `--rubric`, each case's first `judge` check supplies its rubric.
+A pair the judge cannot score (exception, `both`, unparseable) is listed as an error, left out of the counts, and makes the command exit 1.
+The judge replies `{"winner": "A" | "B" | "tie", "reason": "..."}`; the grading prompt defangs forged `response_a` / `response_b` / `rubric` / `input` tags in candidate text.
+
+### Audit a pairwise judge against humans
+
+```bash
+promptlab pair-audit --labels examples/pair_labels.jsonl --judge rule --min-accuracy 0.75 --max-inconsistent 0.1
+```
+
+```
+Pairwise judge audit on 24 human-labelled pairs (each judged in both orders)
+  reconciled accuracy  79.2%  (95% CI 59.5%-90.8%)
+  single-order         79.2% (A first)   79.2% (A second)   swap gain +0.0% vs their mean
+  consistency          100.0% of pairs answered identically in both orders; 0 position flip(s)
+  first-slot picks     50.0% of decisive picks (a judge that follows content sits near 50%, since each candidate is shown once per slot)
+```
+
+Now the same audit on a judge with simulated position bias (`--judge rule-biased:0.5`, which answers "A" regardless of content on half of the prompts):
+
+```
+  reconciled accuracy  50.0%  (95% CI 31.4%-68.6%)
+  single-order         37.5% (A first)   62.5% (A second)   swap gain +0.0% vs their mean
+  consistency          29.2% of pairs answered identically in both orders; 14 position flip(s)
+  first-slot picks     84.4% of decisive picks (...)
+  position bias        flips lean first (14 first vs 0 second, p=0.000)
+```
+
+Two things worth noticing. The biased judge's single-order accuracy depends on which order you happened to use (37.5% vs 62.5%), which is how a position-biased
+judge makes an A/B result depend on which prompt you listed first; swapping removes that dependence by turning those pairs into ties. And swapping does **not** raise accuracy:
+it makes the failure visible (consistency, first-slot rate, the lean test) instead of letting it pass as signal.
+
+**About the bundled numbers.** The `pairwise` demo in `examples/demo.sh` (v1 vs v3, 60-0) is mechanical: its rubric is keyword-based, so the lexical judge simply sees v3's JSON `category` and v1's "Thanks"; it demonstrates the plumbing, not a finding. `--judge rule` is a lexical stand-in (it scores each candidate with the quoted-term `RuleJudge` and picks the higher), symmetric by construction, so its
+position bias is exactly zero and its consistency is 100% by design; its 79.2% reflects 5 of 24 pairs it cannot get right (paraphrases like "five working days", negated
+terms like "we never ask for your password"). `rule-biased:p[:A|B]` is a **simulation** of position bias so the audit can be shown catching a known problem; real LLM bias is subtler.
+The 24 human labels in `examples/pair_labels.jsonl` were written by the repo author alongside the candidates before any judge was run; they are illustrative, not an independent annotation,
+and 24 pairs gives wide intervals. A real judge should be audited with a larger, independently labelled set.
+
 ## Templates
 
 `{{name}}` and `{{name|default}}`. Single braces (JSON examples inside the
@@ -147,6 +205,7 @@ silently test the wrong prompt.
 | `compare.py` | A/B verdict, Markdown report, baseline regression gate |
 | `models.py` | `RuleModel` / `RuleJudge` offline stand-ins, `CommandModel` adapter |
 | `judge.py` | judge prompt + strict reply parser, `judge` check, calibration (agreement, kappa, Spearman, bias) |
+| `pairwise.py` | both-orders pairwise judging, reconciliation, A/B summary with sign tests, judge audit vs human preferences, `RulePairJudge` / simulated `PositionBiasedJudge` |
 
 ## GitHub Action
 
