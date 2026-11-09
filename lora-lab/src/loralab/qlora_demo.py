@@ -42,7 +42,7 @@ def train(lora, data, steps, block, lr=1e-2, seed=0):
 
 
 def run(rank=4, block_size=64, pre_steps=250, ad_steps=150, block=32, embd=48, layers=2, heads=4, seed=0,
-        schemes=("fp32", "int8", "nf4", "int4")):
+        schemes=("fp32", "int8", "nf4", "int4"), double_quant=False):
     text_a = open(CORPUS, encoding="utf-8").read()
     text_b = generate_domain_text(150, seed=7)
     tok = CharTokenizer(text_a + text_b)
@@ -58,7 +58,7 @@ def run(rank=4, block_size=64, pre_steps=250, ad_steps=150, block=32, embd=48, l
     rows = []
     for scheme in schemes:
         m = clone(base)
-        qb = None if scheme == "fp32" else QuantizedBase(m, scheme, block=block_size)
+        qb = None if scheme == "fp32" else QuantizedBase(m, scheme, block=block_size, double_quant=double_quant)
         lo = GPTLoRA(m, ("qkv", "proj"), r=rank, seed=seed)
         row = {"scheme": scheme,
                "model_bytes": qb.model_bytes() if qb else sum(v.nbytes for v in m.params.values()),
@@ -73,7 +73,7 @@ def run(rank=4, block_size=64, pre_steps=250, ad_steps=150, block=32, embd=48, l
         # recovery: fresh adapters on a fresh copy, trained on A itself
         m2 = clone(base)
         if scheme != "fp32":
-            QuantizedBase(m2, scheme, block=block_size)
+            QuantizedBase(m2, scheme, block=block_size, double_quant=double_quant)
         rec = GPTLoRA(m2, ("qkv", "proj"), r=rank, seed=seed)
         train(rec, a_tr, ad_steps, block, seed=2)
         row["recovered_A"] = rec.evaluate_loss(a_va, block)
@@ -96,11 +96,13 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description="QLoRA-style LoRA on a quantized frozen base")
     ap.add_argument("--rank", type=int, default=4)
     ap.add_argument("--block", type=int, default=64, help="quantization block size")
+    ap.add_argument("--double-quant", action="store_true", help="also quantize the per-block scales to int8")
     ap.add_argument("--schemes", default="fp32,int8,nf4,int4")
     ap.add_argument("--pre-steps", type=int, default=250)
     ap.add_argument("--steps", type=int, default=150)
     a = ap.parse_args(argv)
-    print(format_report(run(a.rank, a.block, a.pre_steps, a.steps, schemes=tuple(a.schemes.split(",")))))
+    print(format_report(run(a.rank, a.block, a.pre_steps, a.steps, schemes=tuple(a.schemes.split(",")),
+                          double_quant=a.double_quant)))
 
 
 if __name__ == "__main__":

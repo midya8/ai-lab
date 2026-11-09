@@ -127,3 +127,33 @@ Rank and block sweep for int4 (weight error of Q + adapter vs fp32 W, and NLL on
 Reading it honestly: the weight-space claim holds cleanly and monotonically: the adapter absorbs part of the quantization error, more rank absorbs more, and several alternating iterations beat a single SVD every time (about 20% lower error than plain quantization at rank 4 for both nf4 and int4). The downstream effect is much smaller and mostly inside noise. The only visible step-0 gain is int4 on domain A (0.396 → 0.377 at rank 4, close to the fp32 0.368); nf4 is already within 0.005 of fp32 so there is nothing to repair, and after fine-tuning on B the three inits land within a few hundredths of each other (one seed, so no ranking is claimed). Where LoftQ is meant to shine, very low bit widths (2-bit) on large models, this 62k-parameter, 4-bit setup does not reach. Weight error is also an indirect proxy: error in a few high-impact directions matters more than the Frobenius norm says.
 
 Tests (`tests/test_loftq.py`, 16): the SVD factors are the best rank-r approximation (scale-correct, padded when rank exceeds the matrix), one iteration is never worse than plain quantization for nf4/int4/int8, per-iteration errors are recorded, the reported error matches an independent recomputation, the stored codes are exactly the quantization of `W − s·A·B` from the previous iteration and the final adapter is the SVD of that Q's residual, untargeted tensors are quantized plainly, the adapted model's logits start closer to fp32 than the quantized base's, finite-difference gradients from a LoftQ start, frozen codes after training, merge equivalence, input validation, demo smoke test.
+
+## Double quantization: paying less for the scales
+
+Block-wise quantization stores one fp32 scale per block, which is 0.5 bits per weight at block 64 and 2 bits at block 16, so small blocks (better accuracy) are expensive. QLoRA's second trick is to quantize those scales too: `quantize(..., double_quant=True, dq_block=256)` / `QuantizedBase(..., double_quant=True)` subtracts the mean of a tensor's scales, then stores them as int8 with one fp32 scale per 256 of them. Overhead per weight falls from `32/block` to about `8/block + 32/(block·256)` bits (0.5 → 0.127 at block 64, matching the QLoRA paper; tested). The weight codes are chosen against the *dequantized* scales, so what is stored is exactly what `dequantize` returns, `save()` writes only the int8 scale codes (old files still load) and `verify_frozen()` keeps working. Opt-in; `qlora_demo --double-quant` runs the adapter demo on top.
+
+```
+PYTHONPATH=src python -m loralab.dq_frontier [--seeds 3] [--schemes nf4,int4] [--blocks 16,32,64,128,256]
+```
+
+Frontier on the 62k-parameter GPT (3 pretraining seeds, ~35 s). Bits per weight count the quantized linear weights only (codes + scales); NLL is the quantized base alone on Shakespeare held-out text, so it isolates the quantizer (fp32 base: 0.350). Rows marked * are Pareto-optimal in (bits, weight error):
+
+| scheme | block | double quant | bits/weight | weight err | NLL A |
+|---|---|---|---|---|---|
+| nf4 | 16 | no | 6.000 | 0.0812 * | 0.358 |
+| nf4 | 16 | yes | 4.515 | 0.0812 * | 0.357 |
+| nf4 | 32 | yes | 4.262 | 0.0879 * | 0.363 |
+| nf4 | 64 | no | 4.500 | 0.0932 | 0.368 |
+| nf4 | 64 | yes | 4.134 | 0.0932 * | 0.366 |
+| nf4 | 128 | yes | 4.072 | 0.0986 * | 0.362 |
+| nf4 | 256 | no | 4.125 | 0.1034 | 0.367 |
+| nf4 | 256 | yes | 4.041 | 0.1034 * | 0.368 |
+| int4 | 16 | yes | 4.515 | 0.0849 * | 0.363 |
+| int4 | 64 | no | 4.500 | 0.1115 | 0.372 |
+| int4 | 64 | yes | 4.134 | 0.1115 * | 0.371 |
+
+(Full table, both schemes and all blocks, from the command above.)
+
+Reading it honestly: in weight space the result is clean. Double quantization leaves the error unchanged to 4 digits (the scales are smooth, so int8 is plenty) and saves 0.37 bits per weight at block 64; at the *same* ~4.5 bits, nf4 with block 16 + double quant has 13% lower weight error than plain block 64 (0.0812 vs 0.0932), and every Pareto-optimal row uses double quantization except the 6-bit plain block-16 rows, which hold the lowest error only by a hair (and by costing 1.5 more bits). Downstream NLL does not separate the configurations: all quantized bases land within 0.357-0.372 against an fp32 0.350 with a seed standard deviation of 0.02-0.04, so no NLL ranking is claimed. Real LLM weight tensors have heavier tails and more block-to-block scale variation than this tiny model, which is where small blocks and double quantization matter most; that is not tested here. The saving is per-tensor, so a 62k-parameter model with many small tensors also pays a fixed 8 bytes per tensor (mean + one second-level scale).
+
+Tests (`tests/test_double_quant.py`, 20): scale codec within half a step and padding not stored, mean-centering, decoded scales never reach zero, error within 5% of plain on Gaussian weights for all schemes, codes consistent with the dequantized scales, the paper's 4.127 bits/weight, dq-block overhead, zero/padded tensors, input validation, base-level bit accounting, bit-exact save/load for every scheme, smaller files and backward-compatible loading, LoRA training over a double-quantized base with frozen codes, Pareto helper, frontier smoke test, demo flag.
