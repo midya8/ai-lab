@@ -8,6 +8,7 @@ import numpy as np
 
 from .audit import audit, render_markdown
 from .evaluate import cleaning_effect, compare_detectors
+from .report import render_html
 from .io import load_csv, write_csv_without
 from .synth import inject_label_noise, make_blobs
 
@@ -23,6 +24,9 @@ def _cmd_audit(a):
     if a.out:
         with open(a.out, "w") as f:
             f.write(json.dumps(r, indent=2) if a.json else render_markdown(r))
+    if a.html:
+        with open(a.html, "w") as f:
+            f.write(render_html(r))
     if a.write_clean:
         n = write_csv_without(a.csv, a.write_clean, {it["row"] for it in r["label_issues"]})
         print(f"wrote {n} rows to {a.write_clean} (flagged rows removed)", file=sys.stderr)
@@ -56,6 +60,7 @@ def main(argv=None) -> int:
     p.add_argument("--method", default="both", choices=["argmax", "confident_joint", "prune_by_class", "prune_by_noise_rate", "both"])
     p.add_argument("--json", action="store_true")
     p.add_argument("--out")
+    p.add_argument("--html", help="also write a self-contained HTML report")
     p.add_argument("--write-clean", help="write a copy of the CSV without flagged rows")
     p.add_argument("--fail-above", type=float, help="exit 1 if the flagged share exceeds this fraction (CI gate)")
     p.set_defaults(fn=_cmd_audit)

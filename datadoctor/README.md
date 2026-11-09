@@ -54,3 +54,7 @@ experiments/     benchmark.py -> results.md
 ```
 
 Tests: `PYTHONPATH=src python -m pytest -q` (about 2 s).
+
+## HTML report
+
+`python -m datadoctor audit data.csv --label y --html report.html` also writes a single self-contained HTML file (class balance bars, label-issue table, noise-matrix heatmap, duplicates, outliers). No JavaScript or external assets, so it can be attached to a PR or CI run as-is.
