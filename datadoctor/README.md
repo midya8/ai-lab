@@ -86,3 +86,18 @@ datadoctor diff before.json after.json --fail-on-regression
 ```
 
 Reports the change in flagged share, CV accuracy and estimated noise rate, plus which label issues were resolved, introduced or persisted (rows matched by index, so keep row order stable). `--fail-on-regression` exits 1 if the flagged share grew, for CI.
+
+## Regression targets
+
+For a continuous target there is no confident joint, so `datadoctor.regression` uses
+out-of-fold residuals scaled by a local robust spread (MAD inside prediction-quantile bins):
+
+```python
+from datadoctor.regression import find_target_issues, inject_target_noise
+issues, scores, oof_pred = find_target_issues(X, y, threshold=3.5)
+```
+
+On a synthetic linear task with 8% of targets shifted by 2-4 std, the unit tests require
+>80% precision and >70% recall and <3% flagged on clean data. The detector is only as good as
+the model: a linear ridge cannot separate nonlinearity from corruption, so pass `model_factory`
+(any object with `fit(X, y)` / `predict(X)`) for non-linear targets. Synthetic data only.
