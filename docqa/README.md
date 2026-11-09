@@ -61,6 +61,17 @@ a demonstration, not a generalisation estimate. Limits: it fixes single-word typ
 against the corpus vocabulary, not word splits/joins ("shop hours" typed "shophours") or
 a typo that lands on another valid corpus word. Disable with `DocQA(..., spell=False)` or `--no-spell`.
 
+## Hybrid retrieval (`--retrieval hybrid`)
+
+`DocQA(..., retrieval="hybrid")` swaps the retriever for BM25 fused (RRF) with a hashed
+character-trigram dense index served by [vecdb](../vecdb). Result on the four eval sets
+(spelling correction on or off): **identical** to BM25 everywhere (e.g. typos set with
+spelling off: 7/12 both; with spelling on: 12/12 both). This is a null result: the answer
+stage still scores sentences lexically, so better recall at the retrieval stage does not
+rescue a misspelled term downstream, and this tiny corpus is already easy for BM25.
+The option is kept because it is tested and cheap; the corpus is small, so do not read
+this as evidence about larger corpora.
+
 ## Use as an agentkit tool
 
 ```python

@@ -142,6 +142,7 @@
 - vecdb v0.7: `IVFIndex(opq=True)` — learned rotation on residuals, persisted (MSE -5%, recall@10 0.539 -> 0.567 on synthetic data, single seed; 4 tests, 110 total)
 - vecdb v0.9: hybrid fusion benchmark (`experiments/hybrid_eval.py`, dense vs BM25 vs RRF vs weighted; null result: fusion does not beat best single retriever on synthetic mixed queries; 2 tests, 118 total)
 - promptlab: concurrent judge calls within one ensemble pair (--workers, order-preserving, serial-equivalence + overlap tests; 139 tests)
+- docqa: `retrieval="hybrid"` (BM25 + char-trigram dense via vecdb, RRF); null result on all four eval sets, disclosed; 5 tests, 69 total
 
 
 ## Next
@@ -155,7 +156,7 @@
 7. ticket-triage: (done urgency head) (done active learning) (done multi-label tags) (done tag-aware routing) (done SLA-breach simulation) -> next: feed live router output into the simulator
 8. llm-router: (done v0.1) -> (done latency tracking) (done semantic cache) (done learned complexity classifier) (done persistence)
 9. promptlab: (done v0.1) -> v0.2 multi-sample done; (done GitHub Action + summary); (done LLM-judge checks + calibration) (done pairwise judge + position-swap bias audit) (done multi-judge ensembles + Fleiss kappa, v0.5) (done pairwise gate) (done ensemble gate) (done cost metering + budgets) (done HTTP-backed models/judges) (done concurrent cases, --workers) (done shared 429 cooldown across workers) (done concurrent ensemble judge calls)
-10. docqa: (done v0.1) -> (done paraphrase) (done broad benchmark) (done yes/no fixes) (done agentkit integration) (done agentflow worker) (done HTTP service) (done cache + metrics) (done typo-tolerant spelling) next: docqa on llm-router / dense or hybrid retrieval
+10. docqa: (done v0.1) -> (done paraphrase) (done broad benchmark) (done yes/no fixes) (done agentkit integration) (done agentflow worker) (done HTTP service) (done cache + metrics) (done typo-tolerant spelling) (done hybrid retrieval, null result) next: docqa on llm-router; answer-stage semantic scoring
 11. autojob: (done v0.1 — profile validation, posting parse, transparent match scoring, facts-only cover-letter drafts, review notes, JSONL tracker; never submits; 49 tests)
 12. visionlab follow-ups: (done GAP head vs dense under shift) (done batch-norm) (done certified robustness via IBP) -> next: contrast/photometric augmentation to fix the GAP head's contrast brittleness, tighter bounds (CROWN / zonotope) to certify the FGSM-trained net, IBP-compatible BatchNorm
 13. reviewkit follow-ups: a fresh held-out set (the current one is now tuned-on); moved-code detection (match removed vs added blocks in the diff); light intra-function taint for SQL/shell; run the Action on a real PR in a scratch repo; docqa/ragkit-style repo-context retrieval for the LLM pass; JS/TS AST via a parser

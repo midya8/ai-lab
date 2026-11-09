@@ -15,6 +15,7 @@ def main(argv=None) -> int:
         s.add_argument("arg", help="question (ask) or labelled JSON file (eval)")
         s.add_argument("--min-coverage", type=float, default=0.6)
         s.add_argument("--json", action="store_true")
+        s.add_argument("--retrieval", choices=["bm25", "hybrid"], default="bm25")
         s.add_argument("--no-spell", action="store_true", help="disable corpus-grounded spelling correction")
     sv = sub.add_parser("serve", help="run the HTTP service")
     sv.add_argument("docs")
@@ -43,7 +44,8 @@ def main(argv=None) -> int:
             pass
         return 0
     try:
-        qa = DocQA.from_dir(a.docs, min_coverage=a.min_coverage, spell=not a.no_spell)
+        qa = DocQA.from_dir(a.docs, min_coverage=a.min_coverage, spell=not a.no_spell,
+                         retrieval=a.retrieval)
         if a.cmd == "ask":
             r = qa.ask(a.arg)
             if r.corrections and not a.json:

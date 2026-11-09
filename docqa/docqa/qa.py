@@ -93,7 +93,8 @@ class QAResult:
 
 class DocQA:
     def __init__(self, chunks, min_coverage: float = 0.6, max_sentences: int = 2,
-                 top_k: int = 4, paraphrase: bool = True, spell: bool = True):
+                 top_k: int = 4, paraphrase: bool = True, spell: bool = True,
+                 retrieval: str = "bm25"):
         self.paraphrase = paraphrase
         self.spell = spell
         if not 0 <= min_coverage <= 1:
@@ -101,7 +102,13 @@ class DocQA:
         self.min_coverage = min_coverage
         self.max_sentences = max_sentences
         self.top_k = top_k
-        self.retriever = Retriever(list(chunks))
+        if retrieval not in ("bm25", "hybrid"):
+            raise ValueError("retrieval must be 'bm25' or 'hybrid'")
+        if retrieval == "hybrid":
+            from .hybrid import HybridRetriever
+            self.retriever = HybridRetriever(chunks)
+        else:
+            self.retriever = Retriever(list(chunks))
         n = max(len(self.retriever.chunks), 1)
         self._idf = {t: math.log(1 + n / df) for t, df in self.retriever._df.items()}
         self._speller = SpellCorrector(c.text for c in self.retriever.chunks) if spell else None
