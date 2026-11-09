@@ -1,0 +1,56 @@
+# datadoctor
+
+Find the rows in a labelled tabular dataset that are probably **mislabelled**, **duplicated** (exactly, nearly, or with conflicting labels), **leaking** from train into test, or **outliers**, from scratch in NumPy. The label-error detector is *confident learning* (Northcutt et al., 2021) written from the paper's definitions, with out-of-sample probabilities from any model you plug in.
+
+```bash
+export PYTHONPATH=src
+python -m datadoctor audit data.csv --label species --text description --out audit.md
+python -m datadoctor audit data.csv --label species --write-clean clean.csv    # drops the flagged rows
+python -m datadoctor audit data.csv --label species --fail-above 0.05          # CI gate: exit 1 if >5% flagged
+python -m datadoctor demo --noise 0.3 --kind pairwise                          # inject noise, score the detectors
+python experiments/benchmark.py                                                # the table below
+```
+
+Features are every column that parses as a number; the label can be any string. `--text` adds MinHash/LSH near-duplicate text detection.
+
+## What it does
+
+1. **Out-of-sample probabilities.** Stratified k-fold (each row is scored by a model that never saw it, optionally averaged over repeated splits). Models: a NumPy softmax regression (Adam, L2) and a k-NN classifier; anything with `fit(X, y, n_classes=)` / `predict_proba(X)` works.
+2. **Confident joint.** Per-class thresholds t_j = mean self-confidence of class j; C[i][j] counts rows labelled *i* whose probability for *j* clears t_j. Calibrated to the label counts, it yields the **noise matrix** P(given | true), the **true class prior** and an overall **noise-rate estimate**.
+3. **Label-issue rules.** `argmax`, `confident_joint` (off-diagonals), `prune_by_class`, `prune_by_noise_rate`, and `both` (their intersection, the default). Plus per-row **quality scores** to rank by review priority: self-confidence, normalised margin, entropy-weighted.
+4. **Duplicates.** Exact groups (and the ones whose members **disagree on the label**, which are guaranteed errors somewhere), near-duplicate pairs within 5% of the median nearest-neighbour distance, train-test **leakage** pairs (standardised with the training statistics), and text near-duplicates via 3-word shingles, MinHash, LSH banding and an exact-Jaccard verification pass (no false positives).
+5. **Outliers.** Mean k-NN distance scored *within each labelled class* with a robust (median/MAD) z, so a point that is ordinary globally but far from its own class is found.
+6. **Report.** Markdown or JSON: class balance (given vs estimated true share), flagged rows with the suggested label and probabilities, duplicate groups, outliers. Flagged rows are *candidates for a human*, not verdicts.
+
+## Measured
+
+Synthetic data with injected noise, so the truth is known. Two datasets (5-class overlapping Gaussians, a model trained on clean labels reaches about 0.89 test accuracy; 4 classes that are each two far-apart modes, which a linear model cannot separate), two probability models, five noise settings, 3 seeds, 1,800 training rows, 600 clean test rows. Full table in [`experiments/results.md`](experiments/results.md). A slice:
+
+| data | model | noise | true -> est. rate | AUROC (CV margin) | AUROC in-sample loss | AUROC kNN-disagree | F1 (`both`) | test acc: noisy -> pruned (oracle clean) |
+|---|---|---|---|---|---|---|---|---|
+| blobs | softmax | symmetric 20% | 0.20 -> 0.24 | 0.984 | 0.986 | 0.969 | 0.861 | 0.879 -> 0.888 (0.895) |
+| blobs | softmax | pairwise 30% | 0.30 -> 0.39 | 0.863 | 0.846 | 0.866 | 0.681 | 0.724 -> 0.824 (0.895) |
+| blobs | kNN | pairwise 30% | 0.30 -> 0.37 | 0.918 | 0.846 | 0.866 | 0.764 | 0.724 -> 0.871 (0.895) |
+| two-mode | softmax | symmetric 20% | 0.20 -> 0.33 | 0.933 | 0.937 | 0.977 | 0.714 | 0.772 -> 0.773 (0.777) |
+| two-mode | kNN | symmetric 20% | 0.20 -> 0.23 | 0.983 | 0.937 | 0.977 | 0.858 | 0.772 -> 0.778 (0.777) |
+| two-mode | kNN | pairwise 30% | 0.30 -> 0.35 | 0.934 | 0.799 | 0.880 | 0.787 | 0.675 -> 0.772 (0.777) |
+
+What to take from it, including what did **not** work:
+
+- **The model has to fit the data.** On the two-mode data the linear model's probabilities are poor and so is everything built on them (symmetric 20%: AUROC 0.933 with softmax, 0.983 with kNN; the noise rate is overestimated, 0.33 vs 0.20). Confident learning is model-agnostic, but it is only as good as the out-of-sample probabilities you feed it.
+- **Structured noise is where it pays.** When labels are systematically confused (pairwise 30%), a model trained on the noisy labels drops to 0.72 (blobs) / 0.68 (two-mode) test accuracy and pruning the flagged rows recovers most of it (blobs 0.82 with softmax, 0.87 with kNN probabilities; oracle 0.895; two-mode 0.73 / 0.77, oracle 0.777). With random (symmetric) noise, a classifier is already fairly robust and pruning buys only 0.5-1.5 points.
+- **Honest baselines are strong.** On the blob data a low-capacity in-sample softmax loss ranks errors as well as the cross-validated margin (0.986 vs 0.984): a regularised linear model cannot memorise noise, so cross-validation adds nothing there. In-sample loss falls to 0.80-0.85 under pairwise noise, which is the case cross-validation is for. The kNN-disagreement baseline even wins on the two-mode data against a softmax detector.
+- **The noise-rate estimate overshoots** (0.20 -> 0.24, 0.30 -> 0.39) because genuinely ambiguous rows near class borders also look like confident-joint off-diagonals. Treat it as an upper-ish bound.
+- **`both` is not always best**: it is the most conservative rule (highest precision); `prune_by_noise_rate` usually has the better F1 here. Single-seed gaps of a couple of hundredths are noise (3 seeds).
+- **Everything is synthetic and the noise is injected at random**, so this says nothing about how real annotators fail (they are confused by hard examples, not uniformly). The audit is a way to prioritise a human review, not a replacement for one.
+
+## Layout
+
+```
+src/datadoctor/  models.py cv.py confident.py dups.py outliers.py synth.py evaluate.py audit.py io.py __main__.py
+tests/           41 tests: hand-computed confident joint, fold stratification, out-of-sample check,
+                 metric edge cases (ties, AP by hand), noise injection exactness, duplicates/leakage/MinHash, CLI
+experiments/     benchmark.py -> results.md
+```
+
+Tests: `PYTHONPATH=src python -m pytest -q` (about 2 s).
