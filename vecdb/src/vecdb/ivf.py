@@ -13,6 +13,8 @@ class IVFIndex:
     ``nprobe`` closest cells.
 
     * ``pq_m=None``: IVF-Flat, cells hold the raw vectors (exact distances inside a cell).
+    * ``sq8=True``: cells hold one uint8 per dimension (global per-dimension affine codes fitted at
+      train time; 4x smaller than IVF-Flat). ``keep_raw=True`` enables ``refine``.
     * ``pq_m=m``: IVF-PQ, cells hold ``m``-byte codes of the *residual* ``x - centroid`` and the
       query is scored by ADC table lookups. ``keep_raw=True`` additionally keeps the raw
       vectors so ``search(..., refine=r)`` can re-rank the top ``r*k`` ADC hits exactly.
@@ -24,7 +26,7 @@ class IVFIndex:
 
     def __init__(self, dim: int, nlist: int = 64, metric: str = "l2", pq_m: int | None = None,
                  pq_bits: int = 8, keep_raw: bool = False, seed: int = 0, max_train: int | None = None,
-                 opq: bool = False, opq_rounds: int = 4):
+                 opq: bool = False, opq_rounds: int = 4, sq8: bool = False):
         if nlist < 1:
             raise ValueError("nlist must be >= 1")
         self.dim, self.nlist, self.seed = dim, nlist, seed
@@ -33,12 +35,17 @@ class IVFIndex:
             raise ValueError("residual PQ needs an L2-compatible metric: use 'l2' or 'cosine', not 'ip'")
         if opq and not pq_m:
             raise ValueError("opq=True needs pq_m (OPQ rotates the residuals before PQ)")
+        if sq8 and pq_m:
+            raise ValueError("sq8 and pq_m are mutually exclusive cell encodings")
+        self.sq8 = bool(sq8)
+        self.sq_lo: np.ndarray | None = None
+        self.sq_step: np.ndarray | None = None
         self.opq, self.opq_rounds = bool(opq), opq_rounds
         if pq_m:
             self.pq = (OPQ if opq else ProductQuantizer)(dim, pq_m, pq_bits, seed)
         else:
             self.pq = None
-        self.keep_raw = bool(keep_raw and self.pq is not None)
+        self.keep_raw = bool(keep_raw and (self.pq is not None or self.sq8))
         self.max_train = max_train if max_train is not None else 256 * nlist
         self.centroids: np.ndarray | None = None
         self._ids: list[np.ndarray] = []
@@ -78,9 +85,14 @@ class IVFIndex:
                 self.pq.fit(R, rounds=self.opq_rounds)
             else:
                 self.pq.fit(R)
+        if self.sq8:
+            lo, hi = T.min(axis=0), T.max(axis=0)
+            span = hi - lo
+            self.sq_lo = lo.astype(np.float32)
+            self.sq_step = np.where(span > 0, span / 255.0, 1.0).astype(np.float32)
         self._ids = [np.empty(0, dtype=np.int64) for _ in range(self.nlist)]
         width = self.pq.m if self.pq is not None else self.dim
-        dtype = np.uint8 if self.pq is not None else np.float32
+        dtype = np.uint8 if (self.pq is not None or self.sq8) else np.float32
         self._data = [np.empty((0, width), dtype=dtype) for _ in range(self.nlist)]
         if len(self._pending):
             pend, self._pending = self._pending, np.empty((0, self.dim), dtype=np.float32)
@@ -103,6 +115,8 @@ class IVFIndex:
         if self.pq is not None:
             codes = self.pq.encode(A - self.centroids[a])
             payload = codes
+        elif self.sq8:
+            payload = self._sq_encode(A)
         else:
             payload = A
         if self.keep_raw:
@@ -117,6 +131,12 @@ class IVFIndex:
                 self._ids[l] = np.concatenate([self._ids[l], rows[sel]])
                 self._data[l] = np.concatenate([self._data[l], payload[sel]])
 
+    def _sq_encode(self, A: np.ndarray) -> np.ndarray:
+        return np.clip(np.rint((A - self.sq_lo) / self.sq_step), 0, 255).astype(np.uint8)
+
+    def _sq_decode(self, C: np.ndarray) -> np.ndarray:
+        return C.astype(np.float32) * self.sq_step + self.sq_lo
+
     def remove(self, rows) -> None:
         rows = np.asarray(rows, dtype=np.int64)
         if rows.size and (rows.min() < 0 or rows.max() >= self.ntotal):
@@ -130,7 +150,7 @@ class IVFIndex:
         if not self.trained:
             raise RuntimeError("IVFIndex is not trained; call train() first")
         if refine is not None and not self.keep_raw:
-            raise ValueError("refine needs keep_raw=True on an IVF-PQ index")
+            raise ValueError("refine needs keep_raw=True on an IVF-PQ or IVF-SQ8 index")
         nprobe = max(1, min(int(nprobe), self.nlist))
         Qm = self.metric.prep(as_matrix(Q, self.dim))
         ok = ~self.deleted
@@ -151,7 +171,9 @@ class IVFIndex:
                 ids = self._ids[l]
                 if len(ids) == 0:
                     continue
-                if self.pq is None:
+                if self.sq8:
+                    d = self.metric.dist(q[None, :], self._sq_decode(self._data[l]))[0]
+                elif self.pq is None:
                     d = self.metric.dist(q[None, :], self._data[l])[0]
                 else:
                     table = self.pq.adc_table(q - self.centroids[l])
@@ -195,7 +217,7 @@ class IVFIndex:
             for j in np.flatnonzero(hit):
                 p = int(np.flatnonzero(self._ids[l] == rows[j])[0])
                 v = self._data[l][p]
-                out[j] = v if self.pq is None else self.pq.decode(v[None, :])[0] + self.centroids[l]
+                out[j] = self._sq_decode(v[None, :])[0] if self.sq8 else v if self.pq is None else self.pq.decode(v[None, :])[0] + self.centroids[l]
                 found[j] = True
         if not found.all():
             raise IndexError("row not found")
@@ -208,6 +230,8 @@ class IVFIndex:
         n = self._pending.nbytes + self._raw.nbytes
         if self.trained:
             n += self.centroids.nbytes + sum(a.nbytes for a in self._ids) + sum(a.nbytes for a in self._data)
+            if self.sq8:
+                n += self.sq_lo.nbytes + self.sq_step.nbytes
             if self.pq is not None:
                 n += self.pq.codebooks.nbytes + (self.pq.R.nbytes if self.opq else 0)
         return int(n)
@@ -216,7 +240,7 @@ class IVFIndex:
         arrays = {"deleted": self.deleted, "pending": self._pending, "raw": self._raw}
         meta = {"dim": self.dim, "nlist": self.nlist, "metric": self.metric.name, "seed": self.seed,
                 "pq_m": self.pq.m if self.pq else None, "pq_bits": self.pq.nbits if self.pq else 8,
-                "keep_raw": self.keep_raw, "opq": self.opq, "opq_rounds": self.opq_rounds, "max_train": self.max_train, "ntotal": self.ntotal,
+                "keep_raw": self.keep_raw, "opq": self.opq, "opq_rounds": self.opq_rounds, "sq8": self.sq8, "max_train": self.max_train, "ntotal": self.ntotal,
                 "trained": self.trained}
         if self.trained:
             arrays["centroids"] = self.centroids
@@ -225,6 +249,8 @@ class IVFIndex:
             arrays["ids"] = np.concatenate(self._ids) if sizes.sum() else np.empty(0, dtype=np.int64)
             width = self.pq.m if self.pq else self.dim
             arrays["data"] = np.concatenate(self._data) if sizes.sum() else np.empty((0, width))
+            if self.sq8:
+                arrays["sq_lo"], arrays["sq_step"] = self.sq_lo, self.sq_step
             if self.pq is not None:
                 arrays["codebooks"] = self.pq.codebooks
                 if self.opq:
@@ -235,20 +261,23 @@ class IVFIndex:
     def _from_state(cls, arrays, meta):
         idx = cls(meta["dim"], meta["nlist"], meta["metric"], meta["pq_m"], meta["pq_bits"],
                   meta["keep_raw"], meta["seed"], meta["max_train"],
-                  meta.get("opq", False), meta.get("opq_rounds", 4))
+                  meta.get("opq", False), meta.get("opq_rounds", 4), meta.get("sq8", False))
         idx.ntotal = meta["ntotal"]
         idx.deleted = arrays["deleted"].astype(bool)
         idx._pending = np.ascontiguousarray(arrays["pending"], dtype=np.float32)
         idx._raw = np.ascontiguousarray(arrays["raw"], dtype=np.float32)
         if meta["trained"]:
             idx.centroids = np.ascontiguousarray(arrays["centroids"], dtype=np.float32)
+            if idx.sq8:
+                idx.sq_lo = np.ascontiguousarray(arrays["sq_lo"], dtype=np.float32)
+                idx.sq_step = np.ascontiguousarray(arrays["sq_step"], dtype=np.float32)
             if idx.pq is not None:
                 idx.pq.codebooks = np.ascontiguousarray(arrays["codebooks"], dtype=np.float32)
                 if idx.opq:
                     idx.pq.R = np.ascontiguousarray(arrays["opq_R"], dtype=np.float32)
             sizes = arrays["sizes"]
             off = np.concatenate([[0], np.cumsum(sizes)])
-            dtype = np.uint8 if idx.pq is not None else np.float32
+            dtype = np.uint8 if (idx.pq is not None or idx.sq8) else np.float32
             data = arrays["data"].astype(dtype)
             idx._ids = [arrays["ids"][off[l]:off[l + 1]].astype(np.int64) for l in range(idx.nlist)]
             idx._data = [data[off[l]:off[l + 1]] for l in range(idx.nlist)]

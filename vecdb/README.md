@@ -116,3 +116,8 @@ Measured once on a 2-core sandbox (FlatIndex, 50k x 64 float32, 2000 queries, k=
 | clustered, rotated + anisotropic | 10.89 | 8.99 | 0.460 | 0.503 |
 
 Gain is real but modest and concentrated where variance is not axis-aligned; on the axis-aligned set recall is a tie. Not yet wired into `IVFIndex`.
+
+
+## IVF-SQ8 (v0.8)
+
+`IVFIndex(dim, nlist=64, sq8=True)` stores each cell as one uint8 per dimension (global per-dimension affine codes fitted at train time), 4x smaller than IVF-Flat; `keep_raw=True` enables `refine=`. Mutually exclusive with `pq_m`. Vectors outside the training range are clipped. Persisted by `save_index`/`load_index`. Tests: `tests/test_ivf_sq8.py`.
