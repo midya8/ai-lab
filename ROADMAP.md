@@ -138,6 +138,7 @@
 - vecdb v0.3: `HNSWIndex.repair()` (relink around tombstones, entry-point fix; recall unchanged on synthetic data, 25-76% fewer distance evals at 30-80% deleted; 4 tests, 89 total)
 - vecdb v0.4: `HybridCollection` — BM25 + vector search with RRF or weighted fusion, filters on both sides, upsert/delete sync (8 tests, 97 total; fixtures only, no quality benchmark yet)
 - vecdb v0.5: `parallel_search` threaded batch search (identical results to serial; ~1.4x on 2 cores for flat scans, none for HNSW; 4 tests, 101 total)
+- vecdb v0.6: `OPQ` learned rotation before PQ (MSE -18% and recall@10 0.460 -> 0.503 on rotated synthetic data, tie on axis-aligned; 5 tests, 106 total; not yet in IVFIndex)
 
 
 ## Next
@@ -157,4 +158,4 @@
 13. reviewkit follow-ups: a fresh held-out set (the current one is now tuned-on); moved-code detection (match removed vs added blocks in the diff); light intra-function taint for SQL/shell; run the Action on a real PR in a scratch repo; docqa/ragkit-style repo-context retrieval for the LLM pass; JS/TS AST via a parser
 14. codesearch follow-ups: optional neural-embedding backend as an extra (compare against BM25F on the same queries), a third blind query set written by someone other than the author, call-graph expansion (boost callers/callees of top hits), JS/TS via a parser, `--watch` re-index, an editor-friendly JSON-lines server
 15. datadoctor follow-ups: (done audit diff + CI regression gate) (done temperature scaling, mixed results) a real noisy-label dataset benchmark (needs a download-free source), (done regression targets) (done ordinal targets) (done co-occurrence stacking, null result on detection F1) object-detection style boxes
-16. vecdb follow-ups: (done flat SQ8) (done HNSW tombstone repair) SQ8 in IVF cells + persistence, OPQ rotation, (done multi-threaded batch search), (done hybrid BM25+vector core) wire into ragkit/docqa and benchmark fusion quality, real-embedding benchmark
+16. vecdb follow-ups: (done flat SQ8) (done HNSW tombstone repair) SQ8 in IVF cells + persistence, (done OPQ class) OPQ inside IVFIndex, (done multi-threaded batch search), (done hybrid BM25+vector core) wire into ragkit/docqa and benchmark fusion quality, real-embedding benchmark

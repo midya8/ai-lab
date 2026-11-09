@@ -8,10 +8,11 @@ from .hnsw import HNSWIndex
 from .hybrid import BM25, HybridCollection
 from .io import load_index, save_index
 from .ivf import IVFIndex
+from .opq import OPQ
 from .pq import ProductQuantizer
 from .sq8 import SQ8Index
 
-__all__ = ["Collection", "Hit", "FlatIndex", "IVFIndex", "HNSWIndex", "ProductQuantizer", "SQ8Index", "BM25", "HybridCollection",
+__all__ = ["Collection", "Hit", "FlatIndex", "IVFIndex", "HNSWIndex", "ProductQuantizer", "SQ8Index", "OPQ", "BM25", "HybridCollection",
            "compile_filter", "parallel_search", "save_index", "load_index", "clustered", "gaussian", "queries_like",
            "recall_at_k"]
 __version__ = "0.2.0"

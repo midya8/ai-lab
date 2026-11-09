@@ -104,3 +104,15 @@ hits = h.query(qvec, "error E1234", k=5, where={"team": "auth"})
 `parallel_search(index, Q, k, workers=4, shard=64, **kwargs)` shards the query matrix across threads and returns exactly what `index.search` would (row order preserved; works with `mask=`). Gains come only from GIL-releasing BLAS scans; pure-Python HNSW gets none. `last_stats` is unreliable afterwards; don't mutate the index mid-search.
 
 Measured once on a 2-core sandbox (FlatIndex, 50k x 64 float32, 2000 queries, k=10, shard=100): 1.04 s serial, 0.85 s with 2 workers, 0.73 s with 4 (about 1.4x; single run, noisy, not a benchmark suite). 4 new tests (101 total).
+
+
+## OPQ (v0.6)
+
+`vecdb.opq.OPQ` learns an orthogonal rotation (alternating PQ fit / closed-form Procrustes via SVD) before product quantisation; the query is rotated and ADC is unchanged. `experiments/opq_eval.py` (synthetic, m=8, 6 bits, no re-rank, 8k x 32):
+
+| data | PQ mse | OPQ mse | PQ recall@10 | OPQ recall@10 |
+|---|---|---|---|---|
+| clustered, axis-aligned | 4.58 | 4.33 | 0.414 | 0.416 |
+| clustered, rotated + anisotropic | 10.89 | 8.99 | 0.460 | 0.503 |
+
+Gain is real but modest and concentrated where variance is not axis-aligned; on the axis-aligned set recall is a tie. Not yet wired into `IVFIndex`.
