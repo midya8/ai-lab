@@ -8,6 +8,7 @@ from pathlib import Path
 from .compare import check_regression, render_check_markdown, compare_runs, render_markdown
 from .judge import calibrate_judge, load_calibration_items, render_calibration
 from .models import make_judge, make_model
+from .ensemble import compare_ensemble, render_ensemble
 from .pairwise import (audit_judge, compare_outputs, load_pair_items, make_pair_judge, render_audit,
                        render_pairwise)
 from .registry import Registry, RegistryError
@@ -56,6 +57,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--cases", required=True); p.add_argument("--model", default="rule")
     p.add_argument("--rubric", help="grading rubric (default: the first judge check's rubric in each case)")
     p.add_argument("--judge", default="rule", help="rule | rule-biased:<p>[:A|B] | cmd:<command>")
+    p.add_argument("--also-judge", action="append", default=[], metavar="SPEC",
+                   help="add another judge (repeatable): the verdict becomes a majority vote with agreement stats")
     p.add_argument("--alpha", type=float, default=0.05)
     p.add_argument("--max-inconsistent", type=float, help="exit 1 if more than this share of pairs flip when order is swapped")
     p.add_argument("--out", help="write per-pair verdicts as JSON")
@@ -132,6 +135,18 @@ def main(argv: list[str] | None = None) -> int:
                     raise ValueError(f"case {c.id!r} has no judge rubric: pass --rubric")
                 items.append({"id": c.id, "rubric": rubric, "vars": c.vars,
                               "a": outs[0][c.id].output, "b": outs[1][c.id].output})
+            if args.also_judge:
+                specs = [args.judge] + args.also_judge
+                names = [f"{i + 1}:{sp.split(':')[0]}" for i, sp in enumerate(specs)]
+                ens = compare_ensemble({n: make_pair_judge(sp) for n, sp in zip(names, specs)}, items, args.alpha)
+                print(render_ensemble(ens, f"{args.name}@{args.a}", f"{args.name}@{args.b}"))
+                if args.out:
+                    import json
+                    Path(args.out).write_text(json.dumps([v.to_dict() for v in ens.verdicts], indent=2) + "\n", encoding="utf-8")
+                if ens.summary.errors:
+                    print(f"FAIL: {ens.summary.errors} pair(s) had too few valid judge verdicts")
+                    return 1
+                return 0
             summ = compare_outputs(make_pair_judge(args.judge), items, args.alpha)
             print(render_pairwise(summ, f"{args.name}@{args.a}", f"{args.name}@{args.b}"))
             if args.out:

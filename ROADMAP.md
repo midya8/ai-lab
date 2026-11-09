@@ -133,7 +133,7 @@
 6. logsentry: (done v0.6 Grafana dashboard)
 7. ticket-triage: (done urgency head) (done active learning) (done multi-label tags) (done tag-aware routing) (done SLA-breach simulation) -> next: feed live router output into the simulator
 8. llm-router: (done v0.1) -> (done latency tracking) (done semantic cache) (done learned complexity classifier) (done persistence)
-9. promptlab: (done v0.1) -> v0.2 multi-sample done; (done GitHub Action + summary); (done LLM-judge checks + calibration) (done pairwise judge + position-swap bias audit) -> next: pairwise results fed into the regression gate, or multi-judge ensembles with agreement checks
+9. promptlab: (done v0.1) -> v0.2 multi-sample done; (done GitHub Action + summary); (done LLM-judge checks + calibration) (done pairwise judge + position-swap bias audit) (done multi-judge ensembles + Fleiss kappa, v0.5) -> next: pairwise results fed into the regression gate
 10. docqa: (done v0.1) -> (done paraphrase) (done broad benchmark) (done yes/no fixes) (done agentkit integration) (done agentflow worker) (done HTTP service) (done cache + metrics) (done typo-tolerant spelling) next: docqa on llm-router / dense or hybrid retrieval
 11. autojob: (done v0.1 — profile validation, posting parse, transparent match scoring, facts-only cover-letter drafts, review notes, JSONL tracker; never submits; 49 tests)
 12. visionlab follow-ups: (done GAP head vs dense under shift) (done batch-norm) (done certified robustness via IBP) -> next: contrast/photometric augmentation to fix the GAP head's contrast brittleness, tighter bounds (CROWN / zonotope) to certify the FGSM-trained net, IBP-compatible BatchNorm

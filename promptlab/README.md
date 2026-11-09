@@ -144,6 +144,22 @@ Fewer than 6 decisive pairs is reported as underpowered, not as a result. Withou
 A pair the judge cannot score (exception, `both`, unparseable) is listed as an error, left out of the counts, and makes the command exit 1.
 The judge replies `{"winner": "A" | "B" | "tie", "reason": "..."}`; the grading prompt defangs forged `response_a` / `response_b` / `rubric` / `input` tags in candidate text.
 
+### Multi-judge ensembles
+
+Repeat `--also-judge` to add judges. Every judge rules on every pair in both orders, the ensemble takes a **strict majority**
+of the judges' reconciled winners (a split becomes a tie; fewer valid verdicts than a majority quorum is an error and exits 1),
+and the report shows each judge alone plus agreement: mean pairwise raw agreement, unanimity, and Fleiss' kappa.
+
+```bash
+promptlab pairwise triage v1 v3 --cases cases.jsonl --judge cmd:./gpt.sh --also-judge cmd:./claude.sh --also-judge cmd:./local.sh
+```
+
+Demo (`--judge rule --also-judge rule --also-judge rule-biased:0.8:A`, v1 vs v3): the two lexical judges pick v3 on all 60 pairs, the
+simulated first-slot-biased judge manages 17 wins and 43 flips, and the majority still says v3, with raw agreement 52%, unanimity 28% and
+kappa -0.31. That negative kappa is the known kappa paradox (almost every label is "b", so chance agreement is high and the three
+judges' disagreements are all on the biased one), not evidence the ensemble is broken; read it together with raw agreement and the per-judge rows.
+The judges here are simulated, so this shows the plumbing and the bias being outvoted, not how real LLM judges behave.
+
 ### Audit a pairwise judge against humans
 
 ```bash
