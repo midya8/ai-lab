@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "autojob"
+version = "0.1.0"
+description = "Agentic job-application assistant: match, draft, and track applications from your real profile — never invents experience, never submits"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+
+[project.scripts]
+autojob = "autojob.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["autojob"]

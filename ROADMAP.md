@@ -118,6 +118,8 @@
 
 - datadoctor v0.1 (NEW): confident-learning label-error detection on cross-validated probabilities, duplicates / conflicting duplicates / leakage / MinHash text near-dupes / per-class outliers, audit CLI + CI gate, benchmark on injected noise (41 tests)
 
+- autojob v0.1: agentic job-application assistant — profile validation (strict, every error at once), posting parse, transparent match scoring (required 0.6 / preferred 0.25 / experience 0.15, never 1.0-by-default), facts-only cover-letter drafts (only matched skills named), review notes listing gaps to never claim, JSONL application tracker with company+title dedupe and applied→screening→interview→offer→hired state machine; never submits, drafts only; 49 tests, example profile/posting fictional
+
 
 ## Next
 
@@ -131,7 +133,7 @@
 8. llm-router: (done v0.1) -> (done latency tracking) (done semantic cache) (done learned complexity classifier) (done persistence)
 9. promptlab: (done v0.1) -> v0.2 multi-sample done; (done GitHub Action + summary); (done LLM-judge checks + calibration) (done pairwise judge + position-swap bias audit) -> next: pairwise results fed into the regression gate, or multi-judge ensembles with agreement checks
 10. docqa: (done v0.1) -> (done paraphrase) (done broad benchmark) (done yes/no fixes) (done agentkit integration) (done agentflow worker) (done HTTP service) (done cache + metrics) (done typo-tolerant spelling) next: docqa on llm-router / dense or hybrid retrieval
-11. autojob: agentic job-application assistant (only Midya's real resume data, never invents experience)
+11. autojob: (done v0.1 — profile validation, posting parse, transparent match scoring, facts-only cover-letter drafts, review notes, JSONL tracker; never submits; 49 tests)
 12. visionlab follow-ups: (done GAP head vs dense under shift) (done batch-norm) (done certified robustness via IBP) -> next: contrast/photometric augmentation to fix the GAP head's contrast brittleness, tighter bounds (CROWN / zonotope) to certify the FGSM-trained net, IBP-compatible BatchNorm
 13. reviewkit follow-ups: a fresh held-out set (the current one is now tuned-on); moved-code detection (match removed vs added blocks in the diff); light intra-function taint for SQL/shell; run the Action on a real PR in a scratch repo; docqa/ragkit-style repo-context retrieval for the LLM pass; JS/TS AST via a parser
 14. codesearch follow-ups: optional neural-embedding backend as an extra (compare against BM25F on the same queries), a third blind query set written by someone other than the author, call-graph expansion (boost callers/callees of top hits), JS/TS via a parser, `--watch` re-index, an editor-friendly JSON-lines server
