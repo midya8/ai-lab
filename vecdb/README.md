@@ -97,3 +97,10 @@ h = HybridCollection(384)
 h.upsert(ids, vectors, metas, texts)
 hits = h.query(qvec, "error E1234", k=5, where={"team": "auth"})
 ```
+
+
+## Parallel batch search (v0.5)
+
+`parallel_search(index, Q, k, workers=4, shard=64, **kwargs)` shards the query matrix across threads and returns exactly what `index.search` would (row order preserved; works with `mask=`). Gains come only from GIL-releasing BLAS scans; pure-Python HNSW gets none. `last_stats` is unreliable afterwards; don't mutate the index mid-search.
+
+Measured once on a 2-core sandbox (FlatIndex, 50k x 64 float32, 2000 queries, k=10, shard=100): 1.04 s serial, 0.85 s with 2 workers, 0.73 s with 4 (about 1.4x; single run, noisy, not a benchmark suite). 4 new tests (101 total).
