@@ -9,6 +9,7 @@ import numpy as np
 from .audit import audit, render_markdown
 from .evaluate import cleaning_effect, compare_detectors
 from .report import render_html
+from .diff import diff_audits, render_diff
 from .io import load_csv, write_csv_without
 from .synth import inject_label_noise, make_blobs
 
@@ -31,6 +32,16 @@ def _cmd_audit(a):
         n = write_csv_without(a.csv, a.write_clean, {it["row"] for it in r["label_issues"]})
         print(f"wrote {n} rows to {a.write_clean} (flagged rows removed)", file=sys.stderr)
     return 1 if (a.fail_above is not None and r["n_label_issues"] / r["n"] > a.fail_above) else 0
+
+
+def _cmd_diff(a):
+    with open(a.old) as f:
+        old = json.load(f)
+    with open(a.new) as f:
+        new = json.load(f)
+    d = diff_audits(old, new)
+    print(json.dumps(d, indent=2) if a.json else render_diff(d))
+    return 1 if (a.fail_on_regression and d["flagged_rate_delta"] > 0) else 0
 
 
 def _cmd_demo(a):
@@ -64,6 +75,12 @@ def main(argv=None) -> int:
     p.add_argument("--write-clean", help="write a copy of the CSV without flagged rows")
     p.add_argument("--fail-above", type=float, help="exit 1 if the flagged share exceeds this fraction (CI gate)")
     p.set_defaults(fn=_cmd_audit)
+    f = sub.add_parser("diff", help="compare two audit --json outputs")
+    f.add_argument("old")
+    f.add_argument("new")
+    f.add_argument("--json", action="store_true")
+    f.add_argument("--fail-on-regression", action="store_true", help="exit 1 if the flagged share grew")
+    f.set_defaults(fn=_cmd_diff)
     d = sub.add_parser("demo", help="inject label noise into synthetic data and score the detectors")
     d.add_argument("--n", type=int, default=1500)
     d.add_argument("--noise", type=float, default=0.2)

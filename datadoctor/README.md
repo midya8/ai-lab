@@ -75,3 +75,14 @@ Tests: `PYTHONPATH=src python -m pytest -q` (about 2 s).
 | instance | kNN 15 | 0.200 | 0.072 | 0.871 | 0.258 | 0.396 |
 
 Finding: with border-concentrated noise the detector stays precise (0.87-0.96) but recall collapses to ~0.23-0.26 and the noise rate is *under*-estimated (0.06-0.07 vs 0.20). A mislabelled border row is indistinguishable from a genuinely ambiguous one, so a model fitted on the noisy labels agrees with them. Treat the estimate as a lower bound under realistic human-style errors; uniform-noise benchmarks flatter every detector here.
+
+## Diffing audits
+
+```bash
+datadoctor audit data.csv --label y --json --out before.json
+# ...relabel flagged rows...
+datadoctor audit data_fixed.csv --label y --json --out after.json
+datadoctor diff before.json after.json --fail-on-regression
+```
+
+Reports the change in flagged share, CV accuracy and estimated noise rate, plus which label issues were resolved, introduced or persisted (rows matched by index, so keep row order stable). `--fail-on-regression` exits 1 if the flagged share grew, for CI.
