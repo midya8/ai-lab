@@ -59,3 +59,33 @@ def test_validation():
         find_multilabel_issues(np.zeros((3, 2)), np.zeros((3, 3), int))
     with pytest.raises(ValueError):
         find_multilabel_issues(np.zeros((3, 2)), np.full((3, 2), 2))
+
+
+from datadoctor.multilabel import cooccurrence_refine, make_cooccurring_labels
+
+
+def test_refine_shape_range_and_weight_zero_identity():
+    X, Y = make_cooccurring_labels(n=400, seed=0)
+    P = cross_val_probs_multilabel(X, Y, seed=1)
+    R = cooccurrence_refine(P, Y, seed=2)
+    assert R.shape == P.shape and R.min() >= 0 and R.max() <= 1
+    assert np.allclose(cooccurrence_refine(P, Y, weight=0.0), np.clip(P, 1e-4, 1 - 1e-4))
+
+
+def test_refine_validates():
+    P = np.full((10, 2), 0.5)
+    with pytest.raises(ValueError):
+        cooccurrence_refine(P, np.zeros((10, 3), dtype=int))
+    with pytest.raises(ValueError):
+        cooccurrence_refine(P, np.zeros((10, 2), dtype=int), weight=2)
+
+
+def test_refine_improves_log_loss_on_conjunction_label():
+    X, Y = make_cooccurring_labels(n=1200, seed=3)
+    P = cross_val_probs_multilabel(X, Y, seed=4)
+    R = cooccurrence_refine(P, Y, seed=5)
+
+    def ll(Q, k):
+        Q = np.clip(Q[:, k], 1e-4, 1 - 1e-4)
+        return -np.mean(Y[:, k] * np.log(Q) + (1 - Y[:, k]) * np.log(1 - Q))
+    assert ll(R, 2) < ll(P, 2)

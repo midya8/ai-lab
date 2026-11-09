@@ -95,3 +95,57 @@ def score_multilabel(flagged: np.ndarray, truth: np.ndarray) -> dict:
     rec = tp / max(int(truth.sum()), 1)
     f1 = 2 * prec * rec / (prec + rec) if prec + rec else 0.0
     return {"precision": prec, "recall": rec, "f1": f1, "flagged": int(flagged.sum()), "true": int(truth.sum())}
+
+
+def cooccurrence_refine(P: np.ndarray, Y: np.ndarray, folds: int = 5, seed: int = 0, weight: float = 0.5) -> np.ndarray:
+    """Co-occurrence-aware probabilities by stacking.
+
+    Per-label models ignore that tags travel together ("refund" with "billing"). Here a
+    second-stage model for label k sees the logits of *all* first-stage out-of-fold
+    probabilities, including its own, and is itself cross-validated so the refined
+    P(k) never saw label k of the example it scores. The result is blended with the
+    first-stage P: ``weight`` is the share given to the stacked estimate.
+
+    Caveat: the first-stage OOF probabilities were produced with the *given* (noisy)
+    labels of other columns, so a corrupted neighbour tag can mislead the stack.
+    """
+    P = np.clip(np.asarray(P, dtype=float), 1e-4, 1 - 1e-4)
+    Y = np.asarray(Y, dtype=int)
+    if P.shape != Y.shape:
+        raise ValueError(f"P {P.shape} and Y {Y.shape} must have the same shape")
+    if not 0.0 <= weight <= 1.0:
+        raise ValueError("weight must be in [0, 1]")
+    n, K = Y.shape
+    Z = np.log(P / (1 - P))
+    rng = np.random.default_rng(seed)
+    fold_of = rng.permutation(n) % folds
+    out = P.copy()
+    for k in range(K):
+        yk_all = Y[:, k]
+        if yk_all.min() == yk_all.max():
+            continue
+        R = np.zeros(n)
+        for f in range(folds):
+            tr, te = fold_of != f, fold_of == f
+            yk = yk_all[tr]
+            if yk.min() == yk.max():
+                R[te] = float(yk[0])
+                continue
+            m = SoftmaxRegression(epochs=200).fit(Z[tr], yk, n_classes=2)
+            R[te] = m.predict_proba(Z[te])[:, 1]
+        out[:, k] = (1 - weight) * P[:, k] + weight * R
+    return out
+
+
+def make_cooccurring_labels(n: int = 1500, dim: int = 12, seed: int = 0):
+    """Labels 0 and 1 are linear in X; label 2 is their AND (not linear in X); label 3 is NOT-label-0 mostly.
+
+    A per-label linear model underfits labels 2 and 3's structure, which the stack can recover.
+    """
+    rng = np.random.default_rng(seed)
+    X = rng.normal(size=(n, dim))
+    W = rng.normal(size=(dim, 2)) * 1.2
+    base = (X @ W + rng.normal(scale=0.3, size=(n, 2)) > 0).astype(int)
+    y2 = base[:, 0] & base[:, 1]
+    y3 = 1 - base[:, 0]
+    return X, np.stack([base[:, 0], base[:, 1], y2, y3], axis=1)

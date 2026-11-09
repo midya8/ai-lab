@@ -119,3 +119,13 @@ Synthetic check (6 labels, 1500 examples, each label a noisy linear function of 
 cell flips): precision 0.85-0.91 and recall 0.83-0.91 at 2%, 5% and 10% noise. Caveat: the labels are
 linear in X and the detector's model is linear, so this is the easy case; real tags correlated with
 each other or non-linear in the features will score lower. Label co-occurrence is not yet used.
+
+## Co-occurrence-aware multi-label scoring
+
+`cooccurrence_refine(P, Y)` stacks a second-stage model over the logits of all first-stage
+out-of-fold label probabilities (cross-validated, blended with the originals), so tags that
+travel together inform each other. On `make_cooccurring_labels` (label 2 = AND of labels 0 and 1)
+it lowers the log loss of the conjunction label (tested). **Honest result:** on issue detection
+with 5% injected flips over 3 seeds, F1 moved 0.731->0.738, 0.834->0.834, 0.726->0.717 (base->stack),
+i.e. noise. Neighbour columns carry the same noise, which cancels the gain. Treat it as a
+better-calibrated probability, not a better detector, on this data.

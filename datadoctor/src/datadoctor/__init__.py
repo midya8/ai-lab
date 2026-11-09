@@ -15,6 +15,8 @@ from .models import SoftmaxRegression  # noqa: F401
 from .calibration import apply_temperature, calibrate, fit_temperature  # noqa: F401
 from .multilabel import (  # noqa: F401
     cross_val_probs_multilabel,
+    cooccurrence_refine,
+    make_cooccurring_labels,
     find_multilabel_issues,
     inject_multilabel_noise,
     rank_multilabel_issues,
