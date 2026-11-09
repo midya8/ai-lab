@@ -128,6 +128,7 @@
 - datadoctor: multi-label issue detection (per-label confident learning, missing vs spurious tags, ranked cells; synthetic precision/recall ~0.85-0.91, easy linear case disclosed; 7 tests, 73 total)
 - agentflow v0.6: `AsyncOrchestrator` (asyncio DAG runner; coroutine or sync LLMs/tools, concurrency semaphore, per-attempt timeout, `stream()` in completion order, cancellation; 11 tests, 61 total)
 - agentflow v0.7: `RunLog` resume for `AsyncOrchestrator` (`run`/`stream`/`run_sync` take `log=`, `resume=`; fingerprint-matched replay, journal shared with the sync runner, finished tasks journaled before yielding so abandoning a stream loses nothing; 5 new tests, 66 total)
+- promptlab: pairwise head-to-head gate (`pairwise --gate`, `--max-loss-rate`): fails when the candidate is significantly worse than the baseline or loses too many pairs; the loss-rate rule covers small sets where significance is unreachable (6 tests, 112 total)
 
 
 ## Next
@@ -140,7 +141,7 @@
 6. logsentry: (done v0.6 Grafana dashboard)
 7. ticket-triage: (done urgency head) (done active learning) (done multi-label tags) (done tag-aware routing) (done SLA-breach simulation) -> next: feed live router output into the simulator
 8. llm-router: (done v0.1) -> (done latency tracking) (done semantic cache) (done learned complexity classifier) (done persistence)
-9. promptlab: (done v0.1) -> v0.2 multi-sample done; (done GitHub Action + summary); (done LLM-judge checks + calibration) (done pairwise judge + position-swap bias audit) (done multi-judge ensembles + Fleiss kappa, v0.5) -> next: pairwise results fed into the regression gate
+9. promptlab: (done v0.1) -> v0.2 multi-sample done; (done GitHub Action + summary); (done LLM-judge checks + calibration) (done pairwise judge + position-swap bias audit) (done multi-judge ensembles + Fleiss kappa, v0.5) (done pairwise gate) -> next: gate on ensemble verdicts
 10. docqa: (done v0.1) -> (done paraphrase) (done broad benchmark) (done yes/no fixes) (done agentkit integration) (done agentflow worker) (done HTTP service) (done cache + metrics) (done typo-tolerant spelling) next: docqa on llm-router / dense or hybrid retrieval
 11. autojob: (done v0.1 — profile validation, posting parse, transparent match scoring, facts-only cover-letter drafts, review notes, JSONL tracker; never submits; 49 tests)
 12. visionlab follow-ups: (done GAP head vs dense under shift) (done batch-norm) (done certified robustness via IBP) -> next: contrast/photometric augmentation to fix the GAP head's contrast brittleness, tighter bounds (CROWN / zonotope) to certify the FGSM-trained net, IBP-compatible BatchNorm

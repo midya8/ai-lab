@@ -10,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from promptlab import (build_pairwise_prompt, parse_pairwise_reply, judge_pair, compare_outputs, audit_judge,
                        load_pair_items, make_pair_judge, PairwiseError, RulePairJudge, PositionBiasedJudge)
-from promptlab.pairwise import summarize, render_pairwise, render_audit
+from promptlab.pairwise import pairwise_gate, summarize, render_pairwise, render_audit
 from promptlab.__main__ import main
 
 EX = Path(__file__).resolve().parents[1] / "examples"
@@ -291,3 +291,29 @@ class CliTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PairwiseGateTests(unittest.TestCase):
+    def _s(self, a, b, ties=0, errors=0):
+        from promptlab.pairwise import PairwiseSummary
+        return PairwiseSummary(n=a + b + ties + errors, wins_a=a, wins_b=b, ties=ties, errors=errors)
+
+    def test_significantly_worse_fails(self):
+        self.assertTrue(pairwise_gate(self._s(12, 1)))
+
+    def test_not_significant_passes_default(self):
+        self.assertEqual(pairwise_gate(self._s(4, 2)), [])
+
+    def test_small_set_never_significant(self):
+        self.assertEqual(pairwise_gate(self._s(5, 0)), [])
+
+    def test_loss_rate_catches_small_set(self):
+        r = pairwise_gate(self._s(5, 0, ties=5), max_loss_rate=0.2)
+        self.assertEqual(len(r), 1)
+        self.assertIn("50.0%", r[0])
+
+    def test_better_candidate_passes(self):
+        self.assertEqual(pairwise_gate(self._s(1, 12), max_loss_rate=0.2), [])
+
+    def test_errors_fail(self):
+        self.assertTrue(pairwise_gate(self._s(0, 5, errors=1)))

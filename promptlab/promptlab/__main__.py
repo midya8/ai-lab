@@ -9,7 +9,7 @@ from .compare import check_regression, render_check_markdown, compare_runs, rend
 from .judge import calibrate_judge, load_calibration_items, render_calibration
 from .models import make_judge, make_model
 from .ensemble import compare_ensemble, render_ensemble
-from .pairwise import (audit_judge, compare_outputs, load_pair_items, make_pair_judge, render_audit,
+from .pairwise import (pairwise_gate, audit_judge, compare_outputs, load_pair_items, make_pair_judge, render_audit,
                        render_pairwise)
 from .registry import Registry, RegistryError
 from .runner import RunResult, load_cases, run_prompt
@@ -61,6 +61,8 @@ def main(argv: list[str] | None = None) -> int:
                    help="add another judge (repeatable): the verdict becomes a majority vote with agreement stats")
     p.add_argument("--alpha", type=float, default=0.05)
     p.add_argument("--max-inconsistent", type=float, help="exit 1 if more than this share of pairs flip when order is swapped")
+    p.add_argument("--gate", action="store_true", help="exit 1 if B (candidate) is significantly worse than A (baseline)")
+    p.add_argument("--max-loss-rate", type=float, help="exit 1 if A wins more than this share of pairs (implies the gate)")
     p.add_argument("--out", help="write per-pair verdicts as JSON")
 
     p = sub.add_parser("pair-audit", help="measure a pairwise judge against human preferences and check it for position bias")
@@ -158,6 +160,12 @@ def main(argv: list[str] | None = None) -> int:
             if args.max_inconsistent is not None and summ.inconsistent_rate > args.max_inconsistent:
                 print(f"FAIL: {summ.inconsistent_rate:.1%} of pairs flip with order, above {args.max_inconsistent:.1%}")
                 return 1
+            if args.gate or args.max_loss_rate is not None:
+                reasons = pairwise_gate(summ, args.max_loss_rate)
+                for r in reasons:
+                    print(f"FAIL: {r}")
+                if reasons:
+                    return 1
         elif args.cmd == "pair-audit":
             a = audit_judge(load_pair_items(args.labels), make_pair_judge(args.judge))
             print(render_audit(a))

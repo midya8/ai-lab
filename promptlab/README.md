@@ -136,6 +136,7 @@ candidates swapped**, and only trusts what survives:
 ```bash
 promptlab pairwise triage v1 v3 --cases cases.jsonl --rubric 'Gives the "category" as JSON.' \
     --judge cmd:./my_pair_judge.sh --max-inconsistent 0.2        # exit 1 if >20% of pairs flip with order
+    --gate --max-loss-rate 0.3   # CI gate: exit 1 if B is significantly worse than A, or A wins >30% of pairs
 ```
 
 The report gives wins/ties, the win rate of B (ties as half), the share of decisive pairs B wins with a Wilson interval, an exact

@@ -255,6 +255,23 @@ def compare_outputs(judge: PairJudge, items: list[dict], alpha: float = 0.05) ->
     return summarize(verdicts, skipped, alpha)
 
 
+def pairwise_gate(s: PairwiseSummary, max_loss_rate: float | None = None, fail_if_worse: bool = True) -> list[str]:
+    """Reasons a candidate (B) fails a head-to-head gate against a baseline (A); empty means pass.
+
+    Two independent rules: B must not be *significantly* worse than A (McNemar on decisive pairs),
+    and, if ``max_loss_rate`` is set, A must win no more than that share of scored pairs
+    (a stricter rule that also catches real but not-yet-significant losses on small sets).
+    """
+    reasons = []
+    if s.errors:
+        reasons.append(f"{s.errors} pair(s) could not be judged")
+    if fail_if_worse and s.decisive >= 6 and s.p_value < s.alpha and s.wins_a > s.wins_b:
+        reasons.append(f"candidate is significantly worse: baseline wins {s.wins_a} vs {s.wins_b} (p={s.p_value:.3f})")
+    if max_loss_rate is not None and s.scored and s.wins_a / s.scored > max_loss_rate:
+        reasons.append(f"baseline wins {s.wins_a / s.scored:.1%} of pairs, above allowed {max_loss_rate:.1%}")
+    return reasons
+
+
 def render_pairwise(s: PairwiseSummary, name_a: str = "A", name_b: str = "B") -> str:
     lines = [f"Pairwise comparison, {s.n} pair(s) judged in both orders ({name_a} = A, {name_b} = B)"]
     if s.scored:
