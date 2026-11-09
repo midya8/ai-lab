@@ -81,3 +81,19 @@ experiments/ benchmark.py -> results.md
 ## Roadmap
 
 SQ8 cells inside IVF and `save_index` support (a flat `SQ8Index` is in v0.2); OPQ rotation before PQ; a multi-threaded batch search path; hybrid BM25 + vector scoring on top of `ragkit`; a real-embedding benchmark (needs a download-free source).
+
+## Hybrid search (v0.4)
+
+`HybridCollection` pairs a `Collection` with Okapi BM25 over per-id texts and fuses the two rankings
+with reciprocal-rank fusion (`fusion="rrf"`, scale-free) or min-max weighted scores (`fusion="weighted"`,
+`alpha` = weight on vector similarity). Metadata filters apply to both retrievers; upserts/deletes keep
+the lexical side in sync (BM25 rebuilds lazily). Exact identifiers such as error codes are found by
+BM25 even when the embedding is unrelated. Tested on tiny hand-made fixtures only (8 tests); no
+retrieval-quality benchmark has been run yet, so no claim is made about fusion gains on real data.
+
+```python
+from vecdb import HybridCollection
+h = HybridCollection(384)
+h.upsert(ids, vectors, metas, texts)
+hits = h.query(qvec, "error E1234", k=5, where={"team": "auth"})
+```
