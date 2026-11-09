@@ -259,3 +259,5 @@ With `--also-judge`, the gate flags (`--gate`, `--max-loss-rate`) now apply to t
 ## Concurrency
 
 `--workers N` (on every run-style command) runs cases on N threads, which helps with HTTP models where each call is mostly waiting. Results keep case order and are identical to a serial run; a failing call only fails its own case. `--price/--budget` stay correct because the cost meter is locked, though in-flight calls can overshoot a budget by up to N replies. Models and judges you plug in must be thread-safe.
+
+**Shared rate-limit cooldown** (v0.9): all HTTP models/judges pointed at the same endpoint share one `Cooldown`. When any worker gets a 429 (honouring `Retry-After`, capped at 60s), every worker pauses until the same deadline rather than each retrying into the limit on its own; a shorter later penalty never shortens the pause. Tested with a fake clock and a local fake server only, not a real provider.

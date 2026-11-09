@@ -102,3 +102,50 @@ def test_specs_parse():
     assert isinstance(make_pair_judge("http://h/v1#j"), HttpModel)
     with pytest.raises(ValueError):
         make_model("http://h/v1")  # no model name
+
+
+def test_cooldown_is_shared_and_extends_only():
+    from promptlab.models import Cooldown
+    now = [0.0]
+    slept = []
+    c = Cooldown(clock=lambda: now[0], sleep=slept.append)
+    c.wait()
+    assert slept == []
+    c.penalize(5.0)
+    c.penalize(2.0)  # a shorter penalty must not shorten the deadline
+    c.wait()
+    assert slept == [5.0] and c.waits == 1
+    now[0] = 6.0
+    c.wait()
+    assert slept == [5.0]
+
+
+def test_429_on_one_thread_pauses_the_others():
+    import time
+
+    def handler(n):
+        if n == 1:
+            return 429, {"Retry-After": "1"}, {}
+        return 200, {}, OK
+
+    srv, seen, url = serve(handler)
+    try:
+        m1, m2 = HttpModel(url, "m"), HttpModel(url, "m")
+        assert m1.cooldown is m2.cooldown
+        out = []
+        t0 = time.monotonic()
+        a = threading.Thread(target=lambda: out.append(m1("x")))
+        a.start()
+        time.sleep(0.3)  # let the 429 land
+        b = threading.Thread(target=lambda: out.append(m2("y")))
+        b.start()
+        a.join(); b.join()
+        elapsed = time.monotonic() - t0
+    finally:
+        srv.shutdown()
+    assert out == ["billing", "billing"]
+    # the second thread's first request waited for the shared deadline, so the server saw
+    # only one early request before the cooldown, then both retried after it
+    assert elapsed >= 0.9
+    assert len(seen) == 3
+    assert m1.cooldown.waits >= 1

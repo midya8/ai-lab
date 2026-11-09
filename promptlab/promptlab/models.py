@@ -7,6 +7,7 @@ import os
 import re
 import shlex
 import subprocess
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -87,6 +88,40 @@ class CommandModel:
         return r.stdout
 
 
+class Cooldown:
+    """Shared pause for one endpoint: when any thread is rate limited (429), every thread
+    sharing this object waits out the same deadline instead of each hammering the server
+    and each discovering the limit separately."""
+
+    def __init__(self, clock=time.monotonic, sleep=time.sleep):
+        self._lock = threading.Lock()
+        self._until = 0.0
+        self._clock, self._sleep = clock, sleep
+        self.waits = 0  # how many times a caller actually had to wait
+
+    def penalize(self, seconds: float) -> None:
+        with self._lock:
+            self._until = max(self._until, self._clock() + seconds)
+
+    def wait(self) -> None:
+        with self._lock:
+            remaining = self._until - self._clock()
+        if remaining > 0:
+            with self._lock:
+                self.waits += 1
+            self._sleep(remaining)
+
+
+_COOLDOWNS: dict[str, Cooldown] = {}
+_COOLDOWNS_LOCK = threading.Lock()
+
+
+def cooldown_for(url: str) -> Cooldown:
+    """One Cooldown per endpoint URL, shared by every HttpModel/judge pointed at it."""
+    with _COOLDOWNS_LOCK:
+        return _COOLDOWNS.setdefault(url, Cooldown())
+
+
 class HttpModel:
     """OpenAI-compatible ``/chat/completions`` client, stdlib only.
 
@@ -105,6 +140,7 @@ class HttpModel:
         self.model, self.timeout, self.retries = model, timeout, retries
         self.temperature, self.backoff = temperature, backoff
         self.key_env = key_env or os.environ.get("PROMPTLAB_API_KEY_ENV", "OPENAI_API_KEY")
+        self.cooldown = cooldown_for(self.url)
 
     def __call__(self, prompt: str) -> str:
         body = json.dumps({"model": self.model, "temperature": self.temperature,
@@ -117,6 +153,7 @@ class HttpModel:
         for attempt in range(self.retries + 1):
             req = urllib.request.Request(self.url, data=body, headers=headers, method="POST")
             delay = self.backoff * 2 ** attempt
+            self.cooldown.wait()
             try:
                 with urllib.request.urlopen(req, timeout=self.timeout) as r:
                     data = json.loads(r.read().decode())
@@ -134,9 +171,11 @@ class HttpModel:
                 ra = e.headers.get("Retry-After") if e.headers else None
                 if ra and ra.strip().isdigit():
                     delay = min(float(ra), 60.0)
+                if e.code == 429:
+                    self.cooldown.penalize(delay)  # every worker on this endpoint backs off together
             except (urllib.error.URLError, TimeoutError, ConnectionError) as e:
                 last = f"connection error: {type(e).__name__}"
-            if attempt < self.retries:
+            if attempt < self.retries and not (last == "HTTP 429"):
                 time.sleep(delay)
         raise RuntimeError(f"{last} after {self.retries + 1} attempts")
 
