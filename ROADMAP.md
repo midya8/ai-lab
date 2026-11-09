@@ -122,6 +122,7 @@
 - ticket-triage: label audit via datadoctor confident learning (3 new tests, 51 total)
 - datadoctor: self-contained HTML audit report (`--html`), 3 tests
 - datadoctor: instance-dependent (border-concentrated) noise injection + experiment; recall drops 0.86 -> 0.23 and noise rate is underestimated 0.20 -> 0.06 (4 tests, 54 total)
+- tiny-transformer: associative key-value recall task + benchmark (RoPE reaches 0.98 on 2 pairs, learned positions 0.79; 4 pairs unconverged)
 
 
 ## Next

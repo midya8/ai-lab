@@ -145,3 +145,22 @@ Held-out loss (nats/char, 8 query heads, 2.6k-char corpus, block 32; the validat
 | 1 | MQA | 92,357 | 4.0 KiB (0.125x) | 0.239 | 0.248 | 0.145 |
 
 Honest reading: the cache and parameter savings are exact. Quality is mixed: at 300 steps MHA was ahead by 0.03-0.08 nats on both seeds, while at 500 steps GQA/MQA matched or beat it (seed 2). Three single-seed runs on a tiny corpus cannot rank the variants; the order between 4, 2 and 1 kv heads is noise. What the evidence does support is that cutting the cache 4-8x costs little at this scale, which is the usual motivation for GQA.
+
+## Key-value recall benchmark (v0.x)
+
+The context-extension section above lacked a task where long context is genuinely required. `tinygpt.recall` generates associative recall: `k1 v1 ... kn vn q1 a1 ... qn an`, with distinct keys, random values and queries that repeat earlier keys. Only the context holds the answer; chance is 1/8. Accuracy is scored on the final answer (256 fresh queries).
+
+A single query per sequence did **not** train (accuracy stuck at 0.5 for 2 pairs after 4,000 steps: the model learned "one of the two stored values" and the random pair tokens drown the gradient). Appending n queries gives a dense induction signal and fixes it for 2 pairs.
+
+```bash
+PYTHONPATH=src python experiments/recall_bench.py      # ~30 min on CPU; writes experiments/recall_results.md
+```
+
+2 layers, 2 heads, 64-dim, 5,000 steps, 2 seeds, mean (min over seeds):
+
+| positions | 2 pairs | 4 pairs |
+|---|---|---|
+| learned | 0.79 (min 0.58) | 0.44 (min 0.42) |
+| rope | 0.98 (min 0.97) | 0.60 (min 0.41) |
+
+Honest reading: with 2 pairs RoPE reliably learns recall while learned positions are seed-dependent (0.58 vs 0.97 min). At 4 pairs neither model has converged in the budget (0.4-0.6, chance 0.125) and seed variance is large, so the 0.60 vs 0.44 gap is suggestive, not established. Two seeds and a small step budget only; longer training and more seeds are the next step.
