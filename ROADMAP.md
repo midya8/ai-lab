@@ -125,6 +125,7 @@
 - tiny-transformer: associative key-value recall task + benchmark (RoPE reaches 0.98 on 2 pairs, learned positions 0.79; 4 pairs unconverged)
 - datadoctor: regression-target issue detection via out-of-fold residuals with local robust MAD scaling (6 tests, 64 total)
 - datadoctor: ordinal-target issue detection (`find_ordinal_issues`, gap measured in levels, suggested level) + `inject_ordinal_noise` (2 tests, 66 total)
+- datadoctor: multi-label issue detection (per-label confident learning, missing vs spurious tags, ranked cells; synthetic precision/recall ~0.85-0.91, easy linear case disclosed; 7 tests, 73 total)
 
 
 ## Next
@@ -143,4 +144,4 @@
 12. visionlab follow-ups: (done GAP head vs dense under shift) (done batch-norm) (done certified robustness via IBP) -> next: contrast/photometric augmentation to fix the GAP head's contrast brittleness, tighter bounds (CROWN / zonotope) to certify the FGSM-trained net, IBP-compatible BatchNorm
 13. reviewkit follow-ups: a fresh held-out set (the current one is now tuned-on); moved-code detection (match removed vs added blocks in the diff); light intra-function taint for SQL/shell; run the Action on a real PR in a scratch repo; docqa/ragkit-style repo-context retrieval for the LLM pass; JS/TS AST via a parser
 14. codesearch follow-ups: optional neural-embedding backend as an extra (compare against BM25F on the same queries), a third blind query set written by someone other than the author, call-graph expansion (boost callers/callees of top hits), JS/TS via a parser, `--watch` re-index, an editor-friendly JSON-lines server
-15. datadoctor follow-ups: (done audit diff + CI regression gate) (done temperature scaling, mixed results) a real noisy-label dataset benchmark (needs a download-free source), (done regression targets) (done ordinal targets) object-detection style multi-label support, an HTML report
+15. datadoctor follow-ups: (done audit diff + CI regression gate) (done temperature scaling, mixed results) a real noisy-label dataset benchmark (needs a download-free source), (done regression targets) (done ordinal targets) label co-occurrence-aware multi-label scoring, object-detection style boxes

@@ -101,3 +101,21 @@ On a synthetic linear task with 8% of targets shifted by 2-4 std, the unit tests
 >80% precision and >70% recall and <3% flagged on clean data. The detector is only as good as
 the model: a linear ridge cannot separate nonlinearity from corruption, so pass `model_factory`
 (any object with `fit(X, y)` / `predict(X)`) for non-linear targets. Synthetic data only.
+
+
+## Multi-label targets
+
+`datadoctor.multilabel` runs confident learning per label (one-vs-rest) and returns an
+n x K mask of cells whose tag looks missing (given 0) or spurious (given 1):
+
+```python
+from datadoctor import cross_val_probs_multilabel, find_multilabel_issues, rank_multilabel_issues
+P = cross_val_probs_multilabel(X, Y)          # out-of-fold P(label k = 1)
+mask = find_multilabel_issues(P, Y)
+worst = rank_multilabel_issues(P, Y, mask, top=20)
+```
+
+Synthetic check (6 labels, 1500 examples, each label a noisy linear function of X, 3 seeds, random
+cell flips): precision 0.85-0.91 and recall 0.83-0.91 at 2%, 5% and 10% noise. Caveat: the labels are
+linear in X and the detector's model is linear, so this is the easy case; real tags correlated with
+each other or non-linear in the features will score lower. Label co-occurrence is not yet used.
