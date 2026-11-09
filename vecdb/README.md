@@ -138,6 +138,10 @@ Gain is real but modest and concentrated where variance is not axis-aligned; on 
 
 Honest reading: the semantic task is hard by construction (~50 same-topic docs, the target is indistinguishable by topic alone), so absolute numbers are low. Fusion did **not** beat the best single retriever on the mixed set: BM25 alone is best on lookups, and fusion only dilutes the dense signal on semantic queries because BM25 ranks same-topic distractors highly (RRF recall 0 there). alpha=0.2 was picked after seeing the table. Synthetic data only; a real-embedding benchmark is still open.
 
+### Diversity re-ranking (MMR)
+
+`HybridCollection.query_mmr(vector, text, k, lambda_=0.7)` re-ranks the top `3*k` fused hits with Maximal Marginal Relevance (relevance = scaled fused score, redundancy = max cosine to already-picked hits). `lambda_=1` equals `query`; lower values suppress near-duplicates. Unit-tested on a duplicate-pair case; no retrieval-quality benchmark yet.
+
 ### Explaining hybrid results
 
 `HybridCollection.explain(vector, text, k)` runs the RRF query and returns, per hit, the fused score, its rank in the dense and BM25 lists (None if absent), the raw distance/BM25 score, and whether it came from `both`, `dense` or `lexical`. Useful for debugging why a document surfaced.

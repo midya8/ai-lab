@@ -107,3 +107,31 @@ def test_query_batch_validates_shapes():
     h, V = make()
     with pytest.raises(ValueError):
         h.query_batch(V[:2], ["only one"])
+
+
+def test_mmr_lambda_one_equals_query():
+    h, V = make()
+    base = h.query(V[0], "auth module", k=4)
+    mmr = h.query_mmr(V[0], "auth module", k=4, lambda_=1.0)
+    assert [x.id for x in mmr] == [x.id for x in base]
+
+
+def test_mmr_demotes_near_duplicate():
+    rng = np.random.default_rng(1)
+    h = HybridCollection(8)
+    a = rng.normal(size=8).astype(np.float32)
+    b = rng.normal(size=8).astype(np.float32)
+    V = np.stack([a, a + 1e-3, b])
+    h.upsert(["a", "a2", "b"], V, texts=["alpha", "alpha", "alpha"])
+    plain = [x.id for x in h.query(a, "alpha", k=2)]
+    assert set(plain) == {"a", "a2"}
+    div = [x.id for x in h.query_mmr(a, "alpha", k=2, lambda_=0.3)]
+    assert div[0] in ("a", "a2") and div[1] == "b"
+
+
+def test_mmr_validation_and_small():
+    h, V = make()
+    with pytest.raises(ValueError):
+        h.query_mmr(V[0], "x", lambda_=1.5)
+    assert len(h.query_mmr(V[0], "fox", k=2)) == 2
+    assert HybridCollection(4).query_mmr(np.ones(4), "x") == []

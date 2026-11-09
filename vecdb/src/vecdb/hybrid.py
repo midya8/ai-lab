@@ -133,6 +133,37 @@ class HybridCollection:
         top = sorted(fused.items(), key=lambda kv: (-kv[1], kv[0]))[:k]
         return [Hit(i, -s, dict(self.col._meta[self.col._row_of[i]])) for i, s in top]
 
+    def query_mmr(self, vector, text: str, k: int = 10, lambda_: float = 0.7, pool: int | None = None,
+                  **kwargs) -> list[Hit]:
+        """Maximal Marginal Relevance re-rank of the fused candidates.
+
+        Greedily picks the hit maximising ``lambda_*rel - (1-lambda_)*max_sim_to_selected`` where ``rel`` is the
+        fused score min-max scaled to [0, 1] and similarity is cosine between stored vectors. ``lambda_=1``
+        reproduces ``query``; smaller values trade relevance for diversity. Candidates come from the top
+        ``pool`` (default ``3*k``) fused hits.
+        """
+        if not 0.0 <= lambda_ <= 1.0:
+            raise ValueError("lambda_ must be in [0, 1]")
+        cands = self.query(vector, text, pool or 3 * k, **kwargs)
+        if len(cands) <= 1:
+            return cands[:k]
+        sc = np.array([-h.distance for h in cands], dtype=np.float64)
+        rel = np.ones_like(sc) if sc.max() == sc.min() else (sc - sc.min()) / (sc.max() - sc.min())
+        V = np.stack([self.col.get(h.id)[0] for h in cands]).astype(np.float64)
+        V /= np.maximum(np.linalg.norm(V, axis=1, keepdims=True), 1e-12)
+        sim = V @ V.T
+        chosen: list[int] = []
+        rest = list(range(len(cands)))
+        while rest and len(chosen) < k:
+            if chosen:
+                red = sim[np.ix_(rest, chosen)].max(axis=1)
+            else:
+                red = np.zeros(len(rest))
+            val = lambda_ * rel[rest] - (1 - lambda_) * red
+            j = int(np.argmax(val))  # first max = better fused rank on ties
+            chosen.append(rest.pop(j))
+        return [cands[j] for j in chosen]
+
     def query_batch(self, vectors, texts: list[str], k: int = 10, **kwargs) -> list[list[Hit]]:
         """Run ``query`` for each (vector, text) pair; results are in input order."""
         vectors = np.asarray(vectors, dtype=np.float32)

@@ -147,6 +147,7 @@
 - tiny-transformer: `expected_tokens_per_call` (closed form) and `sweep_k` to compare measured tokens/target-call with the i.i.d.-acceptance prediction (3 tests, 143 total)
 - tiny-transformer: `expected_speedup` / `best_k` wall-clock cost model for speculative decoding (speedup = tokens-per-call / (k*c+1); analytic, not measured; 4 tests)
 - vecdb: SQ8Index persistence via save_index/load_index, incl. keep_raw and untrained (3 tests)
+- vecdb: `HybridCollection.query_mmr` diversity re-ranking (lambda_=1 equals query; near-duplicate demotion test; 3 tests)
 
 
 ## Next
