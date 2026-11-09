@@ -58,3 +58,7 @@ Tests: `PYTHONPATH=src python -m pytest -q` (about 2 s).
 ## HTML report
 
 `python -m datadoctor audit data.csv --label y --html report.html` also writes a single self-contained HTML file (class balance bars, label-issue table, noise-matrix heatmap, duplicates, outliers). No JavaScript or external assets, so it can be attached to a PR or CI run as-is.
+
+## Calibration (v0.2)
+
+`datadoctor.calibrate(P, y)` fits one temperature on out-of-sample probabilities (golden-section search on NLL) and returns calibrated probabilities. It helps when the model is badly under- or over-confident and does nothing for a calibrated one; see `experiments/calibration_results.md` for the small, honestly mixed results.

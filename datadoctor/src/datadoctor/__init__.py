@@ -12,3 +12,4 @@ from .confident import (  # noqa: F401
 )
 from .cv import cross_val_probs, stratified_kfold  # noqa: F401
 from .models import SoftmaxRegression  # noqa: F401
+from .calibration import apply_temperature, calibrate, fit_temperature  # noqa: F401
