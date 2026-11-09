@@ -254,3 +254,8 @@ several times or fix temperature to 0 before trusting a small difference.
 ### Gating on ensemble verdicts
 
 With `--also-judge`, the gate flags (`--gate`, `--max-loss-rate`) now apply to the ensemble's majority outcome, and `--min-kappa-ensemble K` additionally fails the run when Fleiss' kappa across judges is below K (or undefined), so a candidate is never waved through on a verdict the judges themselves disagree about.
+
+
+## Concurrency
+
+`--workers N` (on every run-style command) runs cases on N threads, which helps with HTTP models where each call is mostly waiting. Results keep case order and are identical to a serial run; a failing call only fails its own case. `--price/--budget` stay correct because the cost meter is locked, though in-flight calls can overshoot a budget by up to N replies. Models and judges you plug in must be thread-safe.

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import Callable
@@ -114,7 +115,8 @@ def load_cases(path: str | Path) -> list[Case]:
 
 
 def run_prompt(version: Version, cases: list[Case], model: Model,
-               samples: int = 1, threshold: float = 1.0, judge: Model | None = None) -> RunResult:
+               samples: int = 1, threshold: float = 1.0, judge: Model | None = None,
+               workers: int = 1) -> RunResult:
     """Render the version for each case, call ``model`` and score the output.
 
     With ``samples`` > 1 the model is called that many times per case (for
@@ -125,6 +127,9 @@ def run_prompt(version: Version, cases: list[Case], model: Model,
 
     ``judge`` is the model used by ``judge`` checks (without one they fail).
 
+    ``workers`` > 1 runs cases on a thread pool (models are I/O bound); results keep
+    case order. Models and judges must be thread-safe (CostMeter is).
+
     A render error or a model exception fails that sample (score 0) and is
     recorded; it never aborts the run.
     """
@@ -132,15 +137,16 @@ def run_prompt(version: Version, cases: list[Case], model: Model,
         raise ValueError("samples must be >= 1")
     if not 0 < threshold <= 1:
         raise ValueError("threshold must be in (0, 1]")
+    if workers < 1:
+        raise ValueError("workers must be >= 1")
     tpl: Template = version.template
-    results: list[CaseResult] = []
-    pw = ow = calls = 0
-    for c in cases:
+
+    def one(c: Case) -> tuple[CaseResult, int, int, int]:
+        pw = ow = calls = 0
         try:
             prompt = tpl.render(c.vars)
         except TemplateError as e:
-            results.append(CaseResult(c.id, False, 0.0, "", [], f"render: {e}", samples, 0))
-            continue
+            return CaseResult(c.id, False, 0.0, "", [], f"render: {e}", samples, 0), 0, 0, 0
         scores: list[float] = []
         wins = 0
         out_keep, fails_keep, err_keep = None, [], ""
@@ -169,8 +175,16 @@ def run_prompt(version: Version, cases: list[Case], model: Model,
                 if not fails_keep and not err_keep:
                     out_keep, fails_keep = out, fails
         passed = wins / samples >= threshold - 1e-12
-        results.append(CaseResult(c.id, passed, sum(scores) / samples, out_keep or "",
-                                  fails_keep, err_keep, samples, wins))
+        return (CaseResult(c.id, passed, sum(scores) / samples, out_keep or "",
+                           fails_keep, err_keep, samples, wins), pw, ow, calls)
+
+    if workers == 1:
+        outs = [one(c) for c in cases]
+    else:
+        with ThreadPoolExecutor(max_workers=workers) as ex:
+            outs = list(ex.map(one, cases))  # input order kept; first exception (BudgetExceeded) re-raised
+    results = [o[0] for o in outs]
+    pw = sum(o[1] for o in outs); ow = sum(o[2] for o in outs); calls = sum(o[3] for o in outs)
     n = max(len(results), 1)
     return RunResult(version.name, version.number, version.hash, results,
                      pw / (n * samples), ow / max(calls, 1))

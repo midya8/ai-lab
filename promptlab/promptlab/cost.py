@@ -8,6 +8,7 @@ nothing here knows any vendor's current price list.
 from __future__ import annotations
 
 import math
+import threading
 from dataclasses import dataclass
 
 
@@ -53,22 +54,25 @@ class CostMeter:
         self.model, self.price_in, self.price_out = model, price_in, price_out
         self.budget, self.count, self.max_out = budget, count, max_out_tokens
         self.usage = Usage()
+        self._lock = threading.Lock()  # --workers calls the meter from several threads
 
     def _price(self, tin: int, tout: int) -> float:
         return (tin * self.price_in + tout * self.price_out) / 1e6
 
     def __call__(self, prompt: str) -> str:
         tin = self.count(prompt)
-        if self.budget is not None and self.usage.cost + self._price(tin, self.max_out) > self.budget + 1e-12:
-            raise BudgetExceeded(f"budget ${self.budget:.4f} reached after {self.usage.calls} call(s) "
-                                 f"(spent ${self.usage.cost:.4f})")
-        self.usage.calls += 1
-        self.usage.tokens_in += tin
-        self.usage.cost += self._price(tin, 0)
+        with self._lock:
+            if self.budget is not None and self.usage.cost + self._price(tin, self.max_out) > self.budget + 1e-12:
+                raise BudgetExceeded(f"budget ${self.budget:.4f} reached after {self.usage.calls} call(s) "
+                                     f"(spent ${self.usage.cost:.4f})")
+            self.usage.calls += 1
+            self.usage.tokens_in += tin
+            self.usage.cost += self._price(tin, 0)
         out = self.model(prompt)
         tout = self.count(out)
-        self.usage.tokens_out += tout
-        self.usage.cost += self._price(0, tout)
+        with self._lock:
+            self.usage.tokens_out += tout
+            self.usage.cost += self._price(0, tout)
         return out
 
     def summary(self) -> str:

@@ -30,7 +30,8 @@ def _meter(args):
 def _run(reg: Registry, args, ref: str, model=None) -> RunResult:
     v = reg.resolve(args.name, ref)
     return run_prompt(v, load_cases(args.cases), model if model is not None else make_model(args.model),
-                      samples=args.samples, threshold=args.threshold, judge=make_judge(args.judge))
+                      samples=args.samples, threshold=args.threshold, judge=make_judge(args.judge),
+                      workers=args.workers)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -42,6 +43,7 @@ def main(argv: list[str] | None = None) -> int:
         p.add_argument("--cases", required=True, help="JSONL test cases")
         p.add_argument("--model", default="rule", help="rule | rule:<seed> | cmd:<command>")
         p.add_argument("--samples", type=int, default=1, help="model calls per case (non-deterministic models)")
+        p.add_argument("--workers", type=int, default=1, help="run cases concurrently on this many threads (HTTP models)")
         p.add_argument("--threshold", type=float, default=1.0, help="fraction of samples that must pass a case")
         p.add_argument("--price", help="IN,OUT dollars per million tokens: meter the model and print an estimated cost")
         p.add_argument("--budget", type=float, help="with --price: abort (exit 3) before a call that would exceed this many dollars")
