@@ -8,6 +8,7 @@ from typing import Callable
 
 from .checks import run_check
 from .registry import Version
+from .cost import BudgetExceeded
 from .template import Template, TemplateError
 
 Model = Callable[[str], str]
@@ -147,6 +148,8 @@ def run_prompt(version: Version, cases: list[Case], model: Model,
             pw += len(prompt.split())
             try:
                 out = model(prompt)
+            except BudgetExceeded:
+                raise
             except Exception as e:  # noqa: BLE001 - model backends can fail any way
                 scores.append(0.0)
                 if out_keep is None or not err_keep and not fails_keep:

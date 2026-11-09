@@ -15,4 +15,6 @@ from .pairwise import (build_pairwise_prompt, parse_pairwise_reply, judge_pair, 
 
 from .ensemble import compare_ensemble, render_ensemble, fleiss_kappa, EnsembleResult, ensemble_gate
 
-__version__ = "0.5.0"
+from .cost import CostMeter, BudgetExceeded, Usage, estimate_tokens, parse_price
+
+__version__ = "0.6.0"

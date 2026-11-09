@@ -7,6 +7,7 @@ from pathlib import Path
 
 from .compare import check_regression, render_check_markdown, compare_runs, render_markdown
 from .judge import calibrate_judge, load_calibration_items, render_calibration
+from .cost import BudgetExceeded, CostMeter, parse_price
 from .models import make_judge, make_model
 from .ensemble import compare_ensemble, render_ensemble, ensemble_gate
 from .pairwise import (pairwise_gate, audit_judge, compare_outputs, load_pair_items, make_pair_judge, render_audit,
@@ -15,9 +16,20 @@ from .registry import Registry, RegistryError
 from .runner import RunResult, load_cases, run_prompt
 
 
-def _run(reg: Registry, args, ref: str) -> RunResult:
+def _meter(args):
+    """Wrap the model in a CostMeter when --price is given (shared across all runs of one command)."""
+    model = make_model(args.model)
+    if getattr(args, "price", None) is None:
+        if getattr(args, "budget", None) is not None:
+            raise ValueError("--budget needs --price")
+        return model
+    pin, pout = parse_price(args.price)
+    return CostMeter(model, pin, pout, args.budget)
+
+
+def _run(reg: Registry, args, ref: str, model=None) -> RunResult:
     v = reg.resolve(args.name, ref)
-    return run_prompt(v, load_cases(args.cases), make_model(args.model),
+    return run_prompt(v, load_cases(args.cases), model if model is not None else make_model(args.model),
                       samples=args.samples, threshold=args.threshold, judge=make_judge(args.judge))
 
 
@@ -31,6 +43,8 @@ def main(argv: list[str] | None = None) -> int:
         p.add_argument("--model", default="rule", help="rule | rule:<seed> | cmd:<command>")
         p.add_argument("--samples", type=int, default=1, help="model calls per case (non-deterministic models)")
         p.add_argument("--threshold", type=float, default=1.0, help="fraction of samples that must pass a case")
+        p.add_argument("--price", help="IN,OUT dollars per million tokens: meter the model and print an estimated cost")
+        p.add_argument("--budget", type=float, help="with --price: abort (exit 3) before a call that would exceed this many dollars")
         p.add_argument("--judge", default=None, help="model for judge checks: rule | cmd:<command> (judge checks fail without one)")
 
     p = sub.add_parser("commit", help="store a new prompt version"); p.add_argument("name"); p.add_argument("--file", required=True); p.add_argument("-m", "--message", default="")
@@ -96,7 +110,8 @@ def main(argv: list[str] | None = None) -> int:
             v = reg.tag(args.name, args.tag, args.ref)
             print(f"{args.tag} -> {v.label}")
         elif args.cmd == "run":
-            r = _run(reg, args, args.ref)
+            m = _meter(args)
+            r = _run(reg, args, args.ref, m)
             print(f"{r.prompt} v{r.version}: {r.passed}/{r.n} passed ({r.pass_rate:.1%}), mean score {r.mean_score:.3f}")
             for x in r.results:
                 if args.verbose or not x.passed:
@@ -106,13 +121,18 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"flaky cases ({len(r.flaky)}): {', '.join(r.flaky)}")
             if args.out:
                 r.save(args.out)
+            if isinstance(m, CostMeter):
+                print(m.summary())
         elif args.cmd == "compare":
-            ra, rb = _run(reg, args, args.a), _run(reg, args, args.b)
+            m = _meter(args)
+            ra, rb = _run(reg, args, args.a, m), _run(reg, args, args.b, m)
             c = compare_runs(ra, rb, alpha=args.alpha)
             md = render_markdown(c)
             print(md)
             if args.report:
                 Path(args.report).write_text(md, encoding="utf-8")
+            if isinstance(m, CostMeter):
+                print(m.summary())
         elif args.cmd == "baseline":
             r = _run(reg, args, args.ref)
             r.save(args.out)
@@ -191,6 +211,9 @@ def main(argv: list[str] | None = None) -> int:
                 with open(args.summary, "a", encoding="utf-8") as f:
                     f.write(render_check_markdown(rep))
             return 0 if rep.ok else 1
+    except BudgetExceeded as e:
+        print(f"budget exceeded: {e}", file=sys.stderr)
+        return 3
     except (RegistryError, ValueError, OSError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 2

@@ -61,6 +61,14 @@ Gating v3 against a v2 baseline then **fails** despite the higher average:
 promptlab run summarize --cases cases.jsonl --model cmd:./my_llm.sh --samples 5 --threshold 0.8 -v
 ```
 
+## Cost tracking and budgets
+
+`--price IN,OUT` (dollars per million tokens, supplied by you) wraps the model in a meter and prints an estimated cost after `run` and `compare`. `--budget USD` refuses any call that would push spend over the limit and exits 3, so a runaway `--samples` loop cannot burn money; the abort is not recorded as a model failure. Token counts are estimates (about 4 characters per token) unless you pass your own counter to `CostMeter` in Python; failed calls still bill their input.
+
+```
+promptlab run summarize --cases cases.jsonl --model cmd:./my_llm.sh --samples 5 --price 0.15,0.60 --budget 0.50
+```
+
 ## Test cases
 
 JSONL, one case per line (`#` comments allowed):
