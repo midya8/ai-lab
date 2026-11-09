@@ -126,6 +126,7 @@
 - datadoctor: regression-target issue detection via out-of-fold residuals with local robust MAD scaling (6 tests, 64 total)
 - datadoctor: ordinal-target issue detection (`find_ordinal_issues`, gap measured in levels, suggested level) + `inject_ordinal_noise` (2 tests, 66 total)
 - datadoctor: multi-label issue detection (per-label confident learning, missing vs spurious tags, ranked cells; synthetic precision/recall ~0.85-0.91, easy linear case disclosed; 7 tests, 73 total)
+- agentflow v0.6: `AsyncOrchestrator` (asyncio DAG runner; coroutine or sync LLMs/tools, concurrency semaphore, per-attempt timeout, `stream()` in completion order, cancellation; 11 tests, 61 total)
 
 
 ## Next
@@ -133,7 +134,7 @@
 1. rag-evals: (done hard benchmark) (done chunk sweep) -> next: dense embeddings beyond LSA
 2. llm-eval-harness: (done) (done matrix) (done per-tag matrix) -> next: HTTP-model matrix specs
 3. tiny-transformer follow-ups: (done v0.5, top-p, grad accumulation); (done clipping); (done dropout); (done weight tying); (done early stopping); (done repetition penalty); (done LR finder); (done label smoothing); (done per-position eval); (done sliding-window eval); (done lora-lab on its attention) (done RoPE) (done GQA/MQA) (done context extension: PI + NTK) -> next: a key-value recall benchmark with a larger model to test long-context use properly
-4. agentflow follow-ups: (done shared memory) (done TTL) (done memory-aware Supervisor) (done failure fallback retries) (done circuit breaker) (done run metrics) (done Supervisor-in-DAG adapter) (done llm-router backend) (done persistent run log + resume) -> next: async/streaming workers
+4. agentflow follow-ups: (done shared memory) (done TTL) (done memory-aware Supervisor) (done failure fallback retries) (done circuit breaker) (done run metrics) (done Supervisor-in-DAG adapter) (done llm-router backend) (done persistent run log + resume) (done async orchestrator) -> next: RunLog resume for the async runner
 5. lora-lab: (done rank sweep) (done LoRA on tiny-transformer attention) (done adapter hub) (done QLoRA-style quantized base) -> (done LoftQ-style init) (done double quantization + bits/error frontier) -> next: paged/streamed adapter serving, or 2-bit (NF2) bases to see where LoftQ finally matters
 6. logsentry: (done v0.6 Grafana dashboard)
 7. ticket-triage: (done urgency head) (done active learning) (done multi-label tags) (done tag-aware routing) (done SLA-breach simulation) -> next: feed live router output into the simulator

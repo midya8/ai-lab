@@ -48,3 +48,6 @@ python demo_resume.py                     # first run fails midway, the second r
 python -m agentflow log run.jsonl         # per-run table: tasks / ok / failed / skipped / resumed / work
 python -m agentflow log run.jsonl --compact
 ```
+
+## Async orchestration (v0.6)
+`AsyncOrchestrator(agents, max_concurrency=8, timeout=None)` runs the same `Task` DAG on an asyncio loop. Agents may have a coroutine `llm.complete` and coroutine tools; plain sync ones run in worker threads, so existing agents work unchanged. A semaphore bounds in-flight tasks, `timeout` is per attempt (a timeout is an ordinary failure and can be retried), failures cascade as `skipped`, and `stream()` yields `(task_id, Result)` as each task lands. Abandoning the stream cancels in-flight tasks. `await orch.run(tasks)` or `orch.run_sync(tasks)`. Not yet combined with `RunLog` resume.

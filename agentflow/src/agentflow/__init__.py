@@ -14,3 +14,5 @@ from .router_backend import RouterBackend, RouterLLM, BudgetExhausted, json_or_t
 __all__ += ["RouterBackend", "RouterLLM", "BudgetExhausted", "json_or_text"]
 from .runlog import RunLog, fingerprints
 __all__ += ["RunLog", "fingerprints"]
+from .aorch import AsyncOrchestrator, arun_agent
+__all__ += ["AsyncOrchestrator", "arun_agent"]
