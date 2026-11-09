@@ -85,18 +85,43 @@ class AsyncOrchestrator:
                     await asyncio.sleep(self.backoff * 2 ** (attempt - 1))
         return Result("failed", error=err, attempts=task.retries + 1, duration=time.perf_counter() - t0)
 
-    async def stream(self, tasks: List[Task]) -> AsyncIterator[Tuple[str, Result]]:
-        """Yield ``(task_id, Result)`` as each task finishes (skips included)."""
+    async def stream(self, tasks: List[Task], log=None, resume: bool = False,
+                     run_id: Optional[str] = None) -> AsyncIterator[Tuple[str, Result]]:
+        """Yield ``(task_id, Result)`` as each task finishes (skips included).
+
+        With ``log`` (a ``RunLog``) every result is journaled as it lands, so a crash or
+        cancellation keeps all work finished so far. With ``resume=True`` tasks whose latest
+        ``ok`` record matches their fingerprint are replayed (``Result.resumed``, no call)."""
         self.plan(tasks)
+        fps: Dict[str, str] = {}
+        if log is not None:
+            from .runlog import fingerprints
+            fps = fingerprints(tasks)
+            run_id = run_id or log.new_run_id()
         sem = asyncio.Semaphore(self.max_concurrency)
         pending = {t.id: t for t in tasks}
         results: Dict[str, Result] = {}
         running: Dict[asyncio.Task, str] = {}
+
+        def journal(tid: str, resumed: bool = False) -> None:
+            if log is not None:
+                log.record(run_id, tid, fps[tid], results[tid], resumed=resumed)
+
+        replay: List[str] = []
+        if log is not None and resume:
+            for tid, e in log.completed(tasks).items():
+                results[tid] = Result("ok", e["output"], attempts=0, duration=0.0, resumed=True)
+                journal(tid, resumed=True)
+                del pending[tid]
+                replay.append(tid)
+        for tid in replay:
+            yield tid, results[tid]
         try:
             while pending or running:
                 for tid, t in list(pending.items()):
                     if any(d in results and results[d].status != "ok" for d in t.deps):
                         results[tid] = Result("skipped", error="upstream failure")
+                        journal(tid)
                         del pending[tid]
                         yield tid, results[tid]
                     elif all(d in results for d in t.deps):
@@ -105,9 +130,13 @@ class AsyncOrchestrator:
                         del pending[tid]
                 if running:
                     done, _ = await asyncio.wait(running, return_when=asyncio.FIRST_COMPLETED)
+                    landed = []
                     for f in done:
                         tid = running.pop(f)
                         results[tid] = f.result()
+                        journal(tid)  # journal every finished task before yielding any
+                        landed.append(tid)
+                    for tid in landed:
                         yield tid, results[tid]
         finally:
             for f in running:
@@ -115,11 +144,13 @@ class AsyncOrchestrator:
             if running:
                 await asyncio.gather(*running, return_exceptions=True)
 
-    async def run(self, tasks: List[Task]) -> Dict[str, Result]:
+    async def run(self, tasks: List[Task], log=None, resume: bool = False,
+                  run_id: Optional[str] = None) -> Dict[str, Result]:
         results: Dict[str, Result] = {}
-        async for tid, r in self.stream(tasks):
+        async for tid, r in self.stream(tasks, log=log, resume=resume, run_id=run_id):
             results[tid] = r
         return results
 
-    def run_sync(self, tasks: List[Task]) -> Dict[str, Result]:
-        return asyncio.run(self.run(tasks))
+    def run_sync(self, tasks: List[Task], log=None, resume: bool = False,
+                 run_id: Optional[str] = None) -> Dict[str, Result]:
+        return asyncio.run(self.run(tasks, log=log, resume=resume, run_id=run_id))

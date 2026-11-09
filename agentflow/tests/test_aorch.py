@@ -175,3 +175,74 @@ def test_matches_sync_orchestrator_on_same_dag():
     s = Orchestrator([mk()], max_workers=1).run(tasks)
     a = AsyncOrchestrator([mk()], max_concurrency=1).run_sync(tasks)
     assert {k: (r.status, r.output) for k, r in s.items()} == {k: (r.status, r.output) for k, r in a.items()}
+
+
+# ---- RunLog resume ----
+from agentflow import RunLog
+
+
+class CountingLLM:
+    def __init__(self, reply="r", fail_on=None):
+        self.calls, self.reply, self.fail_on = 0, reply, fail_on
+
+    async def complete(self, messages):
+        self.calls += 1
+        if self.fail_on and self.fail_on in messages[-1]["content"]:
+            raise RuntimeError("boom")
+        return json.dumps({"final": self.reply + ":" + messages[-1]["content"]})
+
+
+def _dag():
+    return [Task("a", "w", "start"), Task("b", "w", "after {a}", deps=["a"]), Task("c", "w", "solo")]
+
+
+def test_async_resume_replays_ok_and_reruns_failed(tmp_path):
+    log = RunLog(str(tmp_path / "j.jsonl"))
+    llm = CountingLLM(fail_on="after")
+    res = AsyncOrchestrator([Agent("w", llm)]).run_sync(_dag(), log=log)
+    assert res["b"].status == "failed" and llm.calls == 3
+    llm2 = CountingLLM()
+    res2 = AsyncOrchestrator([Agent("w", llm2)]).run_sync(_dag(), log=log, resume=True)
+    assert llm2.calls == 1  # only b re-executed
+    assert res2["a"].resumed and res2["c"].resumed and not res2["b"].resumed
+    assert res2["b"].status == "ok" and res2["b"].output.startswith("r:after")
+
+
+def test_async_resume_invalidates_downstream_on_prompt_change(tmp_path):
+    log = RunLog(str(tmp_path / "j.jsonl"))
+    AsyncOrchestrator([Agent("w", CountingLLM())]).run_sync(_dag(), log=log)
+    changed = [Task("a", "w", "START2"), Task("b", "w", "after {a}", deps=["a"]), Task("c", "w", "solo")]
+    llm = CountingLLM()
+    res = AsyncOrchestrator([Agent("w", llm)]).run_sync(changed, log=log, resume=True)
+    assert llm.calls == 2 and res["c"].resumed and not res["a"].resumed and not res["b"].resumed
+
+
+def test_sync_and_async_share_a_journal(tmp_path):
+    log = RunLog(str(tmp_path / "j.jsonl"))
+    ag_sync = Agent("w", ScriptedLLM([json.dumps({"final": "s"})] * 3))
+    Orchestrator([ag_sync]).run(_dag(), log=log)
+    llm = CountingLLM()
+    res = AsyncOrchestrator([Agent("w", llm)]).run_sync(_dag(), log=log, resume=True)
+    assert llm.calls == 0 and all(r.resumed for r in res.values())
+    assert res["a"].output == "s"
+
+
+def test_stream_journals_finished_tasks_even_if_abandoned(tmp_path):
+    log = RunLog(str(tmp_path / "j.jsonl"))
+
+    async def go():
+        orch = AsyncOrchestrator([Agent("w", CountingLLM())])
+        gen = orch.stream(_dag(), log=log)
+        first = await gen.__anext__()
+        await gen.aclose()
+        return first
+
+    first = asyncio.run(go())
+    assert first[0] in {"a", "c"}
+    assert first[0] in {e["task"] for e in log.entries()}
+
+
+def test_resume_without_log_is_noop():
+    llm = CountingLLM()
+    res = AsyncOrchestrator([Agent("w", llm)]).run_sync(_dag(), resume=True)
+    assert llm.calls == 3 and not any(r.resumed for r in res.values())
