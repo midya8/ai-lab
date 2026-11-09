@@ -140,6 +140,7 @@
 - vecdb v0.5: `parallel_search` threaded batch search (identical results to serial; ~1.4x on 2 cores for flat scans, none for HNSW; 4 tests, 101 total)
 - vecdb v0.6: `OPQ` learned rotation before PQ (MSE -18% and recall@10 0.460 -> 0.503 on rotated synthetic data, tie on axis-aligned; 5 tests, 106 total; not yet in IVFIndex)
 - vecdb v0.7: `IVFIndex(opq=True)` — learned rotation on residuals, persisted (MSE -5%, recall@10 0.539 -> 0.567 on synthetic data, single seed; 4 tests, 110 total)
+- vecdb v0.9: hybrid fusion benchmark (`experiments/hybrid_eval.py`, dense vs BM25 vs RRF vs weighted; null result: fusion does not beat best single retriever on synthetic mixed queries; 2 tests, 118 total)
 
 
 ## Next

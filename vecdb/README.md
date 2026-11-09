@@ -121,3 +121,19 @@ Gain is real but modest and concentrated where variance is not axis-aligned; on 
 ## IVF-SQ8 (v0.8)
 
 `IVFIndex(dim, nlist=64, sq8=True)` stores each cell as one uint8 per dimension (global per-dimension affine codes fitted at train time), 4x smaller than IVF-Flat; `keep_raw=True` enables `refine=`. Mutually exclusive with `pq_m`. Vectors outside the training range are clipped. Persisted by `save_index`/`load_index`. Tests: `tests/test_ivf_sq8.py`.
+
+
+## Hybrid fusion benchmark (v0.9)
+
+`PYTHONPATH=src python experiments/hybrid_eval.py` — 1,500 synthetic docs, 300 queries/seed, 3 seeds, one relevant doc per query.
+"semantic" queries share only same-topic words with the target (vector near its topic); "lookup" queries hold the target's rare ID with a noisy vector.
+
+| mode | MRR semantic | MRR lookup | MRR all | recall@10 semantic | recall@10 lookup |
+|---|---|---|---|---|---|
+| dense | 0.058 | 0.018 | 0.038 | 0.184 | 0.073 |
+| bm25 | 0.000 | 1.000 | 0.500 | 0.000 | 1.000 |
+| rrf | 0.000 | 0.828 | 0.414 | 0.000 | 1.000 |
+| weighted a=0.5 | 0.026 | 0.828 | 0.427 | 0.138 | 1.000 |
+| weighted a=0.2 | 0.018 | 1.000 | 0.509 | 0.116 | 1.000 |
+
+Honest reading: the semantic task is hard by construction (~50 same-topic docs, the target is indistinguishable by topic alone), so absolute numbers are low. Fusion did **not** beat the best single retriever on the mixed set: BM25 alone is best on lookups, and fusion only dilutes the dense signal on semantic queries because BM25 ranks same-topic distractors highly (RRF recall 0 there). alpha=0.2 was picked after seeing the table. Synthetic data only; a real-embedding benchmark is still open.
