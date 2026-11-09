@@ -129,3 +129,60 @@ def test_param_validation():
         HNSWIndex(4, M=1)
     with pytest.raises(ValueError):
         HNSWIndex(4, ef_construction=0)
+
+
+def _deleted_world(frac=0.5):
+    X, _ = clustered(1500, 16, n_clusters=12, spread=0.7, seed=11)
+    Q = queries_like(X, 40, seed=12)
+    h = HNSWIndex(16, M=10, ef_construction=60, seed=2)
+    h.add(X)
+    rng = np.random.default_rng(3)
+    dead = rng.choice(len(X), int(frac * len(X)), replace=False)
+    h.remove(dead)
+    keep = np.setdiff1d(np.arange(len(X)), dead)
+    flat = FlatIndex(16)
+    flat.add(X[keep])
+    gt = keep[flat.search(Q, 10)[0]]
+    return X, Q, h, dead, gt
+
+
+def test_repair_unlinks_deleted_and_keeps_degree_caps():
+    _, _, h, dead, _ = _deleted_world()
+    info = h.repair()
+    assert info["nodes_repaired"] > 0
+    d = set(dead.tolist())
+    for lev, lv in enumerate(h.links):
+        cap = h.M0 if lev == 0 else h.M
+        for node, nb in lv.items():
+            assert len(nb) <= cap
+            if node in d:
+                assert nb == []
+            else:
+                assert not d.intersection(nb) and node not in nb
+
+
+def test_repair_keeps_results_live_and_recall_high():
+    _, Q, h, dead, gt = _deleted_world()
+    h.repair()
+    ids, _ = h.search(Q, 10, ef=80)
+    assert not np.isin(ids, dead).any()
+    assert recall_at_k(ids, gt) >= 0.93
+
+
+def test_repair_moves_dead_entry_point_and_survives_total_deletion():
+    X, Q, h, _, _ = _deleted_world(0.2)
+    h.remove([h.entry])
+    h.repair()
+    assert not h.deleted[h.entry]
+    h.remove(np.arange(len(X)))
+    h.repair()
+    assert h.entry == -1 and (h.search(Q[:2], 5)[0] == -1).all()
+
+
+def test_repair_is_idempotent_and_insert_works_after():
+    X, Q, h, _, _ = _deleted_world()
+    h.repair()
+    assert h.repair()["nodes_repaired"] == 0
+    new = h.add(X[:5] + 0.001)
+    ids, _ = h.search(X[:5] + 0.001, 1, ef=80)
+    assert (ids[:, 0] == new).mean() >= 0.8

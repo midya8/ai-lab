@@ -191,6 +191,44 @@ class HNSWIndex:
             raise IndexError("row out of range")
         self.deleted[rows] = True
 
+    def repair(self) -> dict:
+        """Heal the graph around tombstones (the deleted nodes keep routing until this runs).
+
+        For every live node with a deleted neighbour, the deleted neighbours are replaced by *their*
+        live neighbours as candidates, and the node's list is re-chosen from (surviving links +
+        candidates) with the diversity heuristic. Deleted nodes are then unlinked, and the entry
+        point moves to the highest live node. Rows keep their ids and the deleted vectors stay in
+        memory (ids are positional); only graph edges are rewritten.
+        """
+        dead = self.deleted[:self.ntotal]
+        fixed = 0
+        for lev, lv in enumerate(self.links):
+            cap = self.M0 if lev == 0 else self.M
+            for node in list(lv):
+                if dead[node]:
+                    continue
+                nbrs = lv[node]
+                if not any(dead[x] for x in nbrs):
+                    continue
+                pool = {x for x in nbrs if not dead[x]}
+                for x in nbrs:
+                    if dead[x]:
+                        pool.update(y for y in lv.get(x, ()) if not dead[y] and y != node)
+                ids = sorted(pool)
+                d = self._dist_to(self._vecs[node], ids)
+                cands = sorted(zip(d.tolist(), ids))
+                lv[node] = self._select(cands, cap) if len(ids) > cap else [n for _, n in cands]
+                fixed += 1
+            for node in [n for n in lv if dead[n]]:
+                lv[node] = []
+        live_levels = [(self.levels[n], n) for n in range(self.ntotal) if not dead[n]]
+        if live_levels:
+            top, ent = max(live_levels)
+            self.entry, self.max_level = ent, top
+        else:
+            self.entry, self.max_level = -1, -1
+        return {"nodes_repaired": fixed, "entry": self.entry}
+
     def reconstruct(self, rows) -> np.ndarray:
         return self._vecs[np.asarray(rows, dtype=np.int64)].copy()
 
