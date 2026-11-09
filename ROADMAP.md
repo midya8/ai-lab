@@ -145,6 +145,7 @@
 - docqa: `retrieval="hybrid"` (BM25 + char-trigram dense via vecdb, RRF); null result on all four eval sets, disclosed; 5 tests, 69 total
 - tiny-transformer: `speculative_generate` (draft+verify sampling, residual resampling; greedy-equals-target, identical-draft and distribution-match tests; no KV cache so no wall-clock claims; 140 tests)
 - tiny-transformer: `expected_tokens_per_call` (closed form) and `sweep_k` to compare measured tokens/target-call with the i.i.d.-acceptance prediction (3 tests, 143 total)
+- tiny-transformer: `expected_speedup` / `best_k` wall-clock cost model for speculative decoding (speedup = tokens-per-call / (k*c+1); analytic, not measured; 4 tests)
 
 
 ## Next

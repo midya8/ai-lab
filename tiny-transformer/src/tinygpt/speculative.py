@@ -95,3 +95,18 @@ def sweep_k(target, draft, prompt, ks=(1, 2, 4, 6), max_new_tokens=48, temperatu
         rows.append({"k": k, "alpha": a, "measured": float(np.mean(tpc)),
                      "predicted": expected_tokens_per_call(a, k)})
     return rows
+
+
+def expected_speedup(alpha, k, cost_ratio):
+    """Leviathan et al. wall-clock model: speedup over plain decoding is
+    expected_tokens_per_call(alpha, k) / (k * c + 1), where c = draft step cost / target step cost.
+    Assumes i.i.d. acceptance and that one target pass over k+1 positions costs one target step."""
+    if cost_ratio < 0:
+        raise ValueError("cost_ratio must be >= 0")
+    return expected_tokens_per_call(alpha, k) / (k * cost_ratio + 1.0)
+
+
+def best_k(alpha, cost_ratio, k_max=16):
+    """The k in 1..k_max maximising expected_speedup, and that speedup. Returns (k, speedup)."""
+    best = max(range(1, k_max + 1), key=lambda k: expected_speedup(alpha, k, cost_ratio))
+    return best, expected_speedup(alpha, best, cost_ratio)
