@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import numpy as np
 
+from .opq import OPQ
 from .pq import ProductQuantizer
 from .util import Metric, as_matrix, kmeans, topk_smallest
 
@@ -22,14 +23,21 @@ class IVFIndex:
     kind = "ivf"
 
     def __init__(self, dim: int, nlist: int = 64, metric: str = "l2", pq_m: int | None = None,
-                 pq_bits: int = 8, keep_raw: bool = False, seed: int = 0, max_train: int | None = None):
+                 pq_bits: int = 8, keep_raw: bool = False, seed: int = 0, max_train: int | None = None,
+                 opq: bool = False, opq_rounds: int = 4):
         if nlist < 1:
             raise ValueError("nlist must be >= 1")
         self.dim, self.nlist, self.seed = dim, nlist, seed
         self.metric = Metric(metric)
         if pq_m is not None and self.metric.name == "ip":
             raise ValueError("residual PQ needs an L2-compatible metric: use 'l2' or 'cosine', not 'ip'")
-        self.pq = ProductQuantizer(dim, pq_m, pq_bits, seed) if pq_m else None
+        if opq and not pq_m:
+            raise ValueError("opq=True needs pq_m (OPQ rotates the residuals before PQ)")
+        self.opq, self.opq_rounds = bool(opq), opq_rounds
+        if pq_m:
+            self.pq = (OPQ if opq else ProductQuantizer)(dim, pq_m, pq_bits, seed)
+        else:
+            self.pq = None
         self.keep_raw = bool(keep_raw and self.pq is not None)
         self.max_train = max_train if max_train is not None else 256 * nlist
         self.centroids: np.ndarray | None = None
@@ -65,7 +73,11 @@ class IVFIndex:
         self.centroids, _, _ = kmeans(T, self.nlist, seed=self.seed)
         if self.pq is not None:
             a = self.metric.dist(T, self.centroids).argmin(axis=1)
-            self.pq.fit(T - self.centroids[a])
+            R = T - self.centroids[a]
+            if self.opq:
+                self.pq.fit(R, rounds=self.opq_rounds)
+            else:
+                self.pq.fit(R)
         self._ids = [np.empty(0, dtype=np.int64) for _ in range(self.nlist)]
         width = self.pq.m if self.pq is not None else self.dim
         dtype = np.uint8 if self.pq is not None else np.float32
@@ -197,14 +209,14 @@ class IVFIndex:
         if self.trained:
             n += self.centroids.nbytes + sum(a.nbytes for a in self._ids) + sum(a.nbytes for a in self._data)
             if self.pq is not None:
-                n += self.pq.codebooks.nbytes
+                n += self.pq.codebooks.nbytes + (self.pq.R.nbytes if self.opq else 0)
         return int(n)
 
     def _state(self):
         arrays = {"deleted": self.deleted, "pending": self._pending, "raw": self._raw}
         meta = {"dim": self.dim, "nlist": self.nlist, "metric": self.metric.name, "seed": self.seed,
                 "pq_m": self.pq.m if self.pq else None, "pq_bits": self.pq.nbits if self.pq else 8,
-                "keep_raw": self.keep_raw, "max_train": self.max_train, "ntotal": self.ntotal,
+                "keep_raw": self.keep_raw, "opq": self.opq, "opq_rounds": self.opq_rounds, "max_train": self.max_train, "ntotal": self.ntotal,
                 "trained": self.trained}
         if self.trained:
             arrays["centroids"] = self.centroids
@@ -215,12 +227,15 @@ class IVFIndex:
             arrays["data"] = np.concatenate(self._data) if sizes.sum() else np.empty((0, width))
             if self.pq is not None:
                 arrays["codebooks"] = self.pq.codebooks
+                if self.opq:
+                    arrays["opq_R"] = self.pq.R
         return arrays, meta
 
     @classmethod
     def _from_state(cls, arrays, meta):
         idx = cls(meta["dim"], meta["nlist"], meta["metric"], meta["pq_m"], meta["pq_bits"],
-                  meta["keep_raw"], meta["seed"], meta["max_train"])
+                  meta["keep_raw"], meta["seed"], meta["max_train"],
+                  meta.get("opq", False), meta.get("opq_rounds", 4))
         idx.ntotal = meta["ntotal"]
         idx.deleted = arrays["deleted"].astype(bool)
         idx._pending = np.ascontiguousarray(arrays["pending"], dtype=np.float32)
@@ -229,6 +244,8 @@ class IVFIndex:
             idx.centroids = np.ascontiguousarray(arrays["centroids"], dtype=np.float32)
             if idx.pq is not None:
                 idx.pq.codebooks = np.ascontiguousarray(arrays["codebooks"], dtype=np.float32)
+                if idx.opq:
+                    idx.pq.R = np.ascontiguousarray(arrays["opq_R"], dtype=np.float32)
             sizes = arrays["sizes"]
             off = np.concatenate([[0], np.cumsum(sizes)])
             dtype = np.uint8 if idx.pq is not None else np.float32

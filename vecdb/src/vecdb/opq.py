@@ -23,6 +23,14 @@ class OPQ:
     def trained(self) -> bool:
         return self.pq.trained
 
+    @property
+    def codebooks(self) -> np.ndarray:
+        return self.pq.codebooks
+
+    @codebooks.setter
+    def codebooks(self, value: np.ndarray) -> None:
+        self.pq.codebooks = value
+
     def rotate(self, X: np.ndarray) -> np.ndarray:
         return np.ascontiguousarray(np.asarray(X, dtype=np.float32) @ self.R.T)
 
