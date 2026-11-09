@@ -121,6 +121,7 @@
 - autojob v0.1: agentic job-application assistant — profile validation (strict, every error at once), posting parse, transparent match scoring (required 0.6 / preferred 0.25 / experience 0.15, never 1.0-by-default), facts-only cover-letter drafts (only matched skills named), review notes listing gaps to never claim, JSONL application tracker with company+title dedupe and applied→screening→interview→offer→hired state machine; never submits, drafts only; 49 tests, example profile/posting fictional
 - ticket-triage: label audit via datadoctor confident learning (3 new tests, 51 total)
 - datadoctor: self-contained HTML audit report (`--html`), 3 tests
+- datadoctor: instance-dependent (border-concentrated) noise injection + experiment; recall drops 0.86 -> 0.23 and noise rate is underestimated 0.20 -> 0.06 (4 tests, 54 total)
 
 
 ## Next

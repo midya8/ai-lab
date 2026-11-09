@@ -83,3 +83,32 @@ def make_modes(n: int = 1500, n_classes: int = 4, dim: int = 8, sep: float = 2.5
     mode = rng.integers(0, 2, size=n)
     X = centers[y * 2 + mode] + rng.normal(size=(n, dim))
     return X, y
+
+
+def inject_instance_noise(X: np.ndarray, y: np.ndarray, rate: float, temperature: float = 0.5, seed: int = 0):
+    """Instance-dependent noise: errors concentrate near class borders.
+
+    A row's flip weight is softmax(-margin / temperature) where margin is (distance to own class centroid
+    minus distance to the nearest other centroid), standardised; rows are sampled without replacement
+    for exactly round(rate * n) flips, and each flipped row takes the label of its nearest other centroid
+    (the plausible human mistake). Returns (noisy_labels, flipped_mask)."""
+    X = np.asarray(X, dtype=float)
+    y = np.asarray(y, dtype=int)
+    K = int(y.max()) + 1
+    rng = np.random.default_rng(seed)
+    cent = np.stack([X[y == c].mean(0) for c in range(K)])
+    d = np.linalg.norm(X[:, None, :] - cent[None], axis=2)
+    own = d[np.arange(len(y)), y]
+    other = d.copy()
+    other[np.arange(len(y)), y] = np.inf
+    nearest = other.argmin(1)
+    gap = own - other[np.arange(len(y)), nearest]  # larger = closer to the border
+    z = (gap - gap.mean()) / (gap.std() + 1e-12)
+    w = np.exp((z - z.max()) / temperature)
+    w /= w.sum()
+    m = int(round(rate * len(y)))
+    flip = np.zeros(len(y), dtype=bool)
+    flip[rng.choice(len(y), size=m, replace=False, p=w)] = True
+    new = y.copy()
+    new[flip] = nearest[flip]
+    return new, flip

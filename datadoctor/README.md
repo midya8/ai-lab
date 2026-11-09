@@ -62,3 +62,16 @@ Tests: `PYTHONPATH=src python -m pytest -q` (about 2 s).
 ## Calibration (v0.2)
 
 `datadoctor.calibrate(P, y)` fits one temperature on out-of-sample probabilities (golden-section search on NLL) and returns calibrated probabilities. It helps when the model is badly under- or over-confident and does nothing for a calibrated one; see `experiments/calibration_results.md` for the small, honestly mixed results.
+
+### Instance-dependent noise (hard mode)
+
+`inject_instance_noise` concentrates flips near class borders (each flipped row takes its nearest other class). Same 20% rate, 3 seeds, blobs ([`experiments/instance_noise_results.md`](experiments/instance_noise_results.md)):
+
+| noise | model | true rate | est. rate | precision | recall | F1 |
+|---|---|---|---|---|---|---|
+| symmetric | softmax | 0.200 | 0.235 | 0.858 | 0.859 | 0.858 |
+| symmetric | kNN 15 | 0.200 | 0.243 | 0.822 | 0.856 | 0.838 |
+| instance | softmax | 0.200 | 0.057 | 0.960 | 0.226 | 0.363 |
+| instance | kNN 15 | 0.200 | 0.072 | 0.871 | 0.258 | 0.396 |
+
+Finding: with border-concentrated noise the detector stays precise (0.87-0.96) but recall collapses to ~0.23-0.26 and the noise rate is *under*-estimated (0.06-0.07 vs 0.20). A mislabelled border row is indistinguishable from a genuinely ambiguous one, so a model fitted on the noisy labels agrees with them. Treat the estimate as a lower bound under realistic human-style errors; uniform-noise benchmarks flatter every detector here.
