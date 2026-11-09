@@ -73,3 +73,23 @@ def test_validation():
         h.query(V[0], "x", fusion="weighted", alpha=2)
     with pytest.raises(ValueError):
         h.upsert("z", V[0], texts=["a", "b"])
+
+
+def test_explain_matches_rrf_query_and_reports_sources():
+    h, V = make()
+    q = V[2]
+    hits = h.query(q, "auth module", k=5)
+    ex = h.explain(q, "auth module", k=5)
+    assert [r["id"] for r in ex] == [x.id for x in hits]
+    assert ex[0]["id"] == "d2" and ex[0]["source"] == "both"
+    assert ex[0]["dense_rank"] == 1 and ex[0]["lex_rank"] is not None and ex[0]["bm25"] > 0
+    for r in ex:
+        assert abs(-r["score"] - [x.distance for x in hits if x.id == r["id"]][0]) < 1e-12
+        if r["lex_rank"] is None:
+            assert r["source"] == "dense" and r["bm25"] is None
+
+
+def test_explain_respects_filter():
+    h, V = make()
+    ex = h.explain(V[0], "fox", k=5, where={"g": 1})
+    assert ex and all(r["id"] in {"d1", "d3"} for r in ex)

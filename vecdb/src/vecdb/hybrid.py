@@ -133,6 +133,35 @@ class HybridCollection:
         top = sorted(fused.items(), key=lambda kv: (-kv[1], kv[0]))[:k]
         return [Hit(i, -s, dict(self.col._meta[self.col._row_of[i]])) for i, s in top]
 
+    def explain(self, vector, text: str, k: int = 10, where: dict | None = None, depth: int | None = None,
+                rrf_k: int = 60, **search_params) -> list[dict]:
+        """RRF query that reports why each hit ranked where it did.
+
+        Each row: ``id``, ``score`` (RRF), ``dense_rank`` / ``lex_rank`` (1-based, None if absent from that
+        list's top ``depth``), ``dense_distance`` and ``bm25`` (None when absent), and ``source``
+        ('both', 'dense' or 'lexical').
+        """
+        depth = depth or max(4 * k, 50)
+        dense = self.col.query(np.asarray(vector, dtype=np.float32)[None], depth, where, **search_params)[0]
+        lex = self.lexical(text, depth, where)
+        rows: dict[str, dict] = {}
+        def row(i):
+            return rows.setdefault(i, {"id": i, "score": 0.0, "dense_rank": None, "lex_rank": None,
+                                       "dense_distance": None, "bm25": None})
+        for r, h in enumerate(dense):
+            d = row(h.id)
+            d["score"] += 1.0 / (rrf_k + r + 1)
+            d["dense_rank"], d["dense_distance"] = r + 1, float(h.distance)
+        for r, (i, sc) in enumerate(lex):
+            d = row(i)
+            d["score"] += 1.0 / (rrf_k + r + 1)
+            d["lex_rank"], d["bm25"] = r + 1, sc
+        top = sorted(rows.values(), key=lambda d: (-d["score"], d["id"]))[:k]
+        for d in top:
+            d["source"] = ("both" if d["dense_rank"] and d["lex_rank"]
+                           else "dense" if d["dense_rank"] else "lexical")
+        return top
+
     # -- persistence ----------------------------------------------------
     def save(self, directory: str) -> None:
         """Save the vector collection plus texts (``texts.json``); BM25 is rebuilt lazily on load."""
