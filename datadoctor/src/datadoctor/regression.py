@@ -85,3 +85,40 @@ def inject_target_noise(y, rate: float, scale: float = 4.0, seed: int = 0):
     out = y.copy()
     out[mask] += rng.choice([-1.0, 1.0], size=m) * scale * y.std() * rng.uniform(0.5, 1.0, size=m)
     return out, mask
+
+
+def find_ordinal_issues(X, y, min_gap: float = 1.5, k: int = 5, seed: int = 0, model_factory=None):
+    """Label-error candidates for ordinal targets (ratings, severities, grades).
+
+    Ordinal labels are wrong in a graded way: a 5 labelled 1 is a worse error than a 5
+    labelled 4. Rows are scored by the out-of-fold prediction's distance from the given
+    level, measured in *levels* (no MAD scaling, because the level spacing is the natural
+    unit and discrete residuals make MAD degenerate). A row is flagged when that distance
+    is at least ``min_gap`` levels. Returns ``(issue_indices_ranked, gaps, suggested_levels)``
+    where suggested levels are the predictions rounded and clipped to the observed range.
+    """
+    y = np.asarray(y, dtype=float)
+    pred = cross_val_predict(X, y, model_factory, k, seed)
+    gaps = np.abs(pred - y)
+    lo, hi = y.min(), y.max()
+    suggested = np.clip(np.rint(pred), lo, hi)
+    issues = np.flatnonzero(gaps >= min_gap)
+    return issues[np.argsort(-gaps[issues])], gaps, suggested
+
+
+def inject_ordinal_noise(y, rate: float, max_jump: int = 3, seed: int = 0):
+    """Shift ``rate`` of ordinal labels by 2..max_jump levels (clipped to range). Returns (noisy, mask)."""
+    y = np.asarray(y, dtype=float)
+    rng = np.random.default_rng(seed)
+    m = int(round(rate * len(y)))
+    pick = rng.choice(len(y), size=m, replace=False)
+    out = y.copy()
+    lo, hi = y.min(), y.max()
+    for i in pick:
+        for _ in range(20):
+            cand = np.clip(y[i] + rng.choice([-1, 1]) * rng.integers(2, max_jump + 1), lo, hi)
+            if abs(cand - y[i]) >= 2:
+                out[i] = cand
+                break
+    mask = out != y
+    return out, mask

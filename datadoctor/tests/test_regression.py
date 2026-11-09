@@ -61,3 +61,30 @@ def test_ranked_descending():
     issues, scores, _ = find_target_issues(X, yn)
     s = scores[issues]
     assert (np.diff(s) <= 1e-12).all()
+
+
+def test_ordinal_noise_found_and_suggestions_sane():
+    from datadoctor.regression import find_ordinal_issues, inject_ordinal_noise
+    rng = np.random.default_rng(3)
+    X = rng.normal(size=(800, 5))
+    latent = X @ np.array([1.5, -1.0, 0.8, 0.0, 0.5]) + rng.normal(size=800) * 0.3
+    y = np.digitize(latent, np.quantile(latent, [0.2, 0.4, 0.6, 0.8])) + 1.0  # levels 1..5
+    yn, mask = inject_ordinal_noise(y, 0.08, seed=2)
+    assert mask.sum() > 0 and np.all(np.abs(yn[mask] - y[mask]) >= 2)
+    issues, gaps, sugg = find_ordinal_issues(X, yn, min_gap=1.5)
+    assert mask[issues].mean() > 0.7 and mask[issues].sum() / mask.sum() > 0.6
+    assert np.all(gaps[issues[:-1]] >= gaps[issues[1:]])
+    assert sugg.min() >= 1 and sugg.max() <= 5
+    # suggested level matches the true one for most caught rows
+    caught = issues[mask[issues]]
+    assert (sugg[caught] == y[caught]).mean() > 0.5
+
+
+def test_ordinal_clean_data_flags_little():
+    from datadoctor.regression import find_ordinal_issues
+    rng = np.random.default_rng(4)
+    X = rng.normal(size=(600, 4))
+    latent = X @ np.array([1.0, 1.0, -1.0, 0.5])
+    y = np.digitize(latent, np.quantile(latent, [0.25, 0.5, 0.75])) + 1.0
+    issues, _, _ = find_ordinal_issues(X, y, min_gap=1.5)
+    assert len(issues) < 0.03 * len(y)
