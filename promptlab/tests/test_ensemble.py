@@ -99,3 +99,28 @@ class EnsembleTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class EnsembleGateTests(unittest.TestCase):
+    def _res(self, slots):
+        from promptlab import ensemble_gate  # noqa: F401
+        judges = {f"j{i}": always(s) for i, s in enumerate(slots)}
+        return compare_ensemble(judges, items(8))
+
+    def test_candidate_better_passes(self):
+        from promptlab import ensemble_gate
+        r = self._res(["b", "b", "b"])
+        self.assertEqual(ensemble_gate(r, 0.3, 0.0 if r.kappa is not None else None), [])
+
+    def test_candidate_worse_fails_majority(self):
+        from promptlab import ensemble_gate
+        swapped = [{**it, "a": it["b"], "b": it["a"]} for it in items(8)]  # baseline A now has "refund"
+        r = compare_ensemble({"x": RulePairJudge(), "y": RulePairJudge(), "z": RulePairJudge()}, swapped)
+        self.assertTrue(any("worse" in m or "baseline wins" in m for m in ensemble_gate(r, 0.3)))
+
+    def test_low_kappa_and_undefined_kappa(self):
+        from promptlab import ensemble_gate
+        r = self._res(["b", "b"])  # no variation -> kappa undefined
+        self.assertIsNone(r.kappa)
+        self.assertTrue(any("undefined" in m for m in ensemble_gate(r, None, 0.4)))
+        self.assertEqual(ensemble_gate(r, None, None), [])

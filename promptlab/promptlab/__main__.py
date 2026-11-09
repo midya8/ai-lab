@@ -8,7 +8,7 @@ from pathlib import Path
 from .compare import check_regression, render_check_markdown, compare_runs, render_markdown
 from .judge import calibrate_judge, load_calibration_items, render_calibration
 from .models import make_judge, make_model
-from .ensemble import compare_ensemble, render_ensemble
+from .ensemble import compare_ensemble, render_ensemble, ensemble_gate
 from .pairwise import (pairwise_gate, audit_judge, compare_outputs, load_pair_items, make_pair_judge, render_audit,
                        render_pairwise)
 from .registry import Registry, RegistryError
@@ -62,6 +62,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--alpha", type=float, default=0.05)
     p.add_argument("--max-inconsistent", type=float, help="exit 1 if more than this share of pairs flip when order is swapped")
     p.add_argument("--gate", action="store_true", help="exit 1 if B (candidate) is significantly worse than A (baseline)")
+    p.add_argument("--min-kappa-ensemble", type=float, help="with --also-judge: exit 1 if Fleiss kappa across judges is below this (or undefined)")
     p.add_argument("--max-loss-rate", type=float, help="exit 1 if A wins more than this share of pairs (implies the gate)")
     p.add_argument("--out", help="write per-pair verdicts as JSON")
 
@@ -148,7 +149,11 @@ def main(argv: list[str] | None = None) -> int:
                 if ens.summary.errors:
                     print(f"FAIL: {ens.summary.errors} pair(s) had too few valid judge verdicts")
                     return 1
-                return 0
+                reasons = ensemble_gate(ens, args.max_loss_rate, args.min_kappa_ensemble) \
+                    if (args.gate or args.max_loss_rate is not None or args.min_kappa_ensemble is not None) else []
+                for r in reasons:
+                    print(f"FAIL: {r}")
+                return 1 if reasons else 0
             summ = compare_outputs(make_pair_judge(args.judge), items, args.alpha)
             print(render_pairwise(summ, f"{args.name}@{args.a}", f"{args.name}@{args.b}"))
             if args.out:

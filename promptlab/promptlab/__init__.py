@@ -13,6 +13,6 @@ from .pairwise import (build_pairwise_prompt, parse_pairwise_reply, judge_pair, 
                        audit_judge, load_pair_items, make_pair_judge, PairVerdict, PairwiseError,
                        RulePairJudge, PositionBiasedJudge)
 
-from .ensemble import compare_ensemble, render_ensemble, fleiss_kappa, EnsembleResult
+from .ensemble import compare_ensemble, render_ensemble, fleiss_kappa, EnsembleResult, ensemble_gate
 
 __version__ = "0.5.0"

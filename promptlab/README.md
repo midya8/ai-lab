@@ -241,3 +241,7 @@ fixed and new cases. Use it from a checkout of this repo:
 The bundled judge is a lexical stand-in; a real LLM judge costs one extra call per
 judged check (times `votes`) and needs its own calibration. Real models are non-deterministic, so for those, run each case
 several times or fix temperature to 0 before trusting a small difference.
+
+### Gating on ensemble verdicts
+
+With `--also-judge`, the gate flags (`--gate`, `--max-loss-rate`) now apply to the ensemble's majority outcome, and `--min-kappa-ensemble K` additionally fails the run when Fleiss' kappa across judges is below K (or undefined), so a candidate is never waved through on a verdict the judges themselves disagree about.

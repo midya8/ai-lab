@@ -10,7 +10,7 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass, field
 
-from .pairwise import PairJudge, PairVerdict, PairwiseSummary, judge_pair, summarize
+from .pairwise import PairJudge, PairVerdict, PairwiseSummary, judge_pair, pairwise_gate, summarize
 
 LABELS = ("a", "b", "tie")
 
@@ -126,3 +126,19 @@ def render_ensemble(r: EnsembleResult, name_a: str = "A", name_b: str = "B") -> 
         if r.kappa is not None and r.kappa < 0.4:
             lines.append("  WARNING: low inter-judge agreement; the ensemble result is weak evidence.")
     return "\n".join(lines)
+
+
+def ensemble_gate(r: EnsembleResult, max_loss_rate: float | None = None,
+                  min_kappa: float | None = None) -> list[str]:
+    """Reasons a candidate fails a gate on the ensemble's majority verdicts; empty means pass.
+
+    Reuses the single-judge head-to-head rules on the majority outcome, and optionally
+    refuses to trust the verdict when the judges disagree too much (Fleiss kappa below ``min_kappa``).
+    """
+    reasons = pairwise_gate(r.summary, max_loss_rate)
+    if min_kappa is not None:
+        if r.kappa is None:
+            reasons.append("inter-judge kappa is undefined (no variation or no fully-judged pairs)")
+        elif r.kappa < min_kappa:
+            reasons.append(f"inter-judge kappa {r.kappa:.2f} < required {min_kappa:.2f}: verdict is weak evidence")
+    return reasons
