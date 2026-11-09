@@ -6,7 +6,9 @@ apply to both retrievers, so a hit never violates ``where``.
 """
 from __future__ import annotations
 
+import json
 import math
+import os
 import re
 from collections import Counter
 
@@ -130,3 +132,28 @@ class HybridCollection:
                     fused[i] = fused.get(i, 0.0) + (1 - alpha) * v
         top = sorted(fused.items(), key=lambda kv: (-kv[1], kv[0]))[:k]
         return [Hit(i, -s, dict(self.col._meta[self.col._row_of[i]])) for i, s in top]
+
+    # -- persistence ----------------------------------------------------
+    def save(self, directory: str) -> None:
+        """Save the vector collection plus texts (``texts.json``); BM25 is rebuilt lazily on load."""
+        self.col.save(directory)
+        tmp = os.path.join(directory, "texts.json.tmp")
+        with open(tmp, "w") as f:
+            json.dump({i: t for i, t in self._text.items() if i in self.col}, f)
+        os.replace(tmp, os.path.join(directory, "texts.json"))
+
+    @classmethod
+    def load(cls, directory: str) -> "HybridCollection":
+        col = Collection.load(directory)
+        h = cls.__new__(cls)
+        h.col = col
+        h._bm25 = None
+        path = os.path.join(directory, "texts.json")
+        h._text = {}
+        if os.path.exists(path):
+            with open(path) as f:
+                h._text = json.load(f)
+        unknown = [i for i in h._text if i not in col]
+        if unknown:
+            raise ValueError(f"texts.json has ids not in the collection: {unknown[:3]}")
+        return h
