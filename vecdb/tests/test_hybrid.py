@@ -93,3 +93,17 @@ def test_explain_respects_filter():
     h, V = make()
     ex = h.explain(V[0], "fox", k=5, where={"g": 1})
     assert ex and all(r["id"] in {"d1", "d3"} for r in ex)
+
+
+def test_query_batch_matches_single_queries():
+    h, V = make()
+    texts = ["auth module", "fox"]
+    out = h.query_batch(V[:2], texts, k=3, fusion="weighted", alpha=0.3)
+    for v, t, hits in zip(V[:2], texts, out):
+        assert [x.id for x in hits] == [x.id for x in h.query(v, t, 3, fusion="weighted", alpha=0.3)]
+
+
+def test_query_batch_validates_shapes():
+    h, V = make()
+    with pytest.raises(ValueError):
+        h.query_batch(V[:2], ["only one"])

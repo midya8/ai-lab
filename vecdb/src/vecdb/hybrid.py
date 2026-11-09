@@ -133,6 +133,13 @@ class HybridCollection:
         top = sorted(fused.items(), key=lambda kv: (-kv[1], kv[0]))[:k]
         return [Hit(i, -s, dict(self.col._meta[self.col._row_of[i]])) for i, s in top]
 
+    def query_batch(self, vectors, texts: list[str], k: int = 10, **kwargs) -> list[list[Hit]]:
+        """Run ``query`` for each (vector, text) pair; results are in input order."""
+        vectors = np.asarray(vectors, dtype=np.float32)
+        if vectors.ndim != 2 or len(vectors) != len(texts):
+            raise ValueError("vectors must be (n, dim) with one text per row")
+        return [self.query(v, t, k, **kwargs) for v, t in zip(vectors, texts)]
+
     def explain(self, vector, text: str, k: int = 10, where: dict | None = None, depth: int | None = None,
                 rrf_k: int = 60, **search_params) -> list[dict]:
         """RRF query that reports why each hit ranked where it did.
