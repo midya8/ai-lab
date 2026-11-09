@@ -3,9 +3,13 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import shlex
 import subprocess
+import time
+import urllib.error
+import urllib.request
 
 LABELS = ("billing", "bug", "account", "feature")
 _KEYWORDS = {
@@ -83,13 +87,74 @@ class CommandModel:
         return r.stdout
 
 
+class HttpModel:
+    """OpenAI-compatible ``/chat/completions`` client, stdlib only.
+
+    Spec: ``http://host:port/v1#model-name`` (or ``https://``). The API key is read from
+    the env var named by ``PROMPTLAB_API_KEY_ENV`` (default ``OPENAI_API_KEY``) and is never
+    printed or put in an error message. 429 and 5xx are retried with exponential backoff
+    (honouring ``Retry-After`` when it is a number of seconds); other 4xx fail at once.
+    Temperature defaults to 0. Not exercised against a real provider, only a local test server.
+    """
+
+    def __init__(self, base_url: str, model: str, timeout: float = 120.0, retries: int = 3,
+                 temperature: float = 0.0, backoff: float = 1.0, key_env: str | None = None):
+        if not model:
+            raise ValueError("http model needs a model name: http://host/v1#model-name")
+        self.url = base_url.rstrip("/") + "/chat/completions"
+        self.model, self.timeout, self.retries = model, timeout, retries
+        self.temperature, self.backoff = temperature, backoff
+        self.key_env = key_env or os.environ.get("PROMPTLAB_API_KEY_ENV", "OPENAI_API_KEY")
+
+    def __call__(self, prompt: str) -> str:
+        body = json.dumps({"model": self.model, "temperature": self.temperature,
+                           "messages": [{"role": "user", "content": prompt}]}).encode()
+        headers = {"Content-Type": "application/json"}
+        key = os.environ.get(self.key_env)
+        if key:
+            headers["Authorization"] = f"Bearer {key}"
+        last = ""
+        for attempt in range(self.retries + 1):
+            req = urllib.request.Request(self.url, data=body, headers=headers, method="POST")
+            delay = self.backoff * 2 ** attempt
+            try:
+                with urllib.request.urlopen(req, timeout=self.timeout) as r:
+                    data = json.loads(r.read().decode())
+                try:
+                    content = data["choices"][0]["message"]["content"]
+                except (KeyError, IndexError, TypeError):
+                    raise RuntimeError("unexpected response shape (no choices[0].message.content)") from None
+                if not isinstance(content, str):
+                    raise RuntimeError("model returned no text content")
+                return content
+            except urllib.error.HTTPError as e:
+                last = f"HTTP {e.code}"
+                if e.code != 429 and e.code < 500:
+                    raise RuntimeError(last) from None
+                ra = e.headers.get("Retry-After") if e.headers else None
+                if ra and ra.strip().isdigit():
+                    delay = min(float(ra), 60.0)
+            except (urllib.error.URLError, TimeoutError, ConnectionError) as e:
+                last = f"connection error: {type(e).__name__}"
+            if attempt < self.retries:
+                time.sleep(delay)
+        raise RuntimeError(f"{last} after {self.retries + 1} attempts")
+
+
+def _http(spec: str) -> HttpModel:
+    url, _, model = spec.partition("#")
+    return HttpModel(url, model)
+
+
 def make_model(spec: str):
     """``rule`` | ``rule:<seed>`` | ``cmd:<command line>``."""
     if spec == "rule" or spec.startswith("rule:"):
         return RuleModel(int(spec.split(":", 1)[1]) if ":" in spec else 0)
     if spec.startswith("cmd:"):
         return CommandModel(spec[4:])
-    raise ValueError(f"unknown model spec {spec!r} (use rule, rule:<seed> or cmd:<command>)")
+    if spec.startswith(("http://", "https://")):
+        return _http(spec)
+    raise ValueError(f"unknown model spec {spec!r} (use rule, rule:<seed>, cmd:<command> or http://host/v1#model)")
 
 
 class RuleJudge:
@@ -133,4 +198,6 @@ def make_judge(spec: str | None):
         return RuleJudge()
     if spec.startswith("cmd:"):
         return CommandModel(spec[4:])
+    if spec.startswith(("http://", "https://")):
+        return _http(spec)
     raise ValueError(f"unknown judge spec {spec!r} (use rule or cmd:<command>)")

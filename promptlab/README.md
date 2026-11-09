@@ -216,6 +216,7 @@ silently test the wrong prompt.
 - **Underpowered is said out loud.** With few discordant cases the verdict is "no significant difference" plus a note to add cases, never "equal".
 - **Unchanged commits are no-ops** (whitespace-insensitive hash), so re-running a deploy script creates no phantom versions.
 - **Registry is plain JSON files** under `<root>/<name>/vNNNN.json`, so it diffs and reviews in git.
+- **`http://host/v1#model` adapter** (v0.7) talks to any OpenAI-compatible `/chat/completions` endpoint (models, `--judge`, pairwise and ensemble judges), stdlib only. Key from `$OPENAI_API_KEY` (or the env var named in `PROMPTLAB_API_KEY_ENV`), never printed; 429/5xx retried with backoff, other 4xx fail fast. Tested only against a local fake server, not a real provider.
 - **`cmd:` adapter** runs any executable (prompt on stdin, answer on stdout) without a shell.
 
 ## Layout

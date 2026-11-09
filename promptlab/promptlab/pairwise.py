@@ -462,4 +462,7 @@ def make_pair_judge(spec: str | None) -> PairJudge:
         return PositionBiasedJudge(RulePairJudge(), float(parts[1]), parts[2] if len(parts) == 3 else "A")
     if spec.startswith("cmd:"):
         return CommandModel(spec[4:])
-    raise ValueError(f"unknown pairwise judge spec {spec!r} (use rule, rule-biased:<p>[:A|B] or cmd:<command>)")
+    if spec.startswith(("http://", "https://")):
+        from .models import _http
+        return _http(spec)
+    raise ValueError(f"unknown pairwise judge spec {spec!r} (use rule, rule-biased:<p>[:A|B], cmd:<command> or http://host/v1#model)")
