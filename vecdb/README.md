@@ -27,6 +27,7 @@ c.save("my_collection"); c = Collection.load("my_collection")
 | `FlatIndex` | Exact search (chunked BLAS distance matrix, deterministic tie-breaking). The ground truth for every recall number. |
 | `IVFIndex` | k-means (k-means++ seeding, empty-cluster repair) partitions the data; a query scans `nprobe` cells. Vectors added before `train()` are buffered. With `pq_m=` the cells hold `m`-byte PQ codes of the *residual* to the centroid, scored by ADC table lookups; `keep_raw=True` enables `refine=r`, an exact re-rank of the top `r*k` ADC hits. |
 | `ProductQuantizer` | Per-subspace codebooks, encode/decode, `adc_table`. Tested: ADC distance equals the distance to the decoded vector exactly. |
+| `SQ8Index` | Scalar quantisation: one uint8 per dimension (4x less memory than float32), per-dimension range fitted on the first batch (later outliers clip). Asymmetric search (float32 query, decoded chunks); `keep_raw=True` + `refine=r` re-ranks the top `r*k` exactly. Synthetic 20k x 64, batched 200 queries, k=10: recall 0.980 (clusters) / 0.981 (gaussian) without refine, 1.000 with `refine=2`; it decodes in Python so it is not faster than flat float32 (~0.25 ms/query vs ~0.2) - the win is memory, not speed. Not yet persisted by `save_index`. |
 | `HNSWIndex` | Layered proximity graph: geometric level draw, greedy descent, `ef_construction` candidate search, the paper's diversity heuristic (Algorithm 4) for neighbour selection and for pruning overfull neighbour lists, tombstone deletes, save/load that can keep inserting. |
 | `Collection` | ids, metadata, `where=` filters pushed into the index search, upsert (tombstone + append), delete, `compact()`, atomic save/load. |
 | `filters` | `{"year": {"$gte": 2020}}`, `$in/$nin/$ne/$and/$or/$not`; validated at compile time; type mismatches mean "no match" rather than a crash. |
@@ -79,4 +80,4 @@ experiments/ benchmark.py -> results.md
 
 ## Roadmap
 
-Scalar quantisation (SQ8) cells; OPQ rotation before PQ; a multi-threaded batch search path; HNSW tombstone repair; hybrid BM25 + vector scoring on top of `ragkit`; a real-embedding benchmark (needs a download-free source).
+SQ8 cells inside IVF and `save_index` support (a flat `SQ8Index` is in v0.2); OPQ rotation before PQ; a multi-threaded batch search path; HNSW tombstone repair; hybrid BM25 + vector scoring on top of `ragkit`; a real-embedding benchmark (needs a download-free source).

@@ -134,6 +134,7 @@
 - promptlab v0.7: HTTP-backed models and judges (`http://host/v1#model`, OpenAI-compatible, retries/backoff, key from env and never echoed; 7 tests against a local fake server, 128 total)
 - promptlab v0.8: `--workers N` runs cases concurrently on a thread pool (order preserved, per-case error isolation, thread-safe CostMeter so budgets hold; 6 tests, 134 total)
 - vecdb v0.1 (NEW): vector search from scratch — exact flat, IVF-Flat, IVF-PQ (residual PQ, ADC tables, exact re-rank), HNSW (paper's diversity heuristic, tombstones, resumable persistence), `Collection` with ids + metadata + Mongo-style filters pushed into the search, upsert/delete/compact, npz persistence; honest findings: HNSW wins on distance evaluations but loses wall-clock to one BLAS scan at n=20k in Python, PQ-only recall plateaus at 0.744, selective filters make graph walks catastrophic (exact scan of matching rows won at every selectivity; fallback threshold 0.15 from eval-count crossover); 76 tests, synthetic data
+- vecdb v0.2: `SQ8Index` (uint8 scalar quantisation, 4x memory cut, optional exact refine; recall 0.98 -> 1.00 with refine=2 on synthetic data; memory win only, not speed; 7 tests, 85 total)
 
 
 ## Next
@@ -153,4 +154,4 @@
 13. reviewkit follow-ups: a fresh held-out set (the current one is now tuned-on); moved-code detection (match removed vs added blocks in the diff); light intra-function taint for SQL/shell; run the Action on a real PR in a scratch repo; docqa/ragkit-style repo-context retrieval for the LLM pass; JS/TS AST via a parser
 14. codesearch follow-ups: optional neural-embedding backend as an extra (compare against BM25F on the same queries), a third blind query set written by someone other than the author, call-graph expansion (boost callers/callees of top hits), JS/TS via a parser, `--watch` re-index, an editor-friendly JSON-lines server
 15. datadoctor follow-ups: (done audit diff + CI regression gate) (done temperature scaling, mixed results) a real noisy-label dataset benchmark (needs a download-free source), (done regression targets) (done ordinal targets) (done co-occurrence stacking, null result on detection F1) object-detection style boxes
-16. vecdb follow-ups: SQ8 cells, OPQ rotation, multi-threaded batch search, HNSW tombstone repair, hybrid BM25+vector with ragkit/docqa (dense retrieval), real-embedding benchmark
+16. vecdb follow-ups: (done flat SQ8) SQ8 in IVF cells + persistence, OPQ rotation, multi-threaded batch search, HNSW tombstone repair, hybrid BM25+vector with ragkit/docqa (dense retrieval), real-embedding benchmark
