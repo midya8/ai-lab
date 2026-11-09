@@ -120,3 +120,25 @@ class SQ8Index:
             ids, dists = ids2, d2
         self.last_stats = {"scanned": float(ok.sum()), "refined": float(refine * k)}
         return ids, self.metric.report(dists)
+
+    # -- persistence ---------------------------------------------------
+    def _state(self):
+        arrays = {"codes": self._codes, "deleted": self.deleted}
+        if self.lo is not None:
+            arrays["lo"] = self.lo
+            arrays["step"] = self.step
+        if self._raw is not None:
+            arrays["raw"] = self._raw
+        return arrays, {"dim": self.dim, "metric": self.metric.name, "keep_raw": self.keep_raw}
+
+    @classmethod
+    def _from_state(cls, arrays, meta):
+        idx = cls(meta["dim"], meta["metric"], keep_raw=meta["keep_raw"])
+        idx._codes = np.ascontiguousarray(arrays["codes"], dtype=np.uint8)
+        idx.deleted = arrays["deleted"].astype(bool)
+        if "lo" in arrays:
+            idx.lo = arrays["lo"].astype(np.float32)
+            idx.step = arrays["step"].astype(np.float32)
+        if meta["keep_raw"]:
+            idx._raw = np.ascontiguousarray(arrays["raw"], dtype=np.float32)
+        return idx

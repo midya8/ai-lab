@@ -72,3 +72,29 @@ def test_out_of_range_values_clipped_not_crashing():
     s.add(X)
     s.add(X[:3] * 10)
     assert s.ntotal == 103
+
+
+@pytest.mark.parametrize("keep_raw", [False, True])
+def test_save_load_roundtrip(tmp_path, keep_raw):
+    from vecdb import load_index, save_index
+    X, Q = data(500, 16)
+    idx = SQ8Index(16, keep_raw=keep_raw)
+    idx.add(X)
+    idx.remove([3, 7])
+    p = str(tmp_path / "i.npz")
+    save_index(idx, p)
+    j = load_index(p)
+    assert isinstance(j, SQ8Index) and j.keep_raw == keep_raw
+    kw = {"refine": 2} if keep_raw else {}
+    a, da = idx.search(Q, 5, **kw)
+    b, db = j.search(Q, 5, **kw)
+    assert (a == b).all() and np.allclose(da, db)
+    assert j.deleted[3] and j.deleted[7]
+
+
+def test_save_load_untrained(tmp_path):
+    from vecdb import load_index, save_index
+    p = str(tmp_path / "e.npz")
+    save_index(SQ8Index(8), p)
+    j = load_index(p)
+    assert not j.is_trained and j.ntotal == 0

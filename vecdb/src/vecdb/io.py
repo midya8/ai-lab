@@ -9,8 +9,9 @@ import numpy as np
 from .flat import FlatIndex
 from .hnsw import HNSWIndex
 from .ivf import IVFIndex
+from .sq8 import SQ8Index
 
-_KINDS = {"flat": FlatIndex, "ivf": IVFIndex, "hnsw": HNSWIndex}
+_KINDS = {"flat": FlatIndex, "ivf": IVFIndex, "hnsw": HNSWIndex, "sq8": SQ8Index}
 FORMAT = 1
 
 
