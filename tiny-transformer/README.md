@@ -164,3 +164,7 @@ PYTHONPATH=src python experiments/recall_bench.py      # ~30 min on CPU; writes 
 | rope | 0.98 (min 0.97) | 0.60 (min 0.41) |
 
 Honest reading: with 2 pairs RoPE reliably learns recall while learned positions are seed-dependent (0.58 vs 0.97 min). At 4 pairs neither model has converged in the budget (0.4-0.6, chance 0.125) and seed variance is large, so the 0.60 vs 0.44 gap is suggestive, not established. Two seeds and a small step budget only; longer training and more seeds are the next step.
+
+## Speculative decoding
+
+`tinygpt.speculative.speculative_generate(target, draft, prompt, n, k=4, temperature=1.0)` implements draft-and-verify sampling: the draft proposes `k` tokens, the target scores them in one forward pass, and each is accepted with probability `min(1, p/q)`, with residual resampling on rejection. Tests check greedy equality with the target, full acceptance for an identical draft, and (statistically, 3000 seeds, first-token marginal) that the output distribution matches the target's. There is no KV cache here, so it reports acceptance rate and tokens per target call, not wall-clock speed-ups.

@@ -143,6 +143,7 @@
 - vecdb v0.9: hybrid fusion benchmark (`experiments/hybrid_eval.py`, dense vs BM25 vs RRF vs weighted; null result: fusion does not beat best single retriever on synthetic mixed queries; 2 tests, 118 total)
 - promptlab: concurrent judge calls within one ensemble pair (--workers, order-preserving, serial-equivalence + overlap tests; 139 tests)
 - docqa: `retrieval="hybrid"` (BM25 + char-trigram dense via vecdb, RRF); null result on all four eval sets, disclosed; 5 tests, 69 total
+- tiny-transformer: `speculative_generate` (draft+verify sampling, residual resampling; greedy-equals-target, identical-draft and distribution-match tests; no KV cache so no wall-clock claims; 140 tests)
 
 
 ## Next
