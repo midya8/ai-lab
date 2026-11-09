@@ -163,7 +163,8 @@ def main(argv: list[str] | None = None) -> int:
             if args.also_judge:
                 specs = [args.judge] + args.also_judge
                 names = [f"{i + 1}:{sp.split(':')[0]}" for i, sp in enumerate(specs)]
-                ens = compare_ensemble({n: make_pair_judge(sp) for n, sp in zip(names, specs)}, items, args.alpha)
+                ens = compare_ensemble({n: make_pair_judge(sp) for n, sp in zip(names, specs)}, items, args.alpha,
+                                       workers=getattr(args, "workers", 1))
                 print(render_ensemble(ens, f"{args.name}@{args.a}", f"{args.name}@{args.b}"))
                 if args.out:
                     import json

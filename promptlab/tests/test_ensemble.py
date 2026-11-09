@@ -124,3 +124,30 @@ class EnsembleGateTests(unittest.TestCase):
         self.assertIsNone(r.kappa)
         self.assertTrue(any("undefined" in m for m in ensemble_gate(r, None, 0.4)))
         self.assertEqual(ensemble_gate(r, None, None), [])
+
+
+class ConcurrentJudgeTests(unittest.TestCase):
+    def test_workers_match_serial(self):
+        judges = {"x": always("a"), "y": always("b"), "z": always("a")}
+        its = items(6)
+        s = compare_ensemble(judges, its)
+        c = compare_ensemble(judges, its, workers=3)
+        self.assertEqual([v.to_dict() for v in s.verdicts], [v.to_dict() for v in c.verdicts])
+        self.assertEqual(s.kappa, c.kappa)
+
+    def test_judges_really_overlap(self):
+        import threading, time
+        barrier = threading.Barrier(3, timeout=5)
+
+        def waiting(prompt):
+            barrier.wait()          # deadlocks (BrokenBarrierError) unless all 3 run at once
+            return json.dumps({"winner": "a"})
+        judges = {"x": waiting, "y": waiting, "z": waiting}
+        t = time.time()
+        r = compare_ensemble(judges, items(1), workers=3)
+        self.assertEqual(r.verdicts[0].kind, "majority")
+        self.assertLess(time.time() - t, 5)
+
+    def test_bad_workers(self):
+        with self.assertRaises(ValueError):
+            compare_ensemble({"x": always("a"), "y": always("b")}, items(1), workers=0)

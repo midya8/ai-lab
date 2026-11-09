@@ -8,6 +8,7 @@ silently decide an A/B result.
 from __future__ import annotations
 
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 
 from .pairwise import PairJudge, PairVerdict, PairwiseSummary, judge_pair, pairwise_gate, summarize
@@ -74,27 +75,45 @@ def vote(votes: dict[str, str], quorum: int) -> tuple[str, str]:
 
 
 def compare_ensemble(judges: dict[str, PairJudge], items: list[dict], alpha: float = 0.05,
-                     quorum: int | None = None) -> EnsembleResult:
+                     quorum: int | None = None, workers: int = 1) -> EnsembleResult:
+    """Majority-vote ensemble over ``judges``.
+
+    ``workers`` > 1 queries the judges of one pair concurrently (they are independent HTTP
+    calls in practice); results are collected in judge order, so output is identical to the
+    serial run. Judges must then be thread-safe.
+    """
+    if workers < 1:
+        raise ValueError("workers must be >= 1")
     if len(judges) < 2:
         raise ValueError("an ensemble needs at least two judges")
     names = list(judges)
     quorum = quorum or (len(names) // 2 + 1)
     per: dict[str, list[PairVerdict]] = {n: [] for n in names}
     out, rows, skipped = [], [], 0
-    for it in items:
-        if not (it["a"] or "").strip() or not (it["b"] or "").strip():
-            skipped += 1
-            continue
-        votes = {}
-        for n in names:
-            pv = judge_pair(judges[n], it["rubric"], it["a"], it["b"], it.get("vars"), str(it["id"]))
-            per[n].append(pv)
-            votes[n] = "error" if pv.kind == "error" else pv.winner
-        winner, kind = vote(votes, quorum)
-        valid = [v for v in votes.values() if v != "error"]
-        out.append(EnsembleVerdict(str(it["id"]), winner, votes, len(set(valid)) == 1 and len(valid) == len(names), kind))
-        if len(valid) == len(names):
-            rows.append([votes[n] for n in names])
+    pool = ThreadPoolExecutor(min(workers, len(names))) if workers > 1 else None
+    try:
+        for it in items:
+            if not (it["a"] or "").strip() or not (it["b"] or "").strip():
+                skipped += 1
+                continue
+            def ask(n, it=it):
+                return judge_pair(judges[n], it["rubric"], it["a"], it["b"], it.get("vars"), str(it["id"]))
+            if pool is not None:
+                pvs_i = list(pool.map(ask, names))
+            else:
+                pvs_i = [ask(n) for n in names]
+            votes = {}
+            for n, pv in zip(names, pvs_i):
+                per[n].append(pv)
+                votes[n] = "error" if pv.kind == "error" else pv.winner
+            winner, kind = vote(votes, quorum)
+            valid = [v for v in votes.values() if v != "error"]
+            out.append(EnsembleVerdict(str(it["id"]), winner, votes, len(set(valid)) == 1 and len(valid) == len(names), kind))
+            if len(valid) == len(names):
+                rows.append([votes[n] for n in names])
+    finally:
+        if pool is not None:
+            pool.shutdown()
     pvs = []
     for ev in out:
         if ev.kind == "error":

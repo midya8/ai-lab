@@ -155,6 +155,8 @@ The judge replies `{"winner": "A" | "B" | "tie", "reason": "..."}`; the grading 
 
 ### Multi-judge ensembles
 
+Judges of one pair are queried concurrently when `--workers N` (N > 1) is set, or `compare_ensemble(..., workers=N)`: a barrier test proves they overlap, and verdicts/kappa are identical to the serial run. Judges must be thread-safe. Speedup is up to the judge count per pair; not benchmarked against a real provider.
+
 Repeat `--also-judge` to add judges. Every judge rules on every pair in both orders, the ensemble takes a **strict majority**
 of the judges' reconciled winners (a split becomes a tie; fewer valid verdicts than a majority quorum is an error and exits 1),
 and the report shows each judge alone plus agreement: mean pairwise raw agreement, unanimity, and Fleiss' kappa.
