@@ -67,3 +67,31 @@ def speculative_generate(target, draft, idx, max_new_tokens, k=4, temperature=1.
              "acceptance_rate": accepted / max(proposed, 1),
              "tokens_per_target_call": max_new_tokens / max(calls, 1)}
     return np.array(seq, dtype=np.int64), stats
+
+
+def expected_tokens_per_call(alpha, k):
+    """Leviathan et al. closed form: expected tokens emitted per target call when each draft
+    token is accepted independently with probability alpha: (1 - alpha^(k+1)) / (1 - alpha)."""
+    if not 0.0 <= alpha <= 1.0:
+        raise ValueError("alpha must be in [0, 1]")
+    if k < 1:
+        raise ValueError("k must be >= 1")
+    if alpha == 1.0:
+        return float(k + 1)
+    return (1.0 - alpha ** (k + 1)) / (1.0 - alpha)
+
+
+def sweep_k(target, draft, prompt, ks=(1, 2, 4, 6), max_new_tokens=48, temperature=1.0, seeds=(0, 1, 2)):
+    """Measure acceptance and tokens/target-call per k, next to the i.i.d.-acceptance prediction
+    computed from the measured acceptance rate. Rows: dict(k, alpha, measured, predicted)."""
+    rows = []
+    for k in ks:
+        accs, tpc = [], []
+        for s in seeds:
+            _, st = speculative_generate(target, draft, prompt, max_new_tokens, k=k,
+                                         temperature=temperature, seed=s)
+            accs.append(st["acceptance_rate"]); tpc.append(st["tokens_per_target_call"])
+        a = float(np.mean(accs))
+        rows.append({"k": k, "alpha": a, "measured": float(np.mean(tpc)),
+                     "predicted": expected_tokens_per_call(a, k)})
+    return rows

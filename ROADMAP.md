@@ -144,6 +144,7 @@
 - promptlab: concurrent judge calls within one ensemble pair (--workers, order-preserving, serial-equivalence + overlap tests; 139 tests)
 - docqa: `retrieval="hybrid"` (BM25 + char-trigram dense via vecdb, RRF); null result on all four eval sets, disclosed; 5 tests, 69 total
 - tiny-transformer: `speculative_generate` (draft+verify sampling, residual resampling; greedy-equals-target, identical-draft and distribution-match tests; no KV cache so no wall-clock claims; 140 tests)
+- tiny-transformer: `expected_tokens_per_call` (closed form) and `sweep_k` to compare measured tokens/target-call with the i.i.d.-acceptance prediction (3 tests, 143 total)
 
 
 ## Next
