@@ -16,3 +16,15 @@ Tag-aware routing (`triage.routing`): `TaggedTriage.route()` merges category, ur
 
 
 SLA-breach simulation (`triage.sla_sim`): discrete-event, priority-first queues with N agents per routed queue and Poisson arrivals; reports breach rate, mean and p95 wait, plus `staffing_sweep` and `smallest_staffing` to find the fewest agents meeting a breach target. Run `PYTHONPATH=src python -m triage.sla_sim`. Numbers are synthetic and illustrate staffing effects only.
+
+## Label audit (datadoctor integration)
+
+`triage.label_audit.audit_labels(texts, labels)` runs confident learning (from the sibling `datadoctor` project) over out-of-fold TF-IDF probabilities and returns tickets whose category looks wrong, with a suggested fix, most suspicious first.
+
+Measured on synthetic tickets (500 tickets, uniform label flips, mean of 3 seeds; templates are easy, so real data will be harder):
+
+| flip rate | precision | recall |
+|---|---|---|
+| 5% | 0.88 | 0.84 |
+| 10% | 0.78 | 0.87 |
+| 20% | 0.73 | 0.88 |

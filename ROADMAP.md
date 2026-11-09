@@ -119,6 +119,7 @@
 - datadoctor v0.1 (NEW): confident-learning label-error detection on cross-validated probabilities, duplicates / conflicting duplicates / leakage / MinHash text near-dupes / per-class outliers, audit CLI + CI gate, benchmark on injected noise (41 tests)
 
 - autojob v0.1: agentic job-application assistant — profile validation (strict, every error at once), posting parse, transparent match scoring (required 0.6 / preferred 0.25 / experience 0.15, never 1.0-by-default), facts-only cover-letter drafts (only matched skills named), review notes listing gaps to never claim, JSONL application tracker with company+title dedupe and applied→screening→interview→offer→hired state machine; never submits, drafts only; 49 tests, example profile/posting fictional
+- ticket-triage: label audit via datadoctor confident learning (3 new tests, 51 total)
 
 
 ## Next
