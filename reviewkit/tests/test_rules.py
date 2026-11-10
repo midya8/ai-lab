@@ -168,3 +168,10 @@ def test_raise_notimplemented():
     assert rules("a.py", "def f():\n    raise NotImplemented\n") == [(2, "py-raise-notimplemented")]
     assert rules("a.py", "def f():\n    raise NotImplemented('x')\n") == [(2, "py-raise-notimplemented")]
     assert rules("a.py", "def f():\n    raise NotImplementedError\n") == []
+
+
+def test_compare_none():
+    assert rules("a.py", "if x == None:\n    pass\n") == [(1, "py-compare-none")]
+    assert rules("a.py", "if x != None:\n    pass\n") == [(1, "py-compare-none")]
+    assert rules("a.py", "if x is None:\n    pass\n") == []
+    assert rules("a.py", "if x == 0:\n    pass\n") == []

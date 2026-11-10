@@ -180,6 +180,7 @@
 - reviewkit: AST rules py-assert-tuple (always-true assert) and py-return-in-finally (90 tests)
 - reviewkit: AST rule py-duplicate-dict-key (repeated constant keys in a dict literal; 91 tests)
 - reviewkit: AST rule py-raise-notimplemented (`raise NotImplemented`; 92 tests)
+- reviewkit: AST rule py-compare-none (`== None` / `!= None`; 93 tests)
 
 
 ## Next

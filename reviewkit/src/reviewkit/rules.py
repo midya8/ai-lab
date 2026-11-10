@@ -440,6 +440,10 @@ def ast_findings(ctx: FileContext, source: str, complexity_threshold: int = 10) 
                     add(node.lineno, "py-is-literal", "medium",
                         "`is` compares identity, not value; comparing with a literal is unreliable.",
                         "Use `==` / `!=`.")
+                if isinstance(op, (ast.Eq, ast.NotEq)) and isinstance(comp, ast.Constant) and comp.value is None:
+                    add(node.lineno, "py-compare-none", "low",
+                        "`== None` / `!= None` can be overridden by `__eq__` (numpy/pandas return arrays).",
+                        "Use `is None` / `is not None`.")
     from .taint import taint_hits
     for line, rule, msg in taint_hits(tree):
         add(line, rule, "high", msg, "Pass values as bound parameters / argument lists, or validate against an allow-list.")
@@ -458,6 +462,7 @@ RULE_TABLE.update({
     "py-is-literal": ("medium", "`is` / `is not` against a str/int/float/bytes literal."),
     "py-assert-tuple": ("high", "`assert` on a non-empty tuple is always true."),
     "py-return-in-finally": ("medium", "`return` inside `finally` swallows exceptions."),
+    "py-compare-none": ("low", "`== None` / `!= None` instead of `is None`."),
     "py-raise-notimplemented": ("medium", "`raise NotImplemented` (should be NotImplementedError)."),
     "py-duplicate-dict-key": ("medium", "Dict literal repeats a constant key."),
     "py-syntax-error": ("critical", "Changed Python file does not parse."),
