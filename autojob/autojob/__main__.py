@@ -9,11 +9,15 @@ Subcommands (all offline, stdlib only):
   apply     --profile P --posting J [--min-coverage X] [--out-dir D] [--log L] [--dry-run]
   list      [--log L] [--status S]
   status    --log L --id APP-001 --to interview
-  report    [--log L] [--json]
+  report    [--log L] [--json] [--stale-days N] [--today YYYY-MM-DD]
+  prep      --profile P --posting J [--out F] [--json]
+  tailor    --profile P --posting J [--out F] [--json]
+  followup  [--log L] [--profile P] [--wait-days N] [--json] [--today YYYY-MM-DD]
+  followup  --record --id APP-001 [--log L] [--note TEXT] [--today YYYY-MM-DD]
 
 Exit codes: 0 ok · 1 usage error · 2 profile/posting load error ·
 3 match below --fail-under · 4 draft/apply refused below --min-coverage ·
-5 duplicate application · 6 illegal status transition.
+5 duplicate application · 6 illegal status transition or follow-up refused.
 
 autojob prepares application packets for a human to review and submit. It
 never submits anything and never invents experience: every fact in a draft
@@ -23,17 +27,23 @@ comes from the profile file, and gaps are reported, not filled in.
 from __future__ import annotations
 
 import argparse
+import datetime
 import json
 import sys
 from pathlib import Path
 
 from . import __version__
+from .analytics import analytics_json, analytics_report, compute_analytics
+from .followup import due_followups, followup_json, followup_report
 from .letter import draft_letter, review_notes
 from .match import match_profile
 from .posting import parse_posting
+from .prep import build_prep, prep_json, render_prep_markdown
 from .profile import ProfileError, load_profile, skill_map
-from .report import log_report, match_json, match_report
-from .tracker import (TrackerError, add_application, read_log, set_status, slug)
+from .report import match_json, match_report
+from .tailor import build_tailor, render_tailor_markdown, tailor_json
+from .tracker import (TrackerError, add_application, read_log, record_followup,
+                      set_status, slug)
 
 DEFAULT_OUT_DIR = "applications"
 
@@ -127,10 +137,14 @@ def _build_packet(profile, posting, match, out_dir):
     packet = Path(out_dir) / f"{slug(posting.get('company'))}-{slug(posting.get('title'))}"
     letter = draft_letter(profile, posting, match)
     notes = review_notes(profile, posting, match)
+    prep = render_prep_markdown(build_prep(profile, posting, match))
+    tailor = render_tailor_markdown(build_tailor(profile, posting, match))
     return packet, {
         "cover-letter.md": letter,
         "match.json": match_json(posting, match),
         "review-notes.md": notes,
+        "interview-prep.md": prep,
+        "tailored-resume.md": tailor,
     }
 
 
@@ -211,17 +225,111 @@ def _cmd_status(args):
     return 0
 
 
+def _cmd_prep(args):
+    profile, posting, code = _match_both(args)
+    if code:
+        return code
+    prep = build_prep(profile, posting)
+    if args.json:
+        text = prep_json(prep)
+    else:
+        text = render_prep_markdown(prep)
+    if args.out:
+        Path(args.out).write_text(text, encoding="utf-8")
+        print(f"wrote {args.out}")
+    else:
+        print(text, end="")
+    return 0
+
+
+def _cmd_tailor(args):
+    profile, posting, code = _match_both(args)
+    if code:
+        return code
+    tailor = build_tailor(profile, posting)
+    if args.json:
+        text = tailor_json(tailor)
+    else:
+        text = render_tailor_markdown(tailor)
+    if args.out:
+        Path(args.out).write_text(text, encoding="utf-8")
+        print(f"wrote {args.out}")
+    else:
+        print(text, end="")
+    return 0
+
+
+def _cmd_followup(args):
+    if args.today is not None:
+        try:
+            today = datetime.date.fromisoformat(args.today)
+        except ValueError:
+            print(f"error: --today must be YYYY-MM-DD, got {args.today!r}",
+                  file=sys.stderr)
+            return 1
+    else:
+        today = datetime.date.today()
+    if args.record:
+        if not args.id:
+            print("error: --record needs --id APP-001", file=sys.stderr)
+            return 1
+        try:
+            entry = record_followup(args.log, args.id,
+                                    today=today.isoformat(), note=args.note)
+        except TrackerError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 6
+        print(f"recorded a follow-up for {entry['id']}: {entry['company']} — "
+              f"{entry['title']} (sent {today.isoformat()})")
+        return 0
+    if args.id or args.note:
+        print("error: --id and --note need --record", file=sys.stderr)
+        return 1
+    if args.wait_days is not None and args.wait_days < 0:
+        print("error: --wait-days must be 0 or more", file=sys.stderr)
+        return 1
+    try:
+        entries = read_log(args.log)
+    except TrackerError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    name = None
+    if args.profile:
+        profile = _load_profile(args.profile)
+        if profile is None:
+            return 2
+        name = profile["name"]
+    items = due_followups(entries, today=today, wait_days=args.wait_days)
+    if args.json:
+        print(followup_json(items, name), end="")
+    else:
+        print(followup_report(items, name), end="")
+    return 0
+
+
 def _cmd_report(args):
     try:
         entries = read_log(args.log)
     except TrackerError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
-    if args.json:
-        print(json.dumps({"total": len(entries), "entries": entries},
-                         indent=2, sort_keys=True))
+    if args.today is not None:
+        try:
+            today = datetime.date.fromisoformat(args.today)
+        except ValueError:
+            print(f"error: --today must be YYYY-MM-DD, got {args.today!r}",
+                  file=sys.stderr)
+            return 1
     else:
-        print(log_report(entries), end="")
+        today = datetime.date.today()
+    if args.stale_days < 0:
+        print("error: --stale-days must be 0 or more", file=sys.stderr)
+        return 1
+    data = compute_analytics(entries, today=today, stale_days=args.stale_days)
+    if args.json:
+        print(analytics_json(data), end="")
+    else:
+        print(analytics_report(data), end="")
     return 0
 
 
@@ -280,9 +388,47 @@ def build_parser():
     p.add_argument("--to", required=True)
     p.set_defaults(func=_cmd_status)
 
-    p = sub.add_parser("report", help="summary of logged applications")
+    p = sub.add_parser("prep", help="build an interview-prep packet from profile facts")
+    p.add_argument("--profile", required=True)
+    p.add_argument("--posting", required=True)
+    p.add_argument("--out")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=_cmd_prep)
+
+    p = sub.add_parser("tailor", help="build a tailored resume section from "
+                                       "profile facts for one posting")
+    p.add_argument("--profile", required=True)
+    p.add_argument("--posting", required=True)
+    p.add_argument("--out")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=_cmd_tailor)
+
+    p = sub.add_parser("followup", help="list applications due a follow-up, "
+                                         "or record one as sent")
+    p.add_argument("--log", default=f"{DEFAULT_OUT_DIR}/applications.jsonl")
+    p.add_argument("--profile",
+                   help="profile file: supplies the name for draft emails")
+    p.add_argument("--wait-days", type=int, default=None,
+                   help="override the per-stage wait for every stage (default: "
+                        "7 applied/screening, 3 interview, 2 offer)")
+    p.add_argument("--json", action="store_true")
+    p.add_argument("--today", default=None,
+                   help="reference date YYYY-MM-DD (default: today)")
+    p.add_argument("--id", default=None,
+                   help="with --record: the application to record for")
+    p.add_argument("--record", action="store_true",
+                   help="record a follow-up as sent instead of listing due ones")
+    p.add_argument("--note", default=None,
+                   help="with --record: a short note stored with the follow-up")
+    p.set_defaults(func=_cmd_followup)
+
+    p = sub.add_parser("report", help="funnel analytics over logged applications")
     p.add_argument("--log", default=f"{DEFAULT_OUT_DIR}/applications.jsonl")
     p.add_argument("--json", action="store_true")
+    p.add_argument("--stale-days", type=int, default=14,
+                   help="flag applications with no movement in this many days (default 14)")
+    p.add_argument("--today", default=None,
+                   help="reference date YYYY-MM-DD for stale checks (default: today)")
     p.set_defaults(func=_cmd_report)
 
     return parser

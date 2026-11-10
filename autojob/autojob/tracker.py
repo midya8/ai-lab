@@ -84,6 +84,7 @@ def add_application(log_path, company, title, source=None, match_score=None,
         "source": source,
         "status": "applied",
         "applied_at": today,
+        "history": [{"status": "applied", "at": today}],
         "match_score": match_score,
         "packet_dir": packet_dir,
     }
@@ -92,10 +93,40 @@ def add_application(log_path, company, title, source=None, match_score=None,
     return entry
 
 
-def set_status(log_path, app_id, new_status):
-    """Move an application to a new status, enforcing the state machine."""
+def _ensure_history(entry):
+    """Give a pre-v0.2 entry a history it can grow from.
+
+    The entry is known to have reached its current status at some unknown
+    date, so the current stage is backfilled at ``applied_at`` — the
+    earliest it could have happened. Stage durations computed from such
+    backfilled entries are upper bounds, not measured stays; see
+    analytics.days_in_stage, which only counts stays between two recorded
+    events.
+    """
+    history = entry.get("history")
+    if isinstance(history, list) and history:
+        return history
+    history = []
+    if entry.get("applied_at"):
+        history.append({"status": "applied", "at": entry["applied_at"]})
+    current = entry.get("status")
+    if current and current != "applied" and entry.get("applied_at"):
+        history.append({"status": current, "at": entry["applied_at"]})
+    entry["history"] = history
+    return history
+
+
+def set_status(log_path, app_id, new_status, today=None):
+    """Move an application to a new status, enforcing the state machine.
+
+    Records the move in the entry's history (``today`` defaults to the
+    real current date; pass an explicit date in tests). A move to the
+    status the entry already has is a no-op and records nothing.
+    """
     if new_status not in STATUSES:
         raise TrackerError(f"unknown status {new_status!r}; one of: {', '.join(STATUSES)}")
+    if today is None:
+        today = datetime.date.today().isoformat()
     entries = read_log(log_path)
     for entry in entries:
         if entry["id"] == app_id:
@@ -107,7 +138,10 @@ def set_status(log_path, app_id, new_status):
                     f"cannot move {app_id} from {current!r} to {new_status!r}; "
                     f"allowed from {current}: {', '.join(ALLOWED[current]) or 'none (terminal)'}"
                 )
+            # Backfill first: _ensure_history reads the *old* status.
+            history = _ensure_history(entry)
             entry["status"] = new_status
+            history.append({"status": new_status, "at": today})
             _write_log(log_path, entries)
             return entry
     raise TrackerError(f"no application with id {app_id!r}")
@@ -118,3 +152,41 @@ def find_application(entries, app_id):
         if entry["id"] == app_id:
             return entry
     return None
+
+
+def record_followup(log_path, app_id, today=None, note=None):
+    """Record that a follow-up was sent for an application.
+
+    Appends a ``{"kind": "followup", "at": today}`` event to the entry's
+    history, which resets the follow-up clock (see followup.due_followups)
+    and the stale clock (see analytics.stale_applications). Refuses
+    terminal applications — there is nobody left to follow up with — and
+    refuses a second follow-up recorded on the same day, so a double
+    invocation cannot fake two nudges. ``today`` defaults to the real
+    current date; pass an explicit date in tests.
+    """
+    if today is None:
+        today = datetime.date.today().isoformat()
+    entries = read_log(log_path)
+    for entry in entries:
+        if entry["id"] == app_id:
+            if entry.get("status") in TERMINAL:
+                raise TrackerError(
+                    f"cannot follow up on {app_id}: status is "
+                    f"{entry['status']!r} (terminal)"
+                )
+            history = _ensure_history(entry)
+            for event in history:
+                if (event.get("kind") == "followup"
+                        and event.get("at") == today):
+                    raise TrackerError(
+                        f"a follow-up for {app_id} was already recorded "
+                        f"on {today}"
+                    )
+            event = {"kind": "followup", "at": today}
+            if note:
+                event["note"] = note
+            history.append(event)
+            _write_log(log_path, entries)
+            return entry
+    raise TrackerError(f"no application with id {app_id!r}")
