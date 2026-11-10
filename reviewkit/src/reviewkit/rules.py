@@ -13,7 +13,7 @@ import io
 import re
 import tokenize
 from dataclasses import dataclass, field
-from typing import Callable, Dict, List, Optional, Set, Tuple
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 from .diff import FileDiff
 
@@ -415,6 +415,16 @@ def ast_findings(ctx: FileContext, source: str, complexity_threshold: int = 10) 
                         add(sub.lineno, "py-return-in-finally", "medium",
                             "`return` inside `finally` silently swallows any in-flight exception.",
                             "Move the return out of the `finally` block.")
+        elif isinstance(node, ast.Dict):
+            seen: Dict[Any, ast.AST] = {}
+            for k, v in zip(node.keys, node.values):
+                if isinstance(k, ast.Constant) and isinstance(k.value, (str, bytes, int, float)) and not isinstance(k.value, bool):
+                    key = (type(k.value).__name__, k.value)
+                    if key in seen:
+                        add(k.lineno, "py-duplicate-dict-key", "medium",
+                            f"Dict literal repeats the key {k.value!r}; the earlier value is silently discarded.",
+                            "Remove the duplicate or fix the intended key.")
+                    seen[key] = v
         elif isinstance(node, ast.Compare):
             for op, comp in zip(node.ops, node.comparators):
                 if isinstance(comp, ast.UnaryOp) and isinstance(comp.op, (ast.USub, ast.UAdd)):
@@ -442,6 +452,7 @@ RULE_TABLE.update({
     "py-is-literal": ("medium", "`is` / `is not` against a str/int/float/bytes literal."),
     "py-assert-tuple": ("high", "`assert` on a non-empty tuple is always true."),
     "py-return-in-finally": ("medium", "`return` inside `finally` swallows exceptions."),
+    "py-duplicate-dict-key": ("medium", "Dict literal repeats a constant key."),
     "py-syntax-error": ("critical", "Changed Python file does not parse."),
     "py-taint-sql": ("high", "Untrusted input flows into SQL query text."),
     "py-taint-shell": ("high", "Untrusted input flows into a shell command."),

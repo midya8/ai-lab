@@ -155,3 +155,10 @@ def test_return_in_finally():
     assert rules("a.py", src) == [(5, "py-return-in-finally")]
     ok = "def f():\n    try:\n        g()\n    finally:\n        cleanup()\n    return 1\n"
     assert rules("a.py", ok) == []
+
+
+def test_duplicate_dict_key():
+    assert rules("a.py", "d = {\n    'a': 1,\n    'b': 2,\n    'a': 3,\n}\n") == [(4, "py-duplicate-dict-key")]
+    assert rules("a.py", "d = {'a': 1, 'b': 2}\n") == []
+    assert rules("a.py", "d = {1: 'x', '1': 'y'}\n") == []
+    assert rules("a.py", "d = {**o, 'a': 1}\n") == []
