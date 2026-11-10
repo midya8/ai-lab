@@ -1,0 +1,33 @@
+# specdec
+
+Speculative sampling (Leviathan et al. 2023; Chen et al. 2023) from scratch in numpy: a cheap draft model proposes k tokens, the target verifies them, and the output distribution is **exactly** the target's.
+
+- `sampler.py`: `speculative_generate`, `autoregressive_generate`, `theoretical_alpha`, `expected_speedup`
+- `models.py`: count-based n-gram LMs and a mixture LM for a draft of controllable quality
+- Tests (6): exact length, identical models accept all, chi-square check that the joint over the first two tokens matches the target, fewer target calls with a good draft, alpha formula vs empirical, speedup bounds.
+
+Run: `pip install -r requirements.txt && PYTHONPATH=src python -m pytest -q && PYTHONPATH=src python experiment.py`
+
+## Experiment (synthetic 2nd-order Markov source, V=12, 3000 tokens)
+
+```
+w_target  k  alpha_emp  tok/target_call  modeled_speedup(c=0.1)
+   0.00   2     0.253            1.51           1.10
+   0.00   4     0.136            1.54           0.83
+   0.00   8     0.067            1.53           0.60
+   0.50   2     0.558            2.11           1.56
+   0.50   4     0.412            2.65           1.20
+   0.50   8     0.243            2.94           0.73
+   0.80   2     0.791            2.58           2.01
+   0.80   4     0.711            3.84           2.02
+   0.80   8     0.578            5.62           1.31
+   0.95   2     0.957            2.91           2.39
+   0.95   4     0.925            4.69           3.08
+   0.95   8     0.901            8.20           3.41
+```
+
+## Caveats
+- Simulated: models are n-gram tables, not neural nets; "modeled speedup" assumes draft/target cost ratio c=0.1 and the iid-acceptance formula, not measured walltime.
+- alpha_emp = accepted/proposed undercounts the true per-token acceptance, because proposals after the first rejection in a round are never tested. Treat it as a conservative proxy.
+- The distribution test is statistical (chi-square, p=0.001 cutoff, fixed seeds).
+- Finding: with a weak draft, larger k hurts (modeled speedup <1); gains need a draft close to the target.
