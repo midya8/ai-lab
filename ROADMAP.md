@@ -150,6 +150,7 @@
 - vecdb: `HybridCollection.query_mmr` diversity re-ranking (lambda_=1 equals query; near-duplicate demotion test; 3 tests)
 - vecdb: `fusion="zscore"` for HybridCollection.query (per-list standardisation instead of min-max; 4 tests; no quality claim, not benchmarked)
 - vecdb: `alpha` now also weights RRF fusion (2*alpha dense / 2*(1-alpha) BM25; default 0.5 unchanged; 1 test, 137 total)
+- vecdb: `HybridCollection.query_rerank` two-stage retrieval with a pluggable scorer and first-stage blend (4 tests, 141 total)
 
 
 ## Next

@@ -173,6 +173,32 @@ class HybridCollection:
             chosen.append(rest.pop(j))
         return [cands[j] for j in chosen]
 
+    def query_rerank(self, vector, text: str, scorer, k: int = 10, candidates: int | None = None,
+                     blend: float = 1.0, **kwargs) -> list[Hit]:
+        """Two-stage retrieval: fuse to ``candidates`` (default 5*k), then re-score with ``scorer``.
+
+        ``scorer(query_text, doc_texts) -> sequence of floats`` (higher is better), e.g. a cross-encoder or
+        any callable. ``blend`` in [0, 1] mixes the min-max-scaled scorer output (weight ``blend``) with the
+        min-max-scaled first-stage fused score (weight ``1-blend``); 1.0 means the scorer alone decides.
+        Candidates without stored text get the scorer's input ``""``. ``distance`` is the negated final score.
+        """
+        if not 0.0 <= blend <= 1.0:
+            raise ValueError("blend must be in [0, 1]")
+        pool = self.query(vector, text, k=candidates or 5 * k, **kwargs)
+        if not pool:
+            return []
+        sc = np.asarray(list(scorer(text, [self._text.get(h.id, "") for h in pool])), dtype=np.float64)
+        if sc.shape != (len(pool),):
+            raise ValueError("scorer must return one score per candidate")
+
+        def mm(a):
+            lo, hi = a.min(), a.max()
+            return np.ones_like(a) if hi == lo else (a - lo) / (hi - lo)
+        first = mm(np.asarray([-h.distance for h in pool], dtype=np.float64))
+        final = blend * mm(sc) + (1 - blend) * first
+        order = sorted(range(len(pool)), key=lambda j: (-final[j], pool[j].id))[:k]
+        return [Hit(pool[j].id, -float(final[j]), pool[j].metadata) for j in order]
+
     def query_batch(self, vectors, texts: list[str], k: int = 10, **kwargs) -> list[list[Hit]]:
         """Run ``query`` for each (vector, text) pair; results are in input order."""
         vectors = np.asarray(vectors, dtype=np.float32)
