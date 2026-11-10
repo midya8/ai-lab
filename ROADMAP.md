@@ -157,6 +157,7 @@
 - vecdb: `HybridCollection.query_rerank` two-stage retrieval with a pluggable scorer and first-stage blend (4 tests, 141 total)
 - vecdb: HybridCollection.query_terms phrases= (consecutive-token phrase constraint, 1 test)
 - microgrid v0.1: numpy autodiff engine + gradcheck + optimizers (10 tests)
+- microgrid: conv2d (stride/pad/bias) + max_pool2d with gradchecks, iterative backward, tiny CNN test (16 tests)
 
 
 ## Next
@@ -177,4 +178,4 @@
 14. codesearch follow-ups: optional neural-embedding backend as an extra (compare against BM25F on the same queries), a third blind query set written by someone other than the author, call-graph expansion (boost callers/callees of top hits), JS/TS via a parser, `--watch` re-index, an editor-friendly JSON-lines server
 15. datadoctor follow-ups: (done audit diff + CI regression gate) (done temperature scaling, mixed results) a real noisy-label dataset benchmark (needs a download-free source), (done regression targets) (done ordinal targets) (done co-occurrence stacking, null result on detection F1) object-detection style boxes
 16. vecdb follow-ups: (done flat SQ8) (done HNSW tombstone repair) (done SQ8 in IVF cells + persistence, v0.8), (done OPQ class) (done OPQ inside IVFIndex), (done multi-threaded batch search), (done hybrid BM25+vector core) (done HybridCollection save/load, v0.10) (done HybridCollection.explain: per-hit dense/BM25 ranks, v0.11) (done HybridCollection.query_batch) (done configurable + persisted BM25 k1/b) (done HybridCollection.query_terms must/must_not lexical constraints) wire into ragkit/docqa and benchmark fusion quality, real-embedding benchmark
-17. microgrid follow-ups: conv2d/pooling ops, iterative backward, a tiny transformer block built on it and compared to tiny-transformer
+17. microgrid follow-ups: (done conv2d/pooling) (done iterative backward) -> next: a tiny transformer block built on it and compared to tiny-transformer

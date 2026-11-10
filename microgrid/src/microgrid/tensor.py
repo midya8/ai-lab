@@ -150,18 +150,21 @@ class Tensor:
         return out
 
     def backward(self):
+        """Iterative post-order topological sort (no recursion limit issues)."""
         order, seen = [], set()
-        def visit(t):
+        stack = [(self, False)]
+        while stack:
+            t, done = stack.pop()
+            if done:
+                order.append(t)
+                continue
             if id(t) in seen:
-                return
+                continue
             seen.add(id(t))
+            stack.append((t, True))
             for p in t._parents:
-                visit(p)
-            order.append(t)
-        # iterative-safe for moderate depth
-        import sys
-        sys.setrecursionlimit(max(10000, sys.getrecursionlimit()))
-        visit(self)
+                if id(p) not in seen:
+                    stack.append((p, False))
         self.grad = np.ones_like(self.data)
         for t in reversed(order):
             if t._backward is not None:
