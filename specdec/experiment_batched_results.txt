@@ -1,0 +1,3 @@
+k=2 per-position 0.10s  batched 0.12s  target forward passes 24
+k=4 per-position 0.12s  batched 0.21s  target forward passes 29
+autoregressive 0.07s

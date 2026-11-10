@@ -41,8 +41,13 @@ def speculative_generate(target, draft, prompt, n, k, rng, stats=None, controlle
         ctx = list(out)
         rejected = False
         acc_before = st["accepted"]
-        for q, x in zip(qs, xs):
-            p = target.probs(ctx)
+        # if the target can score many prefixes in one forward pass, do so
+        # (prefix i = out + xs[:i], i = 0..kk); the rng stream is unchanged
+        batch = None
+        if hasattr(target, "probs_batch"):
+            batch = target.probs_batch([out + xs[:i] for i in range(kk + 1)])
+        for i, (q, x) in enumerate(zip(qs, xs)):
+            p = batch[i] if batch is not None else target.probs(ctx)
             if rng.random() < min(1.0, p[x] / q[x]):
                 out.append(x); ctx.append(x); st["accepted"] += 1
             else:
@@ -53,7 +58,7 @@ def speculative_generate(target, draft, prompt, n, k, rng, stats=None, controlle
                 rejected = True
                 break
         if not rejected and len(out) < goal:
-            out.append(_draw(target.probs(out), rng))
+            out.append(_draw(batch[kk] if batch is not None else target.probs(out), rng))
         if controller is not None:
             controller.update(st["accepted"] - acc_before, kk, rejected)
     return out[len(prompt):goal]
