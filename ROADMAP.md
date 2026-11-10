@@ -161,6 +161,7 @@
 - microgrid: transformer blocks (LayerNorm, causal multi-head attention, GELU MLP, MiniGPT) with gradchecks + causality test (8 tests, 24 total)
 - microgrid: AdamW (decoupled decay), global grad-norm clipping, warmup+cosine LR schedule, wired into lm.train (5 tests, 31 total)
 - microgrid: numerical parity vs tiny-transformer (shared weights; logits, loss, all grads agree; 33 tests)
+- microgrid: dropout op + Dropout module with train/eval (5 tests, 38 total)
 
 
 ## Next
