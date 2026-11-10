@@ -142,3 +142,16 @@ def test_fingerprint_stable_across_line_shift_and_changes_with_text():
 def test_binary_and_deleted_files_skipped():
     d = "diff --git a/g.py b/g.py\ndeleted file mode 100644\n--- a/g.py\n+++ /dev/null\n@@ -1 +0,0 @@\n-eval(x)\n"
     assert analyze_file(parse_diff(d)[0], None)[0] == []
+
+
+def test_assert_tuple_flagged_only_for_nonempty_tuple():
+    assert rules("a.py", "assert (x > 1, 'msg')\n") == [(1, "py-assert-tuple")]
+    assert rules("a.py", "assert x > 1, 'msg'\n") == []
+    assert rules("a.py", "assert ()\n") == []
+
+
+def test_return_in_finally():
+    src = "def f():\n    try:\n        g()\n    finally:\n        return 1\n"
+    assert rules("a.py", src) == [(5, "py-return-in-finally")]
+    ok = "def f():\n    try:\n        g()\n    finally:\n        cleanup()\n    return 1\n"
+    assert rules("a.py", ok) == []

@@ -177,6 +177,7 @@
 - specdec: optimal_k(alpha, cost_ratio) closed-form-by-search helper + 4 tests (34 total)
 - specdec: estimate_alpha / recommend_k offline calibration of draft length from sample contexts (+3 tests, 39 total)
 - reviewkit: light intra-function taint (input/sys.argv/request.* -> SQL execute, shell, eval/exec; flow-insensitive, no inter-procedural; 88 tests)
+- reviewkit: AST rules py-assert-tuple (always-true assert) and py-return-in-finally (90 tests)
 
 
 ## Next

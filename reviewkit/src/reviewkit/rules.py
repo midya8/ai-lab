@@ -403,6 +403,18 @@ def ast_findings(ctx: FileContext, source: str, complexity_threshold: int = 10) 
                     add(node.lineno, "py-requests-no-timeout", "medium",
                         "`requests` has no default timeout; a stalled server hangs this call forever.",
                         "Pass `timeout=(connect, read)`, e.g. `timeout=10`.")
+        elif isinstance(node, ast.Assert):
+            if isinstance(node.test, ast.Tuple) and node.test.elts:
+                add(node.lineno, "py-assert-tuple", "high",
+                    "`assert (cond, msg)` asserts a non-empty tuple, which is always true; the check never fails.",
+                    "Write `assert cond, msg` without the parentheses around both.")
+        elif isinstance(node, ast.Try):
+            for stmt in node.finalbody:
+                for sub in ast.walk(stmt):
+                    if isinstance(sub, ast.Return):
+                        add(sub.lineno, "py-return-in-finally", "medium",
+                            "`return` inside `finally` silently swallows any in-flight exception.",
+                            "Move the return out of the `finally` block.")
         elif isinstance(node, ast.Compare):
             for op, comp in zip(node.ops, node.comparators):
                 if isinstance(comp, ast.UnaryOp) and isinstance(comp.op, (ast.USub, ast.UAdd)):
@@ -428,6 +440,8 @@ RULE_TABLE.update({
     "py-swallowed-exception": ("medium", "Exception caught and discarded with `pass`."),
     "py-requests-no-timeout": ("medium", "`requests.*` call without `timeout`."),
     "py-is-literal": ("medium", "`is` / `is not` against a str/int/float/bytes literal."),
+    "py-assert-tuple": ("high", "`assert` on a non-empty tuple is always true."),
+    "py-return-in-finally": ("medium", "`return` inside `finally` swallows exceptions."),
     "py-syntax-error": ("critical", "Changed Python file does not parse."),
     "py-taint-sql": ("high", "Untrusted input flows into SQL query text."),
     "py-taint-shell": ("high", "Untrusted input flows into a shell command."),
