@@ -25,3 +25,7 @@ Limits: float64 CPU only, conv is einsum/strided-view based (fine for small imag
 ## Leak-free held-out run
 
 `experiments/train_heldout.py` trains on Python stdlib source (even-indexed files, 60k chars) and validates on disjoint files (odd-indexed, 12k chars) via `make_data_split` (vocab from train only). One 600-step run (d=48, 2 layers, ctx=48, clip+warmup+cosine, ~30 s CPU, single seed): held-out loss 5.35 -> 2.47 (uniform 4.53), train ~2.03. Samples are code-flavoured gibberish (indentation, quotes, common words); a tiny model on 60k chars, so this shows real generalisation to unseen files but not quality. Train loss is a single noisy batch.
+
+## KV-cache inference (`kvcache.py`)
+
+Pure-numpy forward with per-layer key/value caches (`prefill`, `step`, `generate_cached`). Tests check it matches the autodiff forward to 1e-9 at every position, chunked prefill equals single prefill, and `generate_cached` reproduces `lm.generate` token for token, including after the window slides past ctx (absolute positions force a re-prefill there). `experiments/bench_kvcache.py` (d=64, 4 layers, CPU): ctx=64 12x faster (0.33s -> 0.03s), ctx=256 33x (4.14s -> 0.12s). Caveat: the baseline also pays autodiff tape overhead that the cached path skips, so the speedup mixes both effects; it is not caching alone. 44 tests.
