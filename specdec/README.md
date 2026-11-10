@@ -108,3 +108,7 @@ Finding: lookup wins big on copy-heavy text and loses on text with no repeats (t
 
 ## Batched verification (v0.9)
 If the target defines `probs_batch(histories)`, `speculative_generate` scores all k+1 prefixes of a round in one call; `MiniGPTLM.probs_batch` stacks equal-length windows into a single forward pass. Output is bit-identical to the per-position path for the same seed (tested), and target forward passes drop to roughly one per round. `experiment_batched.py` (untrained d=48 2-layer target, 40 tokens, one run, timing only): k=2 per-position 0.10s vs batched 0.12s; k=4 0.12s vs 0.21s; plain autoregressive 0.07s. Finding: **no wall-clock win** at this scale. Batching computes positions after a rejection that are then discarded, there is no KV cache, and numpy overhead dominates tiny nets, so speculative decoding does not beat autoregressive here. Single noisy timings; the value is the exactness-preserving API, not speed.
+
+## CLI
+
+`PYTHONPATH=src python -m specdec FILE [--target-order 4] [--draft-order 1] [--cost-ratio 0.1] [--n 2000]` fits a byte-level n-gram target/draft pair on any file, calibrates alpha offline, recommends k, then runs a real speculative decode and prints calibrated vs measured acceptance as JSON. On this repo's ROADMAP.md (prose, tiny data) the draft is weak: calibrated alpha 0.28 vs measured 0.19 (calibration contexts are in-sample, so it is optimistic), k=1, predicted speedup ~1.1x. Byte n-grams are a toy pair; this is a calibration tool, not a speed claim.
