@@ -47,3 +47,14 @@ Adaptive stays within ~3% of the best fixed k without knowing the draft quality 
 ## Multi-draft verification (v0.3)
 
 `multi_draft_step(p, q, m, rng)` draws m i.i.d. candidates from the draft and tests them with recursive rejection sampling (residual `max(p-q,0)` after each rejection). The emitted token is exactly target-distributed (chi-square tested for m=1,2,4), and `multi_draft_acceptance` gives the closed-form chance that some candidate is accepted, which the tests check against simulation. Acceptance rises monotonically with m. This is a single-position, i.i.d.-candidate scheme (no token tree over multiple depths), and it reports acceptance only, not wall-clock.
+
+## Draft trees (v0.4)
+`tree_generate(target, draft, prompt, n, depth, m, rng)` verifies an m-ary draft tree level by level inside one target pass per round: m i.i.d. candidates per level are tested by recursive rejection, an accepted candidate's subtree is entered (up to `depth`), a full rejection ends the round with a residual sample, and a clean round adds a bonus token. Exactness is tested (chi-square on the joint of the first two tokens). `python experiment_tree.py` (3 seeds, depth 4, synthetic n-gram models), tokens per target call:
+
+```
+w_target | m=1 m=2 m=4 m=8
+     0.2 | 2.01 2.99 4.30 4.84
+     0.6 | 3.04 4.55 4.86 4.98
+     0.9 | 4.58 4.94 5.00 5.00
+```
+Candidates help most for weak drafts and saturate at depth+1 = 5; the price is m draft nodes per level (about 6.4 per token at m=8), which this table does not charge for. Only the accepted path is expanded (not a full m^depth tree), and these are simulated models with no wall-clock.

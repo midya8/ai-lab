@@ -170,6 +170,7 @@
 - microgrid: group-wise weight scales (g8/g16; no gain at 4-bit, 3-bit loss +0.18 -> +0.11; 69 tests)
 - microgrid: fake_quant_mse (per-channel MSE-optimal clipping; on synthetic Student-t(3) weights MSE drops 1.93->1.35 at 2-bit, 0.216->0.166 at 4-bit, ~0 at 6-bit; weight-error only, not task loss; 71 tests)
 - specdec v0.1: speculative sampling, chi-square exactness test, acceptance/speedup experiment (6 tests)
+- specdec v0.4: m-ary draft-tree verification (tree_generate), exactness test, tokens-per-target-call experiment (16 tests)
 
 
 ## Next
@@ -191,4 +192,4 @@
 15. datadoctor follow-ups: (done audit diff + CI regression gate) (done temperature scaling, mixed results) a real noisy-label dataset benchmark (needs a download-free source), (done regression targets) (done ordinal targets) (done co-occurrence stacking, null result on detection F1) object-detection style boxes
 16. vecdb follow-ups: (done flat SQ8) (done HNSW tombstone repair) (done SQ8 in IVF cells + persistence, v0.8), (done OPQ class) (done OPQ inside IVFIndex), (done multi-threaded batch search), (done hybrid BM25+vector core) (done HybridCollection save/load, v0.10) (done HybridCollection.explain: per-hit dense/BM25 ranks, v0.11) (done HybridCollection.query_batch) (done configurable + persisted BM25 k1/b) (done HybridCollection.query_terms must/must_not lexical constraints) wire into ragkit/docqa and benchmark fusion quality, real-embedding benchmark
 17. microgrid follow-ups: (done conv2d/pooling) (done iterative backward) (done transformer blocks) (done char-LM training + generation on the corpus, memorisation disclosed) (done AdamW/clip/cosine schedule) (done parity vs tiny-transformer) (done leak-free stdlib-source corpus run) (done KV-cache generation) (done 3-seed + wd ablation) (done int8 KV cache + top-k/top-p sampling) (done int8-KV perplexity) (done weight-only quantisation) (done GPTQ-style rounding vs RTN) (done group-wise scales: helps at <=3 bits only) (done sequential Hessian re-collection: helps most at 2-3 bits) -> next: a new project
-18. specdec follow-ups: (done adaptive k) (done multi-draft recursive rejection at one position) full token-tree verification, wire to microgrid as a real draft/target pair
+18. specdec follow-ups: (done adaptive k) (done multi-draft recursive rejection at one position) (done m-ary tree along accepted path) full branching-tree verification with cost accounting, wire to microgrid as a real draft/target pair
