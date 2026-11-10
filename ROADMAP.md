@@ -174,6 +174,7 @@
 - specdec v0.5: cost-charged tree experiment (m=1 wins on near-uniform toy target; null result disclosed; 18 tests)
 - specdec v0.6: peaky-target re-test of wide trees (m=2 wins only with poor drafts, up to ~6%; TemperedLM/MarkovLM; 19 tests)
 - specdec v0.8: model-free prompt-lookup draft (exact; alpha 0.80 on periodic vs 0.04 unigram, worse on random; 27 tests)
+- specdec: optimal_k(alpha, cost_ratio) closed-form-by-search helper + 4 tests (34 total)
 
 
 ## Next

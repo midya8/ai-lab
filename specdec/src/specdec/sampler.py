@@ -100,3 +100,14 @@ class AdaptiveK:
         a = min(self.alpha(), 0.999)
         self._k = max(self.lo, min(self.hi, max(
             range(self.lo, self.hi + 1), key=lambda kk: expected_speedup(a, kk, self.c))))
+
+
+def optimal_k(alpha, cost_ratio, k_max=32):
+    """Draft length maximising expected_speedup for a known alpha and cost ratio.
+
+    Returns (k, speedup). Needs alpha in [0, 1] and cost_ratio >= 0.
+    """
+    if not 0.0 <= alpha <= 1.0 or cost_ratio < 0:
+        raise ValueError("alpha must be in [0,1] and cost_ratio >= 0")
+    best = max(range(1, k_max + 1), key=lambda kk: expected_speedup(alpha, kk, cost_ratio))
+    return best, expected_speedup(alpha, best, cost_ratio)
