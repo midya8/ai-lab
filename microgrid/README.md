@@ -33,3 +33,7 @@ Pure-numpy forward with per-layer key/value caches (`prefill`, `step`, `generate
 ## Multi-seed + weight-decay ablation (`experiments/seeds_heldout.py`)
 
 Same leak-free split, 400 steps, 3 seeds (seed varies init and batch sampling). Held-out loss: wd=0.0 -> 2.568 +- 0.018 (runs 2.576/2.544/2.585); wd=0.1 -> 2.558 +- 0.017 (2.566/2.534/2.574). Uniform baseline 4.533. wd=0.1 is lower by ~0.01 in every paired seed, but that is well inside the seed-to-seed spread and 3 seeds is few, so this is a null result: weight decay has no demonstrable effect at this scale. The single-run 2.47 above (600 steps) was a more favourable draw/longer run, not comparable.
+
+## int8 KV cache perplexity (`experiments/kv_perplexity.py`)
+
+`cached_nll` teacher-forces a sequence one token at a time through a cache (windows of ctx), so every attention read uses what the cache stored; with the exact cache it matches the autodiff loss to 1e-9 (tested). On 3000 held-out stdlib characters, 400-step models, 3 seeds: exact vs int8 NLL differ by -0.00006 / +0.00016 / +0.00002 nats (perplexity ~15.65-15.70 either way). Reading: int8 per-vector quantisation of K/V costs nothing measurable here, but these are tiny models (dh=12, ctx 48) with short caches, so this does not predict behaviour at scale. 53 tests.

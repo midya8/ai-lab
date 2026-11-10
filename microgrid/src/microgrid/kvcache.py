@@ -157,3 +157,23 @@ def generate_cached(model, chars, prompt_ids, n, ctx, temperature=0.8, seed=0,
         else:  # window slides: absolute positions shift, rebuild
             lg, cache = prefill(model, ids[-ctx:], cache_cls)
     return "".join(chars[i] for i in ids)
+
+
+def cached_nll(model, ids, cache_cls=KVCache, window=None):
+    """Mean next-token NLL (nats) of `ids`, teacher-forced one token at a time through the cache,
+    so every attention read sees whatever the cache stored (exact or int8). Window length is
+    model ctx unless `window` is smaller. Returns (nll, n_predictions)."""
+    ids = np.asarray(ids)
+    w = min(window or model.pos.data.shape[0], model.pos.data.shape[0])
+    total, n = 0.0, 0
+    for s in range(0, len(ids) - 1, w):
+        chunk = ids[s:s + w + 1]
+        if len(chunk) < 2:
+            break
+        cache = cache_cls(model)
+        for j in range(len(chunk) - 1):
+            lg = forward_new(model, [chunk[j]], cache)[-1]
+            lg = lg - lg.max()
+            total -= float(lg[chunk[j + 1]] - np.log(np.exp(lg).sum()))
+            n += 1
+    return total / n, n

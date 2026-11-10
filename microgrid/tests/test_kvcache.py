@@ -114,3 +114,18 @@ def test_default_sampling_unchanged_and_filters_deterministic():
     c = generate_cached(m, chars, [1, 2], 20, 16, seed=3, top_k=3, cache_cls=QuantKVCache)
     d = generate_cached(m, chars, [1, 2], 20, 16, seed=3, top_k=3, cache_cls=QuantKVCache)
     assert c == d and len(c) == 22
+
+
+def test_cached_nll_matches_autodiff_loss_and_quant_close():
+    import numpy as np
+    from microgrid import MiniGPT
+    from microgrid.kvcache import cached_nll, QuantKVCache
+    from microgrid.lm import lm_loss
+    m = MiniGPT(11, d=16, heads=2, layers=2, ctx=12, seed=3)
+    ids = np.random.default_rng(0).integers(0, 11, 13)  # one window of 12 predictions
+    exact, n = cached_nll(m, ids)
+    assert n == 12
+    ref = float(lm_loss(m, ids[None, :12], ids[None, 1:13]).data)
+    assert abs(exact - ref) < 1e-9
+    q, _ = cached_nll(m, ids, QuantKVCache)
+    assert abs(q - exact) < 0.05
