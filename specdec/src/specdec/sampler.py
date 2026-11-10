@@ -19,7 +19,7 @@ def autoregressive_generate(target, prompt, n, rng):
     return out[len(prompt):]
 
 
-def speculative_generate(target, draft, prompt, n, k, rng, stats=None):
+def speculative_generate(target, draft, prompt, n, k, rng, stats=None, controller=None):
     """Generate exactly n tokens. stats (dict) accumulates target_calls, proposed, accepted."""
     out = list(prompt)
     goal = len(prompt) + n
@@ -27,7 +27,8 @@ def speculative_generate(target, draft, prompt, n, k, rng, stats=None):
     for key in ("target_calls", "proposed", "accepted"):
         st.setdefault(key, 0)
     while len(out) < goal:
-        kk = min(k, goal - len(out))
+        kcur = controller.k() if controller is not None else k
+        kk = min(kcur, goal - len(out))
         ctx = list(out)
         qs, xs = [], []
         for _ in range(kk):
@@ -39,6 +40,7 @@ def speculative_generate(target, draft, prompt, n, k, rng, stats=None):
         st["proposed"] += kk
         ctx = list(out)
         rejected = False
+        acc_before = st["accepted"]
         for q, x in zip(qs, xs):
             p = target.probs(ctx)
             if rng.random() < min(1.0, p[x] / q[x]):
@@ -52,6 +54,8 @@ def speculative_generate(target, draft, prompt, n, k, rng, stats=None):
                 break
         if not rejected and len(out) < goal:
             out.append(_draw(target.probs(out), rng))
+        if controller is not None:
+            controller.update(st["accepted"] - acc_before, kk, rejected)
     return out[len(prompt):goal]
 
 
@@ -65,3 +69,34 @@ def expected_speedup(alpha, k, cost_ratio):
     if alpha >= 1.0:
         return (k + 1) / (k * cost_ratio + 1)
     return (1 - alpha ** (k + 1)) / ((1 - alpha) * (k * cost_ratio + 1))
+
+
+class AdaptiveK:
+    """Choose the draft length k each round from past rounds only.
+
+    Because k never depends on the current round's random draws, the output
+    distribution stays exactly the target's. Tracks an EMA of the per-token
+    acceptance rate (MLE under a truncated-geometric model: accepted tokens /
+    tokens tested, where a rejected round tested accepted+1 and a clean round
+    tested k) and picks k maximising expected_speedup(alpha, k, cost_ratio).
+    """
+
+    def __init__(self, cost_ratio=0.1, k_min=1, k_max=16, k_init=4, decay=0.8):
+        self.c, self.lo, self.hi, self.decay = cost_ratio, k_min, k_max, decay
+        self.acc = 0.0
+        self.tested = 0.0
+        self._k = k_init
+
+    def k(self):
+        return self._k
+
+    def alpha(self):
+        return self.acc / self.tested if self.tested > 0 else None
+
+    def update(self, accepted, proposed, rejected):
+        tested = accepted + 1 if rejected else proposed
+        self.acc = self.decay * self.acc + accepted
+        self.tested = self.decay * self.tested + tested
+        a = min(self.alpha(), 0.999)
+        self._k = max(self.lo, min(self.hi, max(
+            range(self.lo, self.hi + 1), key=lambda kk: expected_speedup(a, kk, self.c))))

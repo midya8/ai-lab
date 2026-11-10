@@ -65,3 +65,28 @@ def test_expected_speedup_bounds():
     assert expected_speedup(1.0, 4, 0.0) == 5
     assert expected_speedup(0.0, 4, 0.1) < 1.0
     assert expected_speedup(0.8, 4, 0.05) > 2
+
+
+def test_adaptive_k_shrinks_for_weak_draft_and_grows_for_strong():
+    t, d = toy()
+    weak, strong = AdaptiveK(0.1), AdaptiveK(0.1)
+    for _ in range(30):
+        weak.update(0, weak.k(), True)      # always rejected at first token
+        strong.update(strong.k(), strong.k(), False)
+    assert weak.k() == 1 and strong.k() == 16
+
+
+def test_adaptive_k_exact_length_and_distribution():
+    t, d = toy(3, 4)
+    rng = np.random.default_rng(9)
+    assert len(speculative_generate(t, d, [0], 25, 0, rng, controller=AdaptiveK())) == 25
+    N = 6000
+    spec = Counter(tuple(speculative_generate(t, d, [1, 2], 2, 0, rng, controller=AdaptiveK())) for _ in range(N))
+    p1 = t.probs([1, 2])
+    chi2 = 0.0
+    for a in range(4):
+        p2 = t.probs([1, 2, a])
+        for b in range(4):
+            e = N * p1[a] * p2[b]
+            chi2 += (spec.get((a, b), 0) - e) ** 2 / e
+    assert chi2 < 37.6

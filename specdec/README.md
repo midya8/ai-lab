@@ -31,3 +31,15 @@ w_target  k  alpha_emp  tok/target_call  modeled_speedup(c=0.1)
 - alpha_emp = accepted/proposed undercounts the true per-token acceptance, because proposals after the first rejection in a round are never tested. Treat it as a conservative proxy.
 - The distribution test is statistical (chi-square, p=0.001 cutoff, fixed seeds).
 - Finding: with a weak draft, larger k hurts (modeled speedup <1); gains need a draft close to the target.
+
+## Adaptive k (v0.2)
+`AdaptiveK(cost_ratio)` picks each round's k from an EMA of past acceptance, maximising `expected_speedup`. k depends only on earlier rounds, so output stays exactly the target distribution (chi-square test with the controller on). Use: `speculative_generate(..., k=0, controller=AdaptiveK(0.1))`. Run `PYTHONPATH=src python experiment_adaptive.py` (3 seeds, simulated cost = target_calls + 0.1*proposed):
+
+```
+w_target |  k=2   k=4   k=8  k=16 adaptive (mean k)
+    0.00 | 0.809 0.904 1.163 1.650  0.815 (1.6)
+    0.50 | 0.563 0.530 0.615 0.831  0.537 (3.8)
+    0.80 | 0.459 0.363 0.322 0.378  0.332 (8.3)
+    0.95 | 0.413 0.300 0.226 0.197  0.198 (15.3)
+```
+Adaptive stays within ~3% of the best fixed k without knowing the draft quality in advance (the cost ratio is assumed known). Still synthetic n-gram models; tests now 8.
