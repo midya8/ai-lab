@@ -168,6 +168,7 @@
 - microgrid: int8-KV vs exact perplexity on held-out stdlib source (3 seeds, delta <2e-4 nats; cached_nll; 53 tests)
 - microgrid: weight-only quantisation (8/6/4/3/2-bit, per-channel vs per-tensor; 4-bit per-channel costs ~0.02 nats; 60 tests)
 - microgrid: group-wise weight scales (g8/g16; no gain at 4-bit, 3-bit loss +0.18 -> +0.11; 69 tests)
+- microgrid: fake_quant_mse (per-channel MSE-optimal clipping; on synthetic Student-t(3) weights MSE drops 1.93->1.35 at 2-bit, 0.216->0.166 at 4-bit, ~0 at 6-bit; weight-error only, not task loss; 71 tests)
 
 
 ## Next

@@ -76,3 +76,26 @@ def weight_bytes(model, bits=None, per_channel=True, embeddings=True, group=None
             nscales = int(np.ceil(a.shape[0] / group)) * a.shape[1]
         total += int(np.ceil(a.size * bits / 8)) + 4 * nscales
     return total
+
+
+def fake_quant_mse(w, bits=4, axis=0, grid=np.linspace(0.5, 1.0, 26)):
+    """RTN with a clipped range chosen per channel to minimise squared weight error.
+    For each slice along `axis`, try clip ratios r in `grid` (scale = r*max|w|/qmax, values
+    beyond the range saturate) and keep the best. r=1.0 is in the grid, so the result is never
+    worse than plain RTN in weight MSE (it says nothing about task loss)."""
+    qmax = 2 ** (bits - 1) - 1
+    w = np.asarray(w, dtype=float)
+    m = np.abs(w).max(axis=axis, keepdims=True)
+    m = np.where(m == 0, 1.0, m)
+    best, best_err = None, None
+    for r in grid:
+        s = r * m / qmax
+        cand = np.clip(np.rint(w / s), -qmax, qmax) * s
+        err = ((cand - w) ** 2).sum(axis=axis, keepdims=True)
+        if best is None:
+            best, best_err = cand, err
+        else:
+            better = err < best_err
+            best = np.where(better, cand, best)
+            best_err = np.where(better, err, best_err)
+    return best

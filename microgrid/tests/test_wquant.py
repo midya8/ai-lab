@@ -92,3 +92,21 @@ def test_group_model_and_bytes():
     assert not np.array_equal(q.head.w.data, m.head.w.data)
     assert weight_bytes(m, 4, group=8) > weight_bytes(m, 4)
     assert weight_bytes(m, 4, group=10**6) == weight_bytes(m, 4)
+
+
+def test_mse_clip_never_worse_than_rtn_and_helps_heavy_tails():
+    from microgrid.wquant import fake_quant, fake_quant_mse
+    rng = np.random.default_rng(0)
+    w = rng.standard_t(3, size=(64, 16))
+    for bits in (3, 4, 6):
+        e_rtn = ((fake_quant(w, bits, 0) - w) ** 2).sum(axis=0)
+        e_mse = ((fake_quant_mse(w, bits, 0) - w) ** 2).sum(axis=0)
+        assert (e_mse <= e_rtn + 1e-12).all()
+    assert e_mse.sum() < e_rtn.sum()
+
+
+def test_mse_clip_zero_and_shape():
+    from microgrid.wquant import fake_quant_mse
+    z = np.zeros((8, 4))
+    assert (fake_quant_mse(z, 4, 0) == 0).all()
+    assert fake_quant_mse(np.ones((5, 3)), 4, 0).shape == (5, 3)
