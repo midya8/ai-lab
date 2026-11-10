@@ -152,4 +152,4 @@ Honest reading: the semantic task is hard by construction (~50 same-topic docs, 
 
 ### Lexical constraints
 
-`HybridCollection.query_terms(vector, text, k, must=[...], must_not=[...])` fuses over the whole collection, then keeps only hits whose text contains every `must` token and none of the `must_not` tokens (relative fused order is preserved).
+`HybridCollection.query_terms(vector, text, k, must=[...], must_not=[...])` fuses over the whole collection, then keeps only hits whose text contains every `must` token and none of the `must_not` tokens (relative fused order is preserved). Pass `phrases=["exact phrase"]` to also require those tokens consecutively and in order.

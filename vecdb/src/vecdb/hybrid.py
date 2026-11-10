@@ -50,6 +50,11 @@ class BM25:
         return s
 
 
+def _has_phrase(seq: list[str], phrase: list[str]) -> bool:
+    n = len(phrase)
+    return any(seq[i:i + n] == phrase for i in range(len(seq) - n + 1))
+
+
 class HybridCollection:
     def __init__(self, dim: int, metric: str = "cosine", index: str = "flat", bm25_k1: float = 1.5,
                  bm25_b: float = 0.75, **index_params):
@@ -204,20 +209,25 @@ class HybridCollection:
         return [Hit(pool[j].id, -float(final[j]), pool[j].metadata) for j in order]
 
     def query_terms(self, vector, text: str, k: int = 10, must: list[str] | None = None,
-                    must_not: list[str] | None = None, **kwargs) -> list[Hit]:
+                    must_not: list[str] | None = None, phrases: list[str] | None = None,
+                    **kwargs) -> list[Hit]:
         """Hybrid query restricted by lexical constraints: every ``must`` token must appear in a doc's text
         and no ``must_not`` token may. Fusion runs over the whole collection first (so ranks are unchanged
-        by the constraint), then non-matching hits are dropped; documents without text never match ``must``."""
+        by the constraint), then non-matching hits are dropped; documents without text never match ``must``.
+        ``phrases`` additionally requires each phrase's tokens to appear consecutively, in order."""
         must_t = {t for m in (must or []) for t in tokenize(m)}
         bad_t = {t for m in (must_not or []) for t in tokenize(m)}
-        if not must_t and not bad_t:
+        phr = [tokenize(p) for p in (phrases or [])]
+        phr = [p for p in phr if p]
+        if not must_t and not bad_t and not phr:
             return self.query(vector, text, k, **kwargs)
         kwargs = dict(kwargs)
         kwargs["depth"] = max(len(self), 1)
         out: list[Hit] = []
         for h in self.query(vector, text, len(self), **kwargs):
-            toks = set(tokenize(self._text.get(h.id, "")))
-            if must_t <= toks and not (bad_t & toks):
+            seq = tokenize(self._text.get(h.id, ""))
+            toks = set(seq)
+            if must_t <= toks and not (bad_t & toks) and all(_has_phrase(seq, p) for p in phr):
                 out.append(h)
                 if len(out) == k:
                     break

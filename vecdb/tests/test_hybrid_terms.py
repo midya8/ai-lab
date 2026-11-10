@@ -26,3 +26,14 @@ def test_textless_doc_never_matches_must():
     h.upsert("x", V[0])
     assert "x" not in [t.id for t in h.query_terms(V[0], "fox", k=10, must=["fox"])]
     assert h.query_terms(V[0], "fox", k=10, must=["nonexistentword"]) == []
+
+
+def test_phrases_require_consecutive_order():
+    h = __import__("vecdb").HybridCollection(4)
+    V = np.eye(4, dtype=np.float32)
+    h.upsert(["a", "b", "c"], V[:3], texts=["the auth module rocks", "module auth swapped", "auth the module"])
+    q = V[0]
+    assert [x.id for x in h.query_terms(q, "auth", k=5, phrases=["auth module"])] == ["a"]
+    assert [x.id for x in h.query_terms(q, "auth", k=5, phrases=["module rocks"])] == ["a"]
+    assert [x.id for x in h.query_terms(q, "auth", k=5, phrases=["module auth"])] == ["b"]
+    assert {x.id for x in h.query_terms(q, "auth", k=5, phrases=["auth"])} == {"a", "b", "c"}
