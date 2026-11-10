@@ -135,3 +135,16 @@ def test_mmr_validation_and_small():
         h.query_mmr(V[0], "x", lambda_=1.5)
     assert len(h.query_mmr(V[0], "fox", k=2)) == 2
     assert HybridCollection(4).query_mmr(np.ones(4), "x") == []
+
+
+def test_rrf_alpha_weights_lists():
+    import numpy as np
+    from vecdb.hybrid import HybridCollection
+    hc = HybridCollection(dim=2)
+    hc.upsert(["d", "l", "x"], np.array([[1, 0], [0, 1], [-1, -1]], dtype=np.float32),
+              texts=["zzz", "apple pie", "qqq"])
+    v = [1.0, 0.0]
+    assert hc.query(v, "apple", k=1, alpha=1.0)[0].id == "d"
+    assert hc.query(v, "apple", k=1, alpha=0.0)[0].id == "l"
+    base = hc.query(v, "apple", k=3)
+    assert [h.id for h in base] == [h.id for h in hc.query(v, "apple", k=3, alpha=0.5)]

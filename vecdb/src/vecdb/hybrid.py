@@ -104,6 +104,7 @@ class HybridCollection:
         """Fuse vector and BM25 rankings.
 
         ``fusion='rrf'``: sum of 1/(rrf_k + rank) over both lists (scale-free, no tuning).
+        ``alpha`` also weights RRF (dense list x 2*alpha, BM25 list x 2*(1-alpha)); the default 0.5 is plain RRF.
         ``fusion='weighted'``: alpha * minmax(vector similarity) + (1-alpha) * minmax(BM25).
         ``fusion='zscore'``: like 'weighted' but each list is standardised (mean 0, std 1) instead of
         min-max scaled, so one outlier score cannot squash the rest of its list.
@@ -119,9 +120,9 @@ class HybridCollection:
         fused: dict[str, float] = {}
         if fusion == "rrf":
             for r, h in enumerate(dense):
-                fused[h.id] = fused.get(h.id, 0.0) + 1.0 / (rrf_k + r + 1)
+                fused[h.id] = fused.get(h.id, 0.0) + 2 * alpha / (rrf_k + r + 1)
             for r, (i, _) in enumerate(lex):
-                fused[i] = fused.get(i, 0.0) + 1.0 / (rrf_k + r + 1)
+                fused[i] = fused.get(i, 0.0) + 2 * (1 - alpha) / (rrf_k + r + 1)
         else:
             def norm(vals):
                 if fusion == "zscore":
