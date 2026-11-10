@@ -51,6 +51,10 @@ Same leak-free split, 400 steps, 3 seeds (seed varies init and batch sampling). 
 One scale per `g` consecutive input rows within each output column (g = full height equals per-channel). Same setup as above, mean NLL delta (nats): 4-bit per-channel +0.022, g16 +0.023, g8 +0.021 (no gain, within seed noise); 3-bit +0.181 -> g16 +0.128 -> g8 +0.106; 2-bit +1.55 -> g8 +0.95 (still unusable). Reading: finer groups only pay off once the grid is coarse (3 bits and below); extra float32 scales cost storage (see `weight_bytes(..., group=g)`). Tiny models, RTN only. Raw output in `experiments/weight_quant_groups_results.txt`. 69 tests.
 
 
+## Sequential GPTQ (`gptq_model(..., sequential=True)`)
+
+Hessians are re-collected before each linear, in forward order, from the partly quantised copy (embeddings quantised first), so each layer compensates for upstream rounding error. Same setup as above (`experiments/gptq_seq.py`, 3 seeds, mean NLL delta vs fp64, nats): 4-bit RTN +0.022, one-shot GPTQ +0.014, sequential +0.011; 3-bit +0.181 / +0.096 / +0.080; 2-bit +1.55 / +1.28 / +0.95. Sequential beat one-shot in 8 of 9 seed/bit cells (seed 0 at 4 bits tied); 2-bit remains far from usable. Costs one forward pass per linear. Tiny models, 3 seeds, simulated quantisation. Output in `experiments/gptq_seq_results.txt`. 72 tests.
+
 ## MSE-optimal clipping
 
 `wquant.fake_quant_mse(w, bits, axis)` searches a clip ratio per channel (0.5-1.0 of max|w|) to minimise weight squared error. On synthetic Student-t(3) weights (256x64) mean squared error vs RTN: 2-bit 1.93 -> 1.35, 3-bit 0.77 -> 0.45, 4-bit 0.216 -> 0.166, 6-bit 0.0131 -> 0.0128. This is weight error on synthetic heavy-tailed data, not measured perplexity on the trained model.

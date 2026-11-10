@@ -45,3 +45,16 @@ def test_hessians_cover_every_linear_and_model_unchanged():
     q = gptq_model(m, win, 4)
     assert np.array_equal(m.head.w.data, before) and not np.array_equal(q.head.w.data, before)
     assert q(win).data.shape == (4, 12, 13)
+
+
+def test_sequential_first_linear_matches_one_shot_and_model_unchanged():
+    m = MiniGPT(13, d=16, heads=4, layers=2, ctx=12, seed=0)
+    win = np.random.default_rng(0).integers(0, 13, (4, 12))
+    before = m.head.w.data.copy()
+    a = gptq_model(m, win, 4, embeddings=False)
+    b = gptq_model(m, win, 4, embeddings=False, sequential=True)
+    # first linear sees identical inputs in both modes; later ones differ
+    assert np.allclose(a.blocks[0].attn.qkv.w.data, b.blocks[0].attn.qkv.w.data)
+    assert not np.allclose(a.head.w.data, b.head.w.data)
+    assert np.array_equal(m.head.w.data, before)
+    assert b(win).data.shape == (4, 12, 13)

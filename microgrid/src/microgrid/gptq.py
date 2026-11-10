@@ -56,10 +56,22 @@ def gptq_quantize(w, H, bits=4, damp=0.01):
     return out
 
 
-def gptq_model(model, windows, bits=4, damp=0.01, embeddings=True):
-    """Deep copy with linears GPTQ-rounded using Hessians from `windows`; embeddings per-row RTN."""
-    H = collect_hessians(model, windows)
+def gptq_model(model, windows, bits=4, damp=0.01, embeddings=True, sequential=False):
+    """Deep copy with linears GPTQ-rounded using Hessians from `windows`; embeddings per-row RTN.
+
+    sequential=True re-collects Hessians before each linear (in forward order) from the partly
+    quantised copy, so each layer compensates for the error already introduced upstream (full
+    GPTQ behaviour). Cost: one extra forward pass per linear. Embeddings are quantised first in
+    that mode so their error is also seen downstream."""
     m = copy.deepcopy(model)
+    if sequential:
+        if embeddings:
+            m.tok.data = fake_quant(m.tok.data, bits, 1)
+            m.pos.data = fake_quant(m.pos.data, bits, 1)
+        for l, l0 in zip(_linears(m), _linears(model)):
+            l.w.data = gptq_quantize(l0.w.data, collect_hessians(m, windows)[id(l)], bits, damp)
+        return m
+    H = collect_hessians(model, windows)
     for l, l0 in zip(_linears(m), _linears(model)):
         l.w.data = gptq_quantize(l0.w.data, H[id(l0)], bits, damp)
     if embeddings:
