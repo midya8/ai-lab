@@ -80,3 +80,14 @@ def tree_generate(target, draft, prompt, n, depth, m, rng, stats=None):
         if clean and len(out) < goal:
             out.append(int(rng.choice(len(target.probs(out)), p=target.probs(out))))
     return out[len(prompt):goal]
+
+
+def tree_cost_per_token(stats, n_tokens, cost_ratio):
+    """Simulated cost per generated token, in units of one target forward pass.
+
+    cost = target_calls + cost_ratio * draft_nodes, where cost_ratio is the price
+    of one draft forward relative to one target forward. Autoregressive decoding
+    costs 1.0 per token, so values < 1 mean a net saving. Ignores batching
+    overheads of verifying wide trees (a real system pays more as m grows).
+    """
+    return (stats["target_calls"] + cost_ratio * stats["draft_nodes"]) / n_tokens

@@ -41,3 +41,27 @@ def test_more_candidates_fewer_target_calls():
             tree_generate(t, d, [0], 60, 4, m, np.random.default_rng(s), st)
         calls.append(st["target_calls"])
     assert calls[1] < calls[0]
+
+
+def test_tree_cost_per_token():
+    from specdec import tree_cost_per_token
+    st = {"target_calls": 10, "draft_nodes": 40}
+    assert tree_cost_per_token(st, 40, 0.1) == (10 + 4.0) / 40
+    t, d = models()
+    st = {}
+    tree_generate(t, d, [0], 50, 3, 2, np.random.default_rng(3), st)
+    assert tree_cost_per_token(st, 50, 0.0) == st["target_calls"] / 50
+
+
+def test_wide_trees_lose_when_draft_is_expensive():
+    from specdec import tree_cost_per_token
+    t, d = models()
+    cost = {}
+    for m in (1, 8):
+        tot = 0.0
+        for s in range(10):
+            st = {}
+            tree_generate(t, d, [0], 60, 4, m, np.random.default_rng(s), st)
+            tot += tree_cost_per_token(st, 60, 0.5)
+        cost[m] = tot / 10
+    assert cost[8] > cost[1]

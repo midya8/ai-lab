@@ -58,3 +58,6 @@ w_target | m=1 m=2 m=4 m=8
      0.9 | 4.58 4.94 5.00 5.00
 ```
 Candidates help most for weak drafts and saturate at depth+1 = 5; the price is m draft nodes per level (about 6.4 per token at m=8), which this table does not charge for. Only the accepted path is expanded (not a full m^depth tree), and these are simulated models with no wall-clock.
+
+## Cost accounting (v0.5)
+`tree_cost_per_token(stats, n, cost_ratio)` = (target_calls + c * draft_nodes) / tokens, in units of one target pass (autoregressive = 1.0). `python experiment_cost.py` (3 seeds, depth 4) charges the draft nodes that the v0.4 table ignored. Result: **m=1 wins at every c in {0.02, 0.1, 0.3} and every draft quality tried** (e.g. c=0.1: 0.28 at m=1 vs 0.84 at m=8). Caveat, found while reading the output: the toy target is trained on i.i.d. uniform tokens, so it is near-uniform and even the weak drafts accept often; wide trees have little to buy here. This is a null result for wide trees on this toy, not evidence about real LLMs, where tree drafting is reported to help when draft and target diverge. A peaky target would be the right next test.
