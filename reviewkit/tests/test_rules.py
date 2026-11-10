@@ -175,3 +175,10 @@ def test_compare_none():
     assert rules("a.py", "if x != None:\n    pass\n") == [(1, "py-compare-none")]
     assert rules("a.py", "if x is None:\n    pass\n") == []
     assert rules("a.py", "if x == 0:\n    pass\n") == []
+
+
+def test_not_in_style():
+    assert rules("a.py", "if not x in y:\n    pass\n") == [(1, "py-not-in-style")]
+    assert rules("a.py", "if not x is None:\n    pass\n") == [(1, "py-not-in-style")]
+    assert rules("a.py", "if x not in y:\n    pass\n") == []
+    assert rules("a.py", "if not (x in y and z):\n    pass\n") == []

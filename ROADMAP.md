@@ -181,6 +181,7 @@
 - reviewkit: AST rule py-duplicate-dict-key (repeated constant keys in a dict literal; 91 tests)
 - reviewkit: AST rule py-raise-notimplemented (`raise NotImplemented`; 92 tests)
 - reviewkit: AST rule py-compare-none (`== None` / `!= None`; 93 tests)
+- reviewkit: AST rule py-not-in-style (`not a in b` / `not a is b`; 94 tests)
 
 
 ## Next

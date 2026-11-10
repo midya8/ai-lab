@@ -431,6 +431,13 @@ def ast_findings(ctx: FileContext, source: str, complexity_threshold: int = 10) 
                             f"Dict literal repeats the key {k.value!r}; the earlier value is silently discarded.",
                             "Remove the duplicate or fix the intended key.")
                     seen[key] = v
+        elif isinstance(node, ast.UnaryOp):
+            if isinstance(node.op, ast.Not) and isinstance(node.operand, ast.Compare) \
+                    and len(node.operand.ops) == 1 and isinstance(node.operand.ops[0], (ast.In, ast.Is)):
+                word = "not in" if isinstance(node.operand.ops[0], ast.In) else "is not"
+                add(node.lineno, "py-not-in-style", "low",
+                    f"`not a {'in' if word == 'not in' else 'is'} b` reads ambiguously; use the dedicated operator.",
+                    f"Write `a {word} b`.")
         elif isinstance(node, ast.Compare):
             for op, comp in zip(node.ops, node.comparators):
                 if isinstance(comp, ast.UnaryOp) and isinstance(comp.op, (ast.USub, ast.UAdd)):
@@ -464,6 +471,7 @@ RULE_TABLE.update({
     "py-return-in-finally": ("medium", "`return` inside `finally` swallows exceptions."),
     "py-compare-none": ("low", "`== None` / `!= None` instead of `is None`."),
     "py-raise-notimplemented": ("medium", "`raise NotImplemented` (should be NotImplementedError)."),
+    "py-not-in-style": ("low", "`not a in b` / `not a is b` instead of `not in` / `is not`."),
     "py-duplicate-dict-key": ("medium", "Dict literal repeats a constant key."),
     "py-syntax-error": ("critical", "Changed Python file does not parse."),
     "py-taint-sql": ("high", "Untrusted input flows into SQL query text."),
