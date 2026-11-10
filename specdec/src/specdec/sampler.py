@@ -116,3 +116,22 @@ def optimal_k(alpha, cost_ratio, k_max=32):
         raise ValueError("alpha must be in [0,1] and cost_ratio >= 0")
     best = max(range(1, k_max + 1), key=lambda kk: expected_speedup(alpha, kk, cost_ratio))
     return best, expected_speedup(alpha, best, cost_ratio)
+
+
+def estimate_alpha(target, draft, contexts):
+    """Mean per-token acceptance sum_x min(p, q) over the given contexts.
+
+    Cheap offline calibration: no sampling, so it has no Monte-Carlo noise,
+    but it is only as representative as the contexts you pass in.
+    """
+    contexts = list(contexts)
+    if not contexts:
+        raise ValueError("need at least one context")
+    return float(np.mean([theoretical_alpha(target.probs(c), draft.probs(c)) for c in contexts]))
+
+
+def recommend_k(target, draft, contexts, cost_ratio, k_max=32):
+    """Calibrate alpha on contexts, then pick k. Returns (k, alpha, predicted_speedup)."""
+    a = estimate_alpha(target, draft, contexts)
+    k, s = optimal_k(a, cost_ratio, k_max)
+    return k, a, s
