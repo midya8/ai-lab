@@ -1,0 +1,19 @@
+seed 0: fp64 nll 2.7507
+  4-bit: rtn +0.0039  gptq +0.0112
+  3-bit: rtn +0.1927  gptq +0.1007
+  2-bit: rtn +1.4262  gptq +1.3177
+seed 1: fp64 nll 2.7522
+  4-bit: rtn +0.0243  gptq +0.0143
+  3-bit: rtn +0.1851  gptq +0.1090
+  2-bit: rtn +1.6479  gptq +1.3541
+seed 2: fp64 nll 2.7533
+  4-bit: rtn +0.0378  gptq +0.0161
+  3-bit: rtn +0.1640  gptq +0.0767
+  2-bit: rtn +1.5903  gptq +1.1663
+mean delta nats over 3 seeds (min..max):
+  4-bit rtn : +0.0220 (+0.0039..+0.0378)
+  4-bit gptq: +0.0139 (+0.0112..+0.0161)
+  3-bit rtn : +0.1806 (+0.1640..+0.1927)
+  3-bit gptq: +0.0955 (+0.0767..+0.1090)
+  2-bit rtn : +1.5548 (+1.4262..+1.6479)
+  2-bit gptq: +1.2794 (+1.1663..+1.3541)
