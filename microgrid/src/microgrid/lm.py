@@ -59,3 +59,13 @@ def generate(model, chars, prompt_ids, n, ctx, temperature=0.8, seed=0):
         p = np.exp(lg - lg.max()); p /= p.sum()
         ids.append(int(rng.choice(len(p), p=p)))
     return "".join(chars[i] for i in ids)
+
+
+def make_data_split(train_text, val_text):
+    """Vocab from train_text only; chars unseen in training are dropped from val.
+    Use with texts from *different files* so the held-out loss has no overlap leakage."""
+    chars = sorted(set(train_text))
+    stoi = {c: i for i, c in enumerate(chars)}
+    tr = np.array([stoi[c] for c in train_text])
+    va = np.array([stoi[c] for c in val_text if c in stoi])
+    return chars, tr, va

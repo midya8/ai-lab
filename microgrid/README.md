@@ -21,3 +21,7 @@ Limits: float64 CPU only, conv is einsum/strided-view based (fine for small imag
 ## Optimiser extras
 
 `AdamW` (decoupled weight decay), `clip_grad_norm`, and `cosine_warmup` are in `microgrid.optim`; `lm.train` accepts `weight_decay`, `clip`, `warmup`, `schedule`. Tests check the exact decay step, AdamW==Adam at wd=0, clip norm, and schedule shape; no quality claim is made for them on the toy corpus.
+
+## Leak-free held-out run
+
+`experiments/train_heldout.py` trains on Python stdlib source (even-indexed files, 60k chars) and validates on disjoint files (odd-indexed, 12k chars) via `make_data_split` (vocab from train only). One 600-step run (d=48, 2 layers, ctx=48, clip+warmup+cosine, ~30 s CPU, single seed): held-out loss 5.35 -> 2.47 (uniform 4.53), train ~2.03. Samples are code-flavoured gibberish (indentation, quotes, common words); a tiny model on 60k chars, so this shows real generalisation to unseen files but not quality. Train loss is a single noisy batch.

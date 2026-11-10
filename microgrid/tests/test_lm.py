@@ -27,3 +27,11 @@ def test_train_with_clip_wd_schedule_still_learns():
     hist = train(m, tr, va, 8, steps=60, bs=8, lr=1e-2, log_every=30,
                  weight_decay=0.01, clip=1.0, warmup=5, schedule=True)
     assert hist[-1][2] < before * 0.7
+
+
+def test_make_data_split_vocab_from_train_only():
+    from microgrid.lm import make_data_split
+    chars, tr, va = make_data_split("abcab", "abz")
+    assert chars == ["a", "b", "c"]
+    assert list(va) == [0, 1]  # 'z' unseen in train is dropped
+    assert len(tr) == 5
