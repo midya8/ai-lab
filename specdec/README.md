@@ -61,3 +61,18 @@ Candidates help most for weak drafts and saturate at depth+1 = 5; the price is m
 
 ## Cost accounting (v0.5)
 `tree_cost_per_token(stats, n, cost_ratio)` = (target_calls + c * draft_nodes) / tokens, in units of one target pass (autoregressive = 1.0). `python experiment_cost.py` (3 seeds, depth 4) charges the draft nodes that the v0.4 table ignored. Result: **m=1 wins at every c in {0.02, 0.1, 0.3} and every draft quality tried** (e.g. c=0.1: 0.28 at m=1 vs 0.84 at m=8). Caveat, found while reading the output: the toy target is trained on i.i.d. uniform tokens, so it is near-uniform and even the weak drafts accept often; wide trees have little to buy here. This is a null result for wide trees on this toy, not evidence about real LLMs, where tree drafting is reported to help when draft and target diverge. A peaky target would be the right next test.
+
+## Peaky target (v0.6)
+`python experiment_peaky.py`: target is a random 16-token Markov chain with Dirichlet(0.15) rows (mean entropy 1.59 nats vs 2.77 uniform); drafts are tempered copies of the target or mixes with another chain. Cost/token at c=0.1, depth 4, 3 seeds, m in (1,2,4,8):
+
+| draft | m=1 | m=2 | m=4 | m=8 |
+|---|---|---|---|---|
+| temper T=1.5 | **0.356** | 0.401 | 0.535 | 0.846 |
+| temper T=3.0 | **0.482** | 0.509 | 0.576 | 0.895 |
+| temper T=6.0 | 0.579 | **0.545** | 0.634 | 0.917 |
+| mix w=0.9 | **0.318** | 0.372 | 0.522 | 0.840 |
+| mix w=0.6 | 0.454 | **0.427** | 0.545 | 0.851 |
+| mix w=0.3 | 0.600 | **0.594** | 0.678 | 0.914 |
+
+Finding: on a peaky target, m=2 beats m=1 once the draft is poor (acceptance roughly below the point where a second candidate pays for its extra node), by up to ~6%; m>=4 never wins, because cost grows linearly with nodes. A modest, honest gain, only with a bad draft, small sample (3 seeds, no error bars). Still toy models and an idealised cost model.
+

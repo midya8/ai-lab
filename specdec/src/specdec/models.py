@@ -34,3 +34,29 @@ class MixtureLM:
 
     def probs(self, ctx):
         return self.w * self.a.probs(ctx) + (1 - self.w) * self.b.probs(ctx)
+
+
+class TemperedLM:
+    """Wrap a model and rescale its distribution: p**(1/T), renormalised.
+
+    T>1 flattens (a vague draft), T<1 sharpens. Handy for building a draft that
+    ranks tokens like the target but is under- or over-confident.
+    """
+
+    def __init__(self, base, temperature):
+        assert temperature > 0
+        self.base, self.T = base, temperature
+
+    def probs(self, ctx):
+        p = np.maximum(self.base.probs(ctx), 1e-12) ** (1.0 / self.T)
+        return p / p.sum()
+
+
+class MarkovLM:
+    """First-order Markov chain with a given row-stochastic transition matrix."""
+
+    def __init__(self, trans):
+        self.trans = np.asarray(trans, dtype=float)
+
+    def probs(self, ctx):
+        return self.trans[ctx[-1]] if ctx else np.full(len(self.trans), 1.0 / len(self.trans))

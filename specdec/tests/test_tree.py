@@ -65,3 +65,13 @@ def test_wide_trees_lose_when_draft_is_expensive():
             tot += tree_cost_per_token(st, 60, 0.5)
         cost[m] = tot / 10
     assert cost[8] > cost[1]
+
+
+def test_tempered_and_markov_models():
+    import numpy as np
+    from specdec import MarkovLM, TemperedLM
+    m = MarkovLM([[0.9, 0.1], [0.2, 0.8]])
+    assert np.allclose(m.probs([1]), [0.2, 0.8])
+    assert np.allclose(TemperedLM(m, 1.0).probs([0]), [0.9, 0.1])
+    flat = TemperedLM(m, 4.0).probs([0])
+    assert abs(flat.sum() - 1) < 1e-9 and flat[0] < 0.9 and flat[0] > flat[1]
