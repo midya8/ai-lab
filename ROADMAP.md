@@ -166,6 +166,7 @@
 - microgrid: KV-cache inference (exact vs autodiff forward and lm.generate; 12-33x faster than tape-based generation; 44 tests)
 - microgrid: 3-seed held-out run + weight-decay ablation (null result, 2.568 vs 2.558 +- ~0.018)
 - microgrid: int8-KV vs exact perplexity on held-out stdlib source (3 seeds, delta <2e-4 nats; cached_nll; 53 tests)
+- microgrid: weight-only quantisation (8/6/4/3/2-bit, per-channel vs per-tensor; 4-bit per-channel costs ~0.02 nats; 60 tests)
 
 
 ## Next
@@ -186,4 +187,4 @@
 14. codesearch follow-ups: optional neural-embedding backend as an extra (compare against BM25F on the same queries), a third blind query set written by someone other than the author, call-graph expansion (boost callers/callees of top hits), JS/TS via a parser, `--watch` re-index, an editor-friendly JSON-lines server
 15. datadoctor follow-ups: (done audit diff + CI regression gate) (done temperature scaling, mixed results) a real noisy-label dataset benchmark (needs a download-free source), (done regression targets) (done ordinal targets) (done co-occurrence stacking, null result on detection F1) object-detection style boxes
 16. vecdb follow-ups: (done flat SQ8) (done HNSW tombstone repair) (done SQ8 in IVF cells + persistence, v0.8), (done OPQ class) (done OPQ inside IVFIndex), (done multi-threaded batch search), (done hybrid BM25+vector core) (done HybridCollection save/load, v0.10) (done HybridCollection.explain: per-hit dense/BM25 ranks, v0.11) (done HybridCollection.query_batch) (done configurable + persisted BM25 k1/b) (done HybridCollection.query_terms must/must_not lexical constraints) wire into ragkit/docqa and benchmark fusion quality, real-embedding benchmark
-17. microgrid follow-ups: (done conv2d/pooling) (done iterative backward) (done transformer blocks) (done char-LM training + generation on the corpus, memorisation disclosed) (done AdamW/clip/cosine schedule) (done parity vs tiny-transformer) (done leak-free stdlib-source corpus run) (done KV-cache generation) (done 3-seed + wd ablation) (done int8 KV cache + top-k/top-p sampling) (done int8-KV perplexity) -> next: weight-only int8 quantisation of MiniGPT and its perplexity cost
+17. microgrid follow-ups: (done conv2d/pooling) (done iterative backward) (done transformer blocks) (done char-LM training + generation on the corpus, memorisation disclosed) (done AdamW/clip/cosine schedule) (done parity vs tiny-transformer) (done leak-free stdlib-source corpus run) (done KV-cache generation) (done 3-seed + wd ablation) (done int8 KV cache + top-k/top-p sampling) (done int8-KV perplexity) (done weight-only quantisation) -> next: GPTQ-style error-compensated rounding vs RTN at 3-4 bits

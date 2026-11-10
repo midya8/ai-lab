@@ -1,0 +1,28 @@
+seed 0: fp64 nll 2.7507 (543720 B)
+  8-bit per-channel: nll 2.7514 delta +0.0006 | 76668 B
+  6-bit per-channel: nll 2.7510 delta +0.0003 | 60036 B
+  4-bit per-channel: nll 2.7546 delta +0.0039 | 43404 B
+  4-bit per-tensor : nll 2.8190 delta +0.0683 | 39056 B
+  3-bit per-channel: nll 2.9434 delta +0.1927 | 35088 B
+  2-bit per-channel: nll 4.1769 delta +1.4262 | 26772 B
+seed 1: fp64 nll 2.7522 (543720 B)
+  8-bit per-channel: nll 2.7528 delta +0.0006 | 76668 B
+  6-bit per-channel: nll 2.7518 delta -0.0004 | 60036 B
+  4-bit per-channel: nll 2.7765 delta +0.0243 | 43404 B
+  4-bit per-tensor : nll 2.8144 delta +0.0622 | 39056 B
+  3-bit per-channel: nll 2.9373 delta +0.1851 | 35088 B
+  2-bit per-channel: nll 4.4001 delta +1.6479 | 26772 B
+seed 2: fp64 nll 2.7533 (543720 B)
+  8-bit per-channel: nll 2.7530 delta -0.0003 | 76668 B
+  6-bit per-channel: nll 2.7526 delta -0.0008 | 60036 B
+  4-bit per-channel: nll 2.7911 delta +0.0378 | 43404 B
+  4-bit per-tensor : nll 2.8470 delta +0.0937 | 39056 B
+  3-bit per-channel: nll 2.9173 delta +0.1640 | 35088 B
+  2-bit per-channel: nll 4.3436 delta +1.5903 | 26772 B
+mean delta nats over 3 seeds:
+  8-bit per-channel: +0.0003 (min -0.0003, max +0.0006)
+  6-bit per-channel: -0.0003 (min -0.0008, max +0.0003)
+  4-bit per-channel: +0.0220 (min +0.0039, max +0.0378)
+  4-bit per-tensor : +0.0747 (min +0.0622, max +0.0937)
+  3-bit per-channel: +0.1806 (min +0.1640, max +0.1927)
+  2-bit per-channel: +1.5548 (min +1.4262, max +1.6479)
