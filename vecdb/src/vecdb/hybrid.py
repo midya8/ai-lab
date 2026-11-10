@@ -203,6 +203,26 @@ class HybridCollection:
         order = sorted(range(len(pool)), key=lambda j: (-final[j], pool[j].id))[:k]
         return [Hit(pool[j].id, -float(final[j]), pool[j].metadata) for j in order]
 
+    def query_terms(self, vector, text: str, k: int = 10, must: list[str] | None = None,
+                    must_not: list[str] | None = None, **kwargs) -> list[Hit]:
+        """Hybrid query restricted by lexical constraints: every ``must`` token must appear in a doc's text
+        and no ``must_not`` token may. Fusion runs over the whole collection first (so ranks are unchanged
+        by the constraint), then non-matching hits are dropped; documents without text never match ``must``."""
+        must_t = {t for m in (must or []) for t in tokenize(m)}
+        bad_t = {t for m in (must_not or []) for t in tokenize(m)}
+        if not must_t and not bad_t:
+            return self.query(vector, text, k, **kwargs)
+        kwargs = dict(kwargs)
+        kwargs["depth"] = max(len(self), 1)
+        out: list[Hit] = []
+        for h in self.query(vector, text, len(self), **kwargs):
+            toks = set(tokenize(self._text.get(h.id, "")))
+            if must_t <= toks and not (bad_t & toks):
+                out.append(h)
+                if len(out) == k:
+                    break
+        return out
+
     def query_batch(self, vectors, texts: list[str], k: int = 10, **kwargs) -> list[list[Hit]]:
         """Run ``query`` for each (vector, text) pair; results are in input order."""
         vectors = np.asarray(vectors, dtype=np.float32)

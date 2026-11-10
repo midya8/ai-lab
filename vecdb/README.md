@@ -149,3 +149,7 @@ Honest reading: the semantic task is hard by construction (~50 same-topic docs, 
 ### Explaining hybrid results
 
 `HybridCollection.explain(vector, text, k)` runs the RRF query and returns, per hit, the fused score, its rank in the dense and BM25 lists (None if absent), the raw distance/BM25 score, and whether it came from `both`, `dense` or `lexical`. Useful for debugging why a document surfaced.
+
+### Lexical constraints
+
+`HybridCollection.query_terms(vector, text, k, must=[...], must_not=[...])` fuses over the whole collection, then keeps only hits whose text contains every `must` token and none of the `must_not` tokens (relative fused order is preserved).
