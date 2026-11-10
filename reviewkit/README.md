@@ -63,3 +63,7 @@ pip install -r requirements.txt && PYTHONPATH=src python -m pytest -q
 ## Moved-code detection
 
 A block removed in one place and added verbatim (ignoring indentation) elsewhere in the same diff is treated as a move: findings on those lines already existed, so they are skipped and a note says how many. Runs of fewer than `min_move_lines` (default 3) meaningful lines, and trivial lines like lone brackets, never count. Config keys: `skip_moved` (default true), `min_move_lines`. A moved block that is also edited is reviewed as new code (conservative). Matching is exact-line, so a move with a one-line tweak in the middle is split into shorter runs, and runs under the minimum are reviewed normally. Tested on synthetic diffs only, not yet on real PRs.
+
+## Taint rules (py-taint-sql / py-taint-shell / py-taint-eval)
+
+`taint.py` follows values from `input()`, `sys.argv` and `request.args/form/json/...` through assignments, f-strings, `+`, `%` and `.format` into SQL `execute` query text, `os.system`, `subprocess.*(shell=True)` and `eval`/`exec`. `int()`/`float()`/`shlex.quote` clear taint; parameterised queries are clean. Limits: per-function only, function parameters are not assumed tainted, no inter-procedural flow, so it will miss injections that cross function boundaries.

@@ -412,6 +412,9 @@ def ast_findings(ctx: FileContext, source: str, complexity_threshold: int = 10) 
                     add(node.lineno, "py-is-literal", "medium",
                         "`is` compares identity, not value; comparing with a literal is unreliable.",
                         "Use `==` / `!=`.")
+    from .taint import taint_hits
+    for line, rule, msg in taint_hits(tree):
+        add(line, rule, "high", msg, "Pass values as bound parameters / argument lists, or validate against an allow-list.")
     return out
 
 
@@ -426,6 +429,9 @@ RULE_TABLE.update({
     "py-requests-no-timeout": ("medium", "`requests.*` call without `timeout`."),
     "py-is-literal": ("medium", "`is` / `is not` against a str/int/float/bytes literal."),
     "py-syntax-error": ("critical", "Changed Python file does not parse."),
+    "py-taint-sql": ("high", "Untrusted input flows into SQL query text."),
+    "py-taint-shell": ("high", "Untrusted input flows into a shell command."),
+    "py-taint-eval": ("high", "Untrusted input flows into eval/exec."),
 })
 
 
