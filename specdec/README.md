@@ -76,3 +76,15 @@ Candidates help most for weak drafts and saturate at depth+1 = 5; the price is m
 
 Finding: on a peaky target, m=2 beats m=1 once the draft is poor (acceptance roughly below the point where a second candidate pays for its extra node), by up to ~6%; m>=4 never wins, because cost grows linearly with nodes. A modest, honest gain, only with a bad draft, small sample (3 seeds, no error bars). Still toy models and an idealised cost model.
 
+
+## Real transformer pair (v0.7)
+`specdec.neural.MiniGPTLM` wraps a trained microgrid `MiniGPT` (last `ctx` tokens -> next-token probs) so it can be a target or draft; exactness is tested with a neural pair (chi-square on the first token). `PYTHONPATH=src python experiment_neural.py 300` trains a target (d=48, 2 layers, 67k params) and a draft (d=24, 1 layer, 12.6k params) on stdlib source chars (300 steps, val nll 2.90 / 3.05) and measures (results file: `experiment_neural_results.txt`, 3 seeds, 120 tokens):
+
+```
+ k  alpha_emp  tok/target_call  cost/token
+ 1     0.714        1.70           0.875
+ 2     0.678        2.33           0.846
+ 4     0.429        2.68           1.103
+ 8     0.301        3.28           1.456
+```
+Finding: the draft has 0.19x the parameters but its measured forward time is **0.49x** the target's (numpy overhead dominates tiny nets), so with c=0.49 the best case is ~15% cheaper per token (k=2) and k>=4 is worse than plain sampling. Gains need a draft that is much cheaper than the target, not just smaller. Caveats: undertrained models, no KV cache, the adapter calls the target once per verified position (so measured wall-clock is slower than autoregressive; the cost column uses the one-batched-pass-per-round model), 3 seeds, no error bars.
