@@ -415,6 +415,12 @@ def ast_findings(ctx: FileContext, source: str, complexity_threshold: int = 10) 
                         add(sub.lineno, "py-return-in-finally", "medium",
                             "`return` inside `finally` silently swallows any in-flight exception.",
                             "Move the return out of the `finally` block.")
+        elif isinstance(node, ast.Raise):
+            exc = node.exc.func if isinstance(node.exc, ast.Call) else node.exc
+            if isinstance(exc, ast.Name) and exc.id == "NotImplemented":
+                add(node.lineno, "py-raise-notimplemented", "medium",
+                    "`raise NotImplemented` raises a TypeError; NotImplemented is not an exception.",
+                    "Use `raise NotImplementedError(...)`.")
         elif isinstance(node, ast.Dict):
             seen: Dict[Any, ast.AST] = {}
             for k, v in zip(node.keys, node.values):
@@ -452,6 +458,7 @@ RULE_TABLE.update({
     "py-is-literal": ("medium", "`is` / `is not` against a str/int/float/bytes literal."),
     "py-assert-tuple": ("high", "`assert` on a non-empty tuple is always true."),
     "py-return-in-finally": ("medium", "`return` inside `finally` swallows exceptions."),
+    "py-raise-notimplemented": ("medium", "`raise NotImplemented` (should be NotImplementedError)."),
     "py-duplicate-dict-key": ("medium", "Dict literal repeats a constant key."),
     "py-syntax-error": ("critical", "Changed Python file does not parse."),
     "py-taint-sql": ("high", "Untrusted input flows into SQL query text."),

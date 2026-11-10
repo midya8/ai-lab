@@ -162,3 +162,9 @@ def test_duplicate_dict_key():
     assert rules("a.py", "d = {'a': 1, 'b': 2}\n") == []
     assert rules("a.py", "d = {1: 'x', '1': 'y'}\n") == []
     assert rules("a.py", "d = {**o, 'a': 1}\n") == []
+
+
+def test_raise_notimplemented():
+    assert rules("a.py", "def f():\n    raise NotImplemented\n") == [(2, "py-raise-notimplemented")]
+    assert rules("a.py", "def f():\n    raise NotImplemented('x')\n") == [(2, "py-raise-notimplemented")]
+    assert rules("a.py", "def f():\n    raise NotImplementedError\n") == []
