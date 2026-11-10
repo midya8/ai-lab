@@ -51,7 +51,11 @@ class BM25:
 
 
 class HybridCollection:
-    def __init__(self, dim: int, metric: str = "cosine", index: str = "flat", **index_params):
+    def __init__(self, dim: int, metric: str = "cosine", index: str = "flat", bm25_k1: float = 1.5,
+                 bm25_b: float = 0.75, **index_params):
+        if bm25_k1 < 0 or not 0 <= bm25_b <= 1:
+            raise ValueError("need bm25_k1 >= 0 and 0 <= bm25_b <= 1")
+        self.bm25_k1, self.bm25_b = float(bm25_k1), float(bm25_b)
         self.col = Collection(dim, metric, index, **index_params)
         self._text: dict[str, str] = {}
         self._bm25: tuple[int, BM25, list[str]] | None = None
@@ -83,7 +87,7 @@ class HybridCollection:
     def _lex(self) -> tuple[BM25, list[str]]:
         if self._bm25 is None or self._bm25[0] != self.col._version:
             ids = [i for i in self._text if i in self.col]
-            self._bm25 = (self.col._version, BM25([tokenize(self._text[i]) for i in ids]), ids)
+            self._bm25 = (self.col._version, BM25([tokenize(self._text[i]) for i in ids], self.bm25_k1, self.bm25_b), ids)
         return self._bm25[1], self._bm25[2]
 
     def lexical(self, text: str, k: int = 10, where: dict | None = None) -> list[tuple[str, float]]:
@@ -243,6 +247,8 @@ class HybridCollection:
         with open(tmp, "w") as f:
             json.dump({i: t for i, t in self._text.items() if i in self.col}, f)
         os.replace(tmp, os.path.join(directory, "texts.json"))
+        with open(os.path.join(directory, "bm25.json"), "w") as f:
+            json.dump({"k1": self.bm25_k1, "b": self.bm25_b}, f)
 
     @classmethod
     def load(cls, directory: str) -> "HybridCollection":
@@ -250,6 +256,12 @@ class HybridCollection:
         h = cls.__new__(cls)
         h.col = col
         h._bm25 = None
+        h.bm25_k1, h.bm25_b = 1.5, 0.75
+        bp = os.path.join(directory, "bm25.json")
+        if os.path.exists(bp):
+            with open(bp) as f:
+                cfg = json.load(f)
+            h.bm25_k1, h.bm25_b = cfg["k1"], cfg["b"]
         path = os.path.join(directory, "texts.json")
         h._text = {}
         if os.path.exists(path):

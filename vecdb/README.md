@@ -142,6 +142,10 @@ Honest reading: the semantic task is hard by construction (~50 same-topic docs, 
 
 `HybridCollection.query_mmr(vector, text, k, lambda_=0.7)` re-ranks the top `3*k` fused hits with Maximal Marginal Relevance (relevance = scaled fused score, redundancy = max cosine to already-picked hits). `lambda_=1` equals `query`; lower values suppress near-duplicates. Unit-tested on a duplicate-pair case; no retrieval-quality benchmark yet.
 
+### BM25 parameters
+
+`HybridCollection(dim, bm25_k1=1.5, bm25_b=0.75)` makes the BM25 saturation and length-normalisation parameters configurable (validated, persisted in `bm25.json`; older saves load with defaults). `b=0` removes length normalisation. Not tuned on any benchmark here.
+
 ### Explaining hybrid results
 
 `HybridCollection.explain(vector, text, k)` runs the RRF query and returns, per hit, the fused score, its rank in the dense and BM25 lists (None if absent), the raw distance/BM25 score, and whether it came from `both`, `dense` or `lexical`. Useful for debugging why a document surfaced.
