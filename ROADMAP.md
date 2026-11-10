@@ -173,6 +173,7 @@
 - specdec v0.4: m-ary draft-tree verification (tree_generate), exactness test, tokens-per-target-call experiment (16 tests)
 - specdec v0.5: cost-charged tree experiment (m=1 wins on near-uniform toy target; null result disclosed; 18 tests)
 - specdec v0.6: peaky-target re-test of wide trees (m=2 wins only with poor drafts, up to ~6%; TemperedLM/MarkovLM; 19 tests)
+- specdec v0.8: model-free prompt-lookup draft (exact; alpha 0.80 on periodic vs 0.04 unigram, worse on random; 27 tests)
 
 
 ## Next

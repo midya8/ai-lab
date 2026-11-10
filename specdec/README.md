@@ -88,3 +88,16 @@ Finding: on a peaky target, m=2 beats m=1 once the draft is poor (acceptance rou
  8     0.301        3.28           1.456
 ```
 Finding: the draft has 0.19x the parameters but its measured forward time is **0.49x** the target's (numpy overhead dominates tiny nets), so with c=0.49 the best case is ~15% cheaper per token (k=2) and k>=4 is worse than plain sampling. Gains need a draft that is much cheaper than the target, not just smaller. Caveats: undertrained models, no KV cache, the adapter calls the target once per verified position (so measured wall-clock is slower than autoregressive; the cost column uses the one-batched-pass-per-round model), 3 seeds, no error bars.
+
+
+## Prompt-lookup draft (v0.8)
+`specdec.PromptLookupLM(vocab, n, conf)` is a model-free draft: if the last n tokens appeared earlier in the context, it puts `conf` mass on the token that followed the latest match, else it is uniform. It depends only on the context, so output stays exactly target-distributed (chi-square test in `tests/test_lookup.py`). `python experiment_lookup.py` (k=4, 200 tokens, 3 seeds, order-2 n-gram targets):
+
+| target | draft | alpha | tokens/target call |
+|---|---|---|---|
+| periodic (i mod 8) | lookup | 0.800 | 4.16 |
+| periodic | unigram | 0.037 | 1.15 |
+| random | lookup | 0.158 | 1.62 |
+| random | unigram | 0.856 | 4.38 |
+
+Finding: lookup wins big on copy-heavy text and loses on text with no repeats (the unigram draft matches a uniform target by construction). Toy targets; alpha on the periodic target is capped by conf=0.9.
