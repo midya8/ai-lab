@@ -9,6 +9,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Set
 
+from .moves import detect_moves, moved_new_lines
 from .diff import FileDiff, parse_diff
 from .llm import Provider, build_prompt, chunk_diff, parse_reply, SYSTEM_PROMPT
 from .rules import (Finding, RULE_TABLE, SEVERITIES, analyze_file, is_test_path, language_of,
@@ -24,6 +25,8 @@ class Config:
     min_severity: str = "low"
     complexity_threshold: int = 10
     max_file_bytes: int = 400_000
+    skip_moved: bool = True
+    min_move_lines: int = 3
 
     def validate(self) -> "Config":
         if self.min_severity not in SEVERITIES:
@@ -41,7 +44,7 @@ def load_config(path: Optional[str]) -> Config:
         return Config()
     with open(path) as f:
         raw = json.load(f)
-    unknown = set(raw) - {"disabled_rules", "severity_overrides", "ignore_paths", "max_comments", "min_severity", "complexity_threshold"}
+    unknown = set(raw) - {"disabled_rules", "severity_overrides", "ignore_paths", "max_comments", "min_severity", "complexity_threshold", "skip_moved", "min_move_lines"}
     if unknown:
         raise ValueError(f"unknown config keys: {sorted(unknown)}")
     cfg = Config(
@@ -51,6 +54,8 @@ def load_config(path: Optional[str]) -> Config:
         max_comments=int(raw.get("max_comments", 25)),
         min_severity=raw.get("min_severity", "low"),
         complexity_threshold=int(raw.get("complexity_threshold", 10)),
+        skip_moved=bool(raw.get("skip_moved", True)),
+        min_move_lines=int(raw.get("min_move_lines", 3)),
     )
     return cfg.validate()
 
@@ -119,6 +124,8 @@ class Reviewer:
     def review(self, diff_text: str) -> ReviewResult:
         cfg = self.config
         files = parse_diff(diff_text)
+        moved = moved_new_lines(detect_moves(files, cfg.min_move_lines)) if cfg.skip_moved else {}
+        n_moved = 0
         notes: List[str] = []
         stats = {"llm_calls": 0, "llm_dropped": 0, "llm_failed": 0, "llm_deduped": 0}
         found: List[Finding] = []
@@ -163,6 +170,9 @@ class Reviewer:
             for f in file_found:
                 if f.rule in cfg.disabled_rules:
                     continue
+                if f.line in moved.get(fd.path, ()):
+                    n_moved += 1
+                    continue
                 if suppressed(f.line_text, f.rule):
                     n_supp += 1
                     continue
@@ -175,6 +185,8 @@ class Reviewer:
 
         found.sort(key=lambda f: (-sev_rank(f.severity), f.path, f.line, f.rule))
         capped = found[: cfg.max_comments]
+        if n_moved:
+            notes.append(f"{n_moved} finding(s) skipped on moved code (unchanged lines relocated in this diff).")
         if src_changed and not test_changed:
             notes.append("Source files changed but no test files were touched.")
         if len(found) > len(capped):
