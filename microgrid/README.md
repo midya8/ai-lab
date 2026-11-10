@@ -29,3 +29,7 @@ Limits: float64 CPU only, conv is einsum/strided-view based (fine for small imag
 ## KV-cache inference (`kvcache.py`)
 
 Pure-numpy forward with per-layer key/value caches (`prefill`, `step`, `generate_cached`). Tests check it matches the autodiff forward to 1e-9 at every position, chunked prefill equals single prefill, and `generate_cached` reproduces `lm.generate` token for token, including after the window slides past ctx (absolute positions force a re-prefill there). `experiments/bench_kvcache.py` (d=64, 4 layers, CPU): ctx=64 12x faster (0.33s -> 0.03s), ctx=256 33x (4.14s -> 0.12s). Caveat: the baseline also pays autodiff tape overhead that the cached path skips, so the speedup mixes both effects; it is not caching alone. 44 tests.
+
+## Multi-seed + weight-decay ablation (`experiments/seeds_heldout.py`)
+
+Same leak-free split, 400 steps, 3 seeds (seed varies init and batch sampling). Held-out loss: wd=0.0 -> 2.568 +- 0.018 (runs 2.576/2.544/2.585); wd=0.1 -> 2.558 +- 0.017 (2.566/2.534/2.574). Uniform baseline 4.533. wd=0.1 is lower by ~0.01 in every paired seed, but that is well inside the seed-to-seed spread and 3 seeds is few, so this is a null result: weight decay has no demonstrable effect at this scale. The single-run 2.47 above (600 steps) was a more favourable draw/longer run, not comparable.
