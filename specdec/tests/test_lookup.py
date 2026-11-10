@@ -39,5 +39,5 @@ def test_high_acceptance_on_repetitive_target():
     toks = [i % V for i in range(600)]
     t = NgramLM(V, 2, alpha=0.05).fit(toks)
     st = {}
-    speculative_generate(t, PromptLookupLM(V, n=2), [0, 1, 2, 3], 60, 4, np.random.default_rng(2), st)
+    speculative_generate(t, PromptLookupLM(V, n=2), [0, 1, 2, 3], 200, 4, np.random.default_rng(2), st)
     assert st["accepted"] / st["proposed"] > 0.6
