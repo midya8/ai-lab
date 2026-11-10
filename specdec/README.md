@@ -43,3 +43,7 @@ w_target |  k=2   k=4   k=8  k=16 adaptive (mean k)
     0.95 | 0.413 0.300 0.226 0.197  0.198 (15.3)
 ```
 Adaptive stays within ~3% of the best fixed k without knowing the draft quality in advance (the cost ratio is assumed known). Still synthetic n-gram models; tests now 8.
+
+## Multi-draft verification (v0.3)
+
+`multi_draft_step(p, q, m, rng)` draws m i.i.d. candidates from the draft and tests them with recursive rejection sampling (residual `max(p-q,0)` after each rejection). The emitted token is exactly target-distributed (chi-square tested for m=1,2,4), and `multi_draft_acceptance` gives the closed-form chance that some candidate is accepted, which the tests check against simulation. Acceptance rises monotonically with m. This is a single-position, i.i.d.-candidate scheme (no token tree over multiple depths), and it reports acceptance only, not wall-clock.
