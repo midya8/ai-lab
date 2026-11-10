@@ -148,6 +148,7 @@
 - tiny-transformer: `expected_speedup` / `best_k` wall-clock cost model for speculative decoding (speedup = tokens-per-call / (k*c+1); analytic, not measured; 4 tests)
 - vecdb: SQ8Index persistence via save_index/load_index, incl. keep_raw and untrained (3 tests)
 - vecdb: `HybridCollection.query_mmr` diversity re-ranking (lambda_=1 equals query; near-duplicate demotion test; 3 tests)
+- vecdb: `fusion="zscore"` for HybridCollection.query (per-list standardisation instead of min-max; 4 tests; no quality claim, not benchmarked)
 
 
 ## Next

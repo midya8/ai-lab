@@ -105,10 +105,12 @@ class HybridCollection:
 
         ``fusion='rrf'``: sum of 1/(rrf_k + rank) over both lists (scale-free, no tuning).
         ``fusion='weighted'``: alpha * minmax(vector similarity) + (1-alpha) * minmax(BM25).
+        ``fusion='zscore'``: like 'weighted' but each list is standardised (mean 0, std 1) instead of
+        min-max scaled, so one outlier score cannot squash the rest of its list.
         ``distance`` on returned hits is the negated fused score (smaller is better, as elsewhere).
         """
-        if fusion not in ("rrf", "weighted"):
-            raise ValueError("fusion must be 'rrf' or 'weighted'")
+        if fusion not in ("rrf", "weighted", "zscore"):
+            raise ValueError("fusion must be 'rrf', 'weighted' or 'zscore'")
         if not 0.0 <= alpha <= 1.0:
             raise ValueError("alpha must be in [0, 1]")
         depth = depth or max(4 * k, 50)
@@ -122,6 +124,12 @@ class HybridCollection:
                 fused[i] = fused.get(i, 0.0) + 1.0 / (rrf_k + r + 1)
         else:
             def norm(vals):
+                if fusion == "zscore":
+                    a = np.asarray(vals, dtype=np.float64)
+                    sd = a.std()
+                    # shift so the worst kept hit is 0: absent docs score 0, as in min-max
+                    z = np.zeros_like(a) if sd == 0 else (a - a.mean()) / sd
+                    return list(z - z.min() + (1.0 if sd == 0 else 0.0))
                 lo, hi = min(vals), max(vals)
                 return [1.0 if hi == lo else (v - lo) / (hi - lo) for v in vals]
             if dense:
