@@ -25,3 +25,29 @@ class PromptLookupLM:
                     q[ctx[i + n]] += self.conf
                     break
         return q
+
+
+class BackoffLookupLM:
+    """Prompt-lookup with backoff: try the longest suffix n_max first, then
+    shorter ones down to n_min. Longer matches are more specific, so they get
+    higher confidence: conf = base_conf + (1 - base_conf) * (n - n_min) / (n_max - n_min + 1) * 0.5 .
+    Still a valid q(.|ctx) depending only on ctx, so decoding stays exact."""
+
+    def __init__(self, vocab, n_max=4, n_min=1, base_conf=0.6, top=0.95):
+        assert vocab > 1 and n_max >= n_min >= 1 and 0 < base_conf <= top < 1
+        self.V, self.n_max, self.n_min, self.base, self.top = vocab, n_max, n_min, base_conf, top
+
+    def conf(self, n):
+        span = self.n_max - self.n_min
+        return self.top if span == 0 else self.base + (self.top - self.base) * (n - self.n_min) / span
+
+    def probs(self, ctx):
+        for n in range(min(self.n_max, len(ctx) - 1), self.n_min - 1, -1):
+            key = list(ctx[-n:])
+            for i in range(len(ctx) - n - 1, -1, -1):
+                if list(ctx[i:i + n]) == key:
+                    c = self.conf(n)
+                    q = np.full(self.V, (1 - c) / self.V)
+                    q[ctx[i + n]] += c
+                    return q
+        return np.full(self.V, 1.0 / self.V)

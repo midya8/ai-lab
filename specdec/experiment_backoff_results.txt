@@ -1,0 +1,4 @@
+lookup n=1     acceptance 0.071
+lookup n=2     acceptance 0.292
+lookup n=3     acceptance 0.243
+backoff 3..1   acceptance 0.287

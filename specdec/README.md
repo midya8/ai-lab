@@ -101,3 +101,7 @@ Finding: the draft has 0.19x the parameters but its measured forward time is **0
 | random | unigram | 0.856 | 4.38 |
 
 Finding: lookup wins big on copy-heavy text and loses on text with no repeats (the unigram draft matches a uniform target by construction). Toy targets; alpha on the periodic target is capped by conf=0.9.
+
+## Backoff prompt-lookup draft
+
+`BackoffLookupLM(vocab, n_max, n_min)` tries the longest matching context suffix first and falls back to shorter ones, with confidence rising with match length. Exactness is preserved (tested by chi-square). `experiment_backoff.py` (synthetic repeated-phrase target, 20 seeds, k=4): acceptance n=1 0.071, n=2 0.292, n=3 0.243, backoff 3..1 0.287. Result: backoff matches the best fixed n within noise rather than beating it; its value is not having to tune n (n=1 and n=3 are both clearly worse). Confidence constants were not tuned.
