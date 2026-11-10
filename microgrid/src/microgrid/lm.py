@@ -1,7 +1,7 @@
 """Char-level language-model training on top of MiniGPT (autodiff from scratch)."""
 import numpy as np
 from .nn import softmax_cross_entropy
-from .optim import Adam
+from .optim import AdamW, clip_grad_norm, cosine_warmup
 
 
 def make_data(text, val_frac=0.15):
@@ -30,15 +30,20 @@ def evaluate(model, ids, ctx, n=16, seed=123):
     return float(lm_loss(model, x, y).data)
 
 
-def train(model, train_ids, val_ids, ctx, steps=300, bs=16, lr=3e-3, seed=0, log_every=50):
+def train(model, train_ids, val_ids, ctx, steps=300, bs=16, lr=3e-3, seed=0, log_every=50,
+          weight_decay=0.0, clip=None, warmup=0, schedule=False):
     rng = np.random.default_rng(seed)
-    opt = Adam(model.parameters(), lr=lr)
+    opt = AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
     hist = []
     for s in range(1, steps + 1):
         x, y = batches(train_ids, ctx, bs, rng)
         opt.zero_grad()
         loss = lm_loss(model, x, y)
         loss.backward()
+        if clip is not None:
+            clip_grad_norm(model.parameters(), clip)
+        if schedule or warmup:
+            opt.lr = cosine_warmup(s, steps, lr, warmup, min_lr=0.1 * lr if schedule else lr)
         opt.step()
         if s % log_every == 0 or s == 1:
             hist.append((s, float(loss.data), evaluate(model, val_ids, ctx)))

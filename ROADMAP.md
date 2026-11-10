@@ -159,6 +159,7 @@
 - microgrid v0.1: numpy autodiff engine + gradcheck + optimizers (10 tests)
 - microgrid: conv2d (stride/pad/bias) + max_pool2d with gradchecks, iterative backward, tiny CNN test (16 tests)
 - microgrid: transformer blocks (LayerNorm, causal multi-head attention, GELU MLP, MiniGPT) with gradchecks + causality test (8 tests, 24 total)
+- microgrid: AdamW (decoupled decay), global grad-norm clipping, warmup+cosine LR schedule, wired into lm.train (5 tests, 31 total)
 
 
 ## Next
@@ -179,4 +180,4 @@
 14. codesearch follow-ups: optional neural-embedding backend as an extra (compare against BM25F on the same queries), a third blind query set written by someone other than the author, call-graph expansion (boost callers/callees of top hits), JS/TS via a parser, `--watch` re-index, an editor-friendly JSON-lines server
 15. datadoctor follow-ups: (done audit diff + CI regression gate) (done temperature scaling, mixed results) a real noisy-label dataset benchmark (needs a download-free source), (done regression targets) (done ordinal targets) (done co-occurrence stacking, null result on detection F1) object-detection style boxes
 16. vecdb follow-ups: (done flat SQ8) (done HNSW tombstone repair) (done SQ8 in IVF cells + persistence, v0.8), (done OPQ class) (done OPQ inside IVFIndex), (done multi-threaded batch search), (done hybrid BM25+vector core) (done HybridCollection save/load, v0.10) (done HybridCollection.explain: per-hit dense/BM25 ranks, v0.11) (done HybridCollection.query_batch) (done configurable + persisted BM25 k1/b) (done HybridCollection.query_terms must/must_not lexical constraints) wire into ragkit/docqa and benchmark fusion quality, real-embedding benchmark
-17. microgrid follow-ups: (done conv2d/pooling) (done iterative backward) (done transformer blocks) (done char-LM training + generation on the corpus, memorisation disclosed) -> next: numerical-parity test of one forward pass vs tiny-transformer with shared weights, a bigger non-repetitive corpus
+17. microgrid follow-ups: (done conv2d/pooling) (done iterative backward) (done transformer blocks) (done char-LM training + generation on the corpus, memorisation disclosed) (done AdamW/clip/cosine schedule) -> next: numerical-parity test of one forward pass vs tiny-transformer with shared weights, a bigger non-repetitive corpus

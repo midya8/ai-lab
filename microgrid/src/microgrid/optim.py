@@ -36,3 +36,38 @@ class Adam:
             mh = m / (1 - self.b1 ** self.t)
             vh = v / (1 - self.b2 ** self.t)
             p.data -= self.lr * mh / (np.sqrt(vh) + self.eps)
+
+
+class AdamW(Adam):
+    """Adam with decoupled weight decay (Loshchilov & Hutter): the decay is
+    applied to the weights directly, not folded into the gradient."""
+
+    def __init__(self, params, lr=1e-2, b1=0.9, b2=0.999, eps=1e-8, weight_decay=0.01):
+        super().__init__(params, lr, b1, b2, eps)
+        self.wd = weight_decay
+
+    def step(self):
+        if self.wd:
+            for p in self.params:
+                p.data -= self.lr * self.wd * p.data
+        super().step()
+
+
+def clip_grad_norm(params, max_norm):
+    """Scale grads in place so their global L2 norm is <= max_norm. Returns the pre-clip norm."""
+    params = list(params)
+    total = float(np.sqrt(sum(float((p.grad ** 2).sum()) for p in params)))
+    if total > max_norm:
+        scale = max_norm / (total + 1e-12)
+        for p in params:
+            p.grad *= scale
+    return total
+
+
+def cosine_warmup(step, total, base_lr, warmup=0, min_lr=0.0):
+    """LR at 1-indexed `step`: linear warmup then cosine decay to min_lr at `total`."""
+    if warmup and step <= warmup:
+        return base_lr * step / warmup
+    prog = (step - warmup) / max(1, total - warmup)
+    prog = min(1.0, max(0.0, prog))
+    return min_lr + 0.5 * (base_lr - min_lr) * (1 + np.cos(np.pi * prog))

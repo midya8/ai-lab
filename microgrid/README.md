@@ -17,3 +17,7 @@ Char-level LM training (`lm.py`, `experiments/train_corpus.py`): trains MiniGPT 
 Test: `PYTHONPATH=src python -m pytest -q` (26 tests incl. LM training/generation smoke tests; 24 earlier: the original 16: gradient checks for each op incl. conv/pool, conv vs naive loop, XOR via MLP, a 2-blob classifier, a tiny CNN on synthetic row-vs-column stripes).
 
 Limits: float64 CPU only, conv is einsum/strided-view based (fine for small images, not fast), no graph freeing. Educational, not a framework.
+
+## Optimiser extras
+
+`AdamW` (decoupled weight decay), `clip_grad_norm`, and `cosine_warmup` are in `microgrid.optim`; `lm.train` accepts `weight_decay`, `clip`, `warmup`, `schedule`. Tests check the exact decay step, AdamW==Adam at wd=0, clip norm, and schedule shape; no quality claim is made for them on the toy corpus.
