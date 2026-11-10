@@ -1,6 +1,6 @@
 import numpy as np
 from microgrid import MiniGPT
-from microgrid.wquant import quantize_array, fake_quant, quantize_model, weight_bytes
+from microgrid.wquant import quantize_array, fake_quant, quantize_model, weight_bytes, fake_quant_grouped
 from microgrid.kvcache import cached_nll
 
 
@@ -61,3 +61,34 @@ def test_bytes_ratio():
     assert weight_bytes(m, 8) < full / 5
     assert weight_bytes(m, 4) < weight_bytes(m, 8)
     assert weight_bytes(m, 4, embeddings=False) > weight_bytes(m, 4)
+
+
+def test_group_full_height_equals_per_channel():
+    w = np.random.default_rng(3).normal(size=(24, 5))
+    assert np.array_equal(fake_quant_grouped(w, 4, 24), fake_quant(w, 4, 0))
+    assert np.array_equal(fake_quant_grouped(w, 4, 100), fake_quant(w, 4, 0))
+
+
+def test_group_handles_ragged_tail_and_error_bound():
+    w = np.random.default_rng(4).normal(size=(21, 6))
+    q = fake_quant_grouped(w, 4, 8)
+    assert q.shape == w.shape
+    for i in range(0, 21, 8):
+        blk = w[i:i + 8]
+        s = np.abs(blk).max(axis=0) / 7
+        assert np.all(np.abs(q[i:i + 8] - blk) <= s / 2 + 1e-12)
+
+
+def test_smaller_groups_help_row_outliers():
+    w = np.random.default_rng(5).normal(size=(64, 8))
+    w[3] *= 30
+    e = lambda g: np.abs(fake_quant_grouped(w, 4, g) - w)[16:].mean()
+    assert e(16) < e(64) / 5
+
+
+def test_group_model_and_bytes():
+    m = model()
+    q = quantize_model(m, 4, group=8)
+    assert not np.array_equal(q.head.w.data, m.head.w.data)
+    assert weight_bytes(m, 4, group=8) > weight_bytes(m, 4)
+    assert weight_bytes(m, 4, group=10**6) == weight_bytes(m, 4)

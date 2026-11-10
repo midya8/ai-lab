@@ -1,0 +1,36 @@
+seed 0: fp64 nll 2.7507 (543720 B)
+  4-bit per-channel: nll 2.7546 delta +0.0039 | 43404 B
+  4-bit g16: nll 2.7525 delta +0.0018 | 54516 B
+  4-bit g8: nll 2.7611 delta +0.0104 | 69456 B
+  3-bit per-channel: nll 2.9434 delta +0.1927 | 35088 B
+  3-bit g16: nll 2.8785 delta +0.1278 | 46200 B
+  3-bit g8: nll 2.8479 delta +0.0972 | 61140 B
+  2-bit per-channel: nll 4.1769 delta +1.4262 | 26772 B
+  2-bit g8: nll 3.6454 delta +0.8947 | 52824 B
+seed 1: fp64 nll 2.7522 (543720 B)
+  4-bit per-channel: nll 2.7765 delta +0.0243 | 43404 B
+  4-bit g16: nll 2.7874 delta +0.0352 | 54516 B
+  4-bit g8: nll 2.7797 delta +0.0275 | 69456 B
+  3-bit per-channel: nll 2.9373 delta +0.1851 | 35088 B
+  3-bit g16: nll 2.9000 delta +0.1478 | 46200 B
+  3-bit g8: nll 2.8798 delta +0.1276 | 61140 B
+  2-bit per-channel: nll 4.4001 delta +1.6479 | 26772 B
+  2-bit g8: nll 3.8030 delta +1.0508 | 52824 B
+seed 2: fp64 nll 2.7533 (543720 B)
+  4-bit per-channel: nll 2.7911 delta +0.0378 | 43404 B
+  4-bit g16: nll 2.7842 delta +0.0309 | 54516 B
+  4-bit g8: nll 2.7785 delta +0.0252 | 69456 B
+  3-bit per-channel: nll 2.9173 delta +0.1640 | 35088 B
+  3-bit g16: nll 2.8614 delta +0.1080 | 46200 B
+  3-bit g8: nll 2.8474 delta +0.0941 | 61140 B
+  2-bit per-channel: nll 4.3436 delta +1.5903 | 26772 B
+  2-bit g8: nll 3.6547 delta +0.9014 | 52824 B
+mean delta nats over 3 seeds:
+  4-bit per-channel: +0.0220 (min +0.0039, max +0.0378)
+  4-bit g16: +0.0226 (min +0.0018, max +0.0352)
+  4-bit g8: +0.0210 (min +0.0104, max +0.0275)
+  3-bit per-channel: +0.1806 (min +0.1640, max +0.1927)
+  3-bit g16: +0.1279 (min +0.1080, max +0.1478)
+  3-bit g8: +0.1063 (min +0.0941, max +0.1276)
+  2-bit per-channel: +1.5548 (min +1.4262, max +1.6479)
+  2-bit g8: +0.9490 (min +0.8947, max +1.0508)

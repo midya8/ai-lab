@@ -23,6 +23,15 @@ def fake_quant(w, bits=8, axis=None):
     return q * s
 
 
+def fake_quant_grouped(w, bits=8, group=16):
+    """Group-wise symmetric RTN for an (in, out) matrix: each run of `group` consecutive input
+    rows within an output column gets its own scale (last group may be shorter)."""
+    out = np.empty_like(w, dtype=float)
+    for i in range(0, w.shape[0], group):
+        out[i:i + group] = fake_quant(w[i:i + group], bits, 0)
+    return out
+
+
 def _linears(model):
     for b in model.blocks:
         yield b.attn.qkv
@@ -32,18 +41,21 @@ def _linears(model):
     yield model.head
 
 
-def quantize_model(model, bits=8, per_channel=True, embeddings=True):
+def quantize_model(model, bits=8, per_channel=True, embeddings=True, group=None):
     """Return a deep copy with weights rounded to `bits` bits; the original is untouched."""
     m = copy.deepcopy(model)
     for l in _linears(m):
-        l.w.data = fake_quant(l.w.data, bits, 0 if per_channel else None)
+        if group:
+            l.w.data = fake_quant_grouped(l.w.data, bits, group)
+        else:
+            l.w.data = fake_quant(l.w.data, bits, 0 if per_channel else None)
     if embeddings:
         m.tok.data = fake_quant(m.tok.data, bits, 1 if per_channel else None)
         m.pos.data = fake_quant(m.pos.data, bits, 1 if per_channel else None)
     return m
 
 
-def weight_bytes(model, bits=None, per_channel=True, embeddings=True):
+def weight_bytes(model, bits=None, per_channel=True, embeddings=True, group=None):
     """Storage estimate in bytes. bits=None -> float64 as held in memory. Otherwise packed
     b-bit codes plus float32 scales for quantised tensors, float32 for the unquantised rest."""
     lin = [l.w.data for l in _linears(model)]
@@ -60,5 +72,7 @@ def weight_bytes(model, bits=None, per_channel=True, embeddings=True):
             total += 4 * a.size
             continue
         nscales = (a.shape[0] if is_emb else a.shape[1]) if per_channel else 1
+        if group and not is_emb:
+            nscales = int(np.ceil(a.shape[0] / group)) * a.shape[1]
         total += int(np.ceil(a.size * bits / 8)) + 4 * nscales
     return total
