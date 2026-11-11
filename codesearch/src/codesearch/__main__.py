@@ -1,9 +1,10 @@
-"""codesearch command line: index, search, similar, dups, eval, stats."""
+"""codesearch command line: index, watch, search, similar, dups, eval, stats."""
 from __future__ import annotations
 
 import argparse
 import json
 import sys
+import time
 from pathlib import Path
 
 from . import __version__
@@ -69,6 +70,24 @@ def cmd_index(args) -> int:
     print(f"{len(chunks)} chunks; {report.summary()}; store: {store}")
     for p, e in report.failed.items():
         print(f"  skipped {p}: {e}", file=sys.stderr)
+    return 0
+
+
+def cmd_watch(args) -> int:
+    from .watch import watch
+
+    root = Path(args.root).resolve()
+    store = Path(args.store) if args.store else root / DEFAULT_STORE
+
+    def report(rep, n):
+        print(f"[{time.strftime('%H:%M:%S')}] {n} chunks; {rep.summary()}", flush=True)
+
+    print(f"watching {root} every {args.interval}s (Ctrl-C to stop)")
+    try:
+        watch(root, store, include=args.include or None, interval=args.interval,
+              on_sync=report, max_cycles=args.cycles)
+    except KeyboardInterrupt:
+        print("stopped")
     return 0
 
 
@@ -157,6 +176,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     sp = sub.add_parser("index", help="build or refresh the on-disk index")
     common(sp); sp.set_defaults(fn=cmd_index)
+
+    sp = sub.add_parser("watch", help="keep the on-disk index fresh while files change")
+    common(sp)
+    sp.add_argument("--interval", type=float, default=1.0, help="seconds between polls")
+    sp.add_argument("--cycles", type=int, help="stop after this many polls (default: run until Ctrl-C)")
+    sp.set_defaults(fn=cmd_watch)
 
     sp = sub.add_parser("search", help="natural-language or identifier search")
     sp.add_argument("query", nargs="+")

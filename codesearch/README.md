@@ -49,6 +49,13 @@ Typical misses are vocabulary gaps ("how many tokens will this prompt use" → `
 
 `python -m codesearch dups --root ..` surfaces genuine repetition: the `train` helpers copy-pasted across three `tiny-transformer/experiments/` scripts (Jaccard 0.86–0.96), `GPTLoRA.evaluate_loss` vs `AdapterHub.evaluate_loss`, and the near-identical constructors of `ResponseCache` and `SemanticCache`. Candidates, not verdicts: a human decides whether to merge them.
 
+## Watch mode
+
+`codesearch watch --root . --interval 1` keeps `.codesearch/index.json` fresh: it polls a cheap
+(path, mtime, size) signature of the tree and runs the incremental sync only when it changes, so
+unchanged files are never re-parsed. Polling is stdlib-only and portable; it is not instant
+(latency up to one interval). `--cycles N` stops after N polls (used by the tests).
+
 ## Limitations
 
 Python only (JS/TS would need another parser). Lexical matching: a query that shares no words with the code or docstring and whose meaning LSA cannot bridge will miss. No embeddings from a neural model — that is the obvious next experiment and would be an optional extra, not a dependency. Dynamically generated functions are invisible. `dups` is quadratic in the number of functions (fine to ~10k).
