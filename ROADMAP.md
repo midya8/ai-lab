@@ -211,6 +211,7 @@
 - reviewkit: py-cleartext-http rule (non-local http:// in requests/httpx calls; 117 tests)
 - reviewkit: py-hardcoded-bearer rule (literal Bearer tokens; 118 tests)
 - reviewkit: py-django-debug-true rule (119 tests)
+- reviewkit: py-flask-debug-run rule (app.run(debug=True); 120 tests)
 
 
 ## Next
