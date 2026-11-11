@@ -122,6 +122,23 @@ def cmd_similar(args) -> int:
     return 0
 
 
+def cmd_calls(args) -> int:
+    ix, _ = _load(args)
+    try:
+        res = Searcher(ix).calls(args.ident, include_tests=args.tests)
+    except KeyError as e:
+        print(e.args[0], file=sys.stderr)
+        return 2
+    if args.json:
+        print(json.dumps({k: [c.id for c in v] for k, v in res.items()}, indent=2))
+        return 0
+    for label in ("callers", "callees"):
+        print(f"{label} ({len(res[label])}):")
+        for c in res[label][: args.k]:
+            print(f"  {c.id}  [{c.start}-{c.end}]")
+    return 0
+
+
 def cmd_dups(args) -> int:
     ix, _ = _load(args)
     pairs = Searcher(ix).duplicates(threshold=args.threshold, min_lines=args.min_lines,
@@ -212,6 +229,13 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("-k", type=int, default=8)
     sp.add_argument("--no-tests", dest="tests", action="store_false", help="leave test code out of the results")
     sp.set_defaults(fn=cmd_similar)
+
+    sp = sub.add_parser("calls", help="callers and callees of a function (name-based call graph)")
+    sp.add_argument("ident", help="path::qualname, qualname, or a unique name")
+    common(sp)
+    sp.add_argument("-k", type=int, default=20)
+    sp.add_argument("--tests", action="store_true", help="include test code")
+    sp.set_defaults(fn=cmd_calls)
 
     sp = sub.add_parser("dups", help="near-duplicate functions")
     common(sp)

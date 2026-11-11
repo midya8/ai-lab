@@ -143,6 +143,35 @@ class Searcher:
             hits.append(Hit(ix.chunks[i], float(fused[i]), len(hits) + 1))
         return hits
 
+    # ------------------------------------------------------------ call graph
+    def calls(self, ident: str, include_tests: bool = False) -> dict[str, list[Chunk]]:
+        """Approximate call graph neighbours by identifier name.
+
+        callees: functions/methods/classes whose bare name appears in this chunk's body.
+        callers: chunks whose body mentions this chunk's bare name.
+        Name-based, no type resolution: a name shared by several definitions links to all of
+        them, and a mention that is not a call (a variable of the same name) counts.
+        """
+        ix = self.index
+        idx = self.resolve(ident)
+        me = ix.chunks[idx]
+        by_name: dict[str, list[int]] = {}
+        for i, c in enumerate(ix.chunks):
+            if c.kind != "module":
+                by_name.setdefault(c.name, []).append(i)
+        used = set(me.ids)
+        callees = [ix.chunks[j] for n in sorted(used) for j in by_name.get(n, [])
+                   if j != idx and (include_tests or not ix.chunks[j].is_test)]
+        callers = []
+        if me.kind != "module":
+            for i, c in enumerate(ix.chunks):
+                if i == idx or c.kind == "module" or (c.is_test and not include_tests):
+                    continue
+                # a class chunk's ids include its methods' bodies; skip pure containers of me
+                if me.name in c.ids and not (c.path == me.path and c.start <= me.start and c.end >= me.end):
+                    callers.append(c)
+        return {"callees": callees, "callers": callers}
+
     def resolve(self, ident: str) -> int:
         ix = self.index
         if ident in ix.id_to_idx:

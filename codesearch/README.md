@@ -8,6 +8,7 @@ python -m codesearch search --root .. "write json to a temp file then rename it"
 python -m codesearch search --root .. '`parse_diff`'                 # identifier → exact symbol first
 python -m codesearch similar --root .. llm-router/llmrouter/breaker.py::CircuitBreaker
 python -m codesearch dups --root ..                                  # near-duplicate functions
+python -m codesearch calls --root .. Searcher.similar               # callers and callees (name-based)
 python -m codesearch eval bench/queries_dev.json --misses            # score the search itself
 ```
 
@@ -71,7 +72,7 @@ send `refresh` (or run `watch` alongside).
 
 ## Limitations
 
-Python only (JS/TS would need another parser). Lexical matching: a query that shares no words with the code or docstring and whose meaning LSA cannot bridge will miss. No embeddings from a neural model — that is the obvious next experiment and would be an optional extra, not a dependency. Dynamically generated functions are invisible. `dups` is quadratic in the number of functions (fine to ~10k).
+`calls` is a name-based call graph: no type or import resolution, so a name defined in several places links to all of them and a non-call mention (a variable with the same name) counts as a caller. Python only (JS/TS would need another parser). Lexical matching: a query that shares no words with the code or docstring and whose meaning LSA cannot bridge will miss. No embeddings from a neural model — that is the obvious next experiment and would be an optional extra, not a dependency. Dynamically generated functions are invisible. `dups` is quadratic in the number of functions (fine to ~10k).
 
 ## Layout
 
