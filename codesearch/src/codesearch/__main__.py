@@ -1,4 +1,4 @@
-"""codesearch command line: index, watch, search, similar, dups, eval, stats."""
+"""codesearch command line: index, watch, search, similar, calls, undocumented, dups, eval, stats."""
 from __future__ import annotations
 
 import argparse
@@ -139,6 +139,19 @@ def cmd_calls(args) -> int:
     return 0
 
 
+def cmd_undocumented(args) -> int:
+    ix, _ = _load(args)
+    res = Searcher(ix).undocumented(include_tests=args.tests, min_lines=args.min_lines)
+    if args.json:
+        print(json.dumps([{"id": c.id, "line": c.start, "references": n} for c, n in res[:args.k]], indent=2))
+        return 0
+    for c, n in res[:args.k]:
+        print(f"{n:>3} refs  {c.path}:{c.start}  {c.qualname} [{c.kind}]")
+    total = sum(1 for c in ix.chunks if c.kind != "module" and not c.name.startswith("_"))
+    print(f"{len(res)} of {total} public definitions lack a docstring")
+    return 0
+
+
 def cmd_dups(args) -> int:
     ix, _ = _load(args)
     pairs = Searcher(ix).duplicates(threshold=args.threshold, min_lines=args.min_lines,
@@ -236,6 +249,13 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("-k", type=int, default=20)
     sp.add_argument("--tests", action="store_true", help="include test code")
     sp.set_defaults(fn=cmd_calls)
+
+    sp = sub.add_parser("undocumented", help="public definitions without docstrings, most-referenced first")
+    common(sp)
+    sp.add_argument("-k", type=int, default=20)
+    sp.add_argument("--min-lines", type=int, default=3, help="skip bodies shorter than this")
+    sp.add_argument("--tests", action="store_true", help="include test code")
+    sp.set_defaults(fn=cmd_undocumented)
 
     sp = sub.add_parser("dups", help="near-duplicate functions")
     common(sp)

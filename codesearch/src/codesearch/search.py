@@ -172,6 +172,31 @@ class Searcher:
                     callers.append(c)
         return {"callees": callees, "callers": callers}
 
+    def undocumented(self, include_tests: bool = False, min_lines: int = 3) -> list[tuple[Chunk, int]]:
+        """Public functions/methods/classes without a docstring, most-referenced first.
+
+        Priority is the number of distinct chunks that mention the name (name-based, so
+        approximate). Names starting with an underscore and bodies shorter than min_lines are skipped.
+        """
+        ix = self.index
+        mentions: dict[str, set[int]] = {}
+        for i, c in enumerate(ix.chunks):
+            if c.kind == "module" or (c.is_test and not include_tests):
+                continue
+            for n in set(c.ids):
+                mentions.setdefault(n, set()).add(i)
+        out = []
+        for i, c in enumerate(ix.chunks):
+            if c.kind == "module" or c.doc or c.name.startswith("_"):
+                continue
+            if c.is_test and not include_tests:
+                continue
+            if c.end - c.start + 1 < min_lines:
+                continue
+            out.append((c, len(mentions.get(c.name, set()) - {i})))
+        out.sort(key=lambda t: (-t[1], t[0].id))
+        return out
+
     def resolve(self, ident: str) -> int:
         ix = self.index
         if ident in ix.id_to_idx:

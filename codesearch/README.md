@@ -9,6 +9,7 @@ python -m codesearch search --root .. '`parse_diff`'                 # identifie
 python -m codesearch similar --root .. llm-router/llmrouter/breaker.py::CircuitBreaker
 python -m codesearch dups --root ..                                  # near-duplicate functions
 python -m codesearch calls --root .. Searcher.similar               # callers and callees (name-based)
+python -m codesearch undocumented --root ..                    # public defs missing docstrings, most-referenced first
 python -m codesearch eval bench/queries_dev.json --misses            # score the search itself
 ```
 
