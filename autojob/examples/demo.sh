@@ -41,4 +41,57 @@ python3 -m autojob followup --log "$WORK/applications/applications.jsonl" \
     --record --id APP-001 --today "$FUTURE"
 python3 -m autojob followup --log "$WORK/applications/applications.jsonl" \
     --profile examples/profile.example.json --today "$FUTURE"
+# Digest: one page over the whole log — funnel, stale, due follow-ups,
+# and the skills both postings keep asking for that the profile lacks.
+python3 -m autojob digest --log "$WORK/applications/applications.jsonl" \
+    --today "$FUTURE"
+# Plan: turn the gaps into work — the skills the profile has but no
+# bullet proves, the skills to learn, and the three quick wins.
+python3 -m autojob plan --profile examples/profile.example.json \
+    --log "$WORK/applications/applications.jsonl" --today "$FUTURE"
+# Rank: all three example postings by fit — Northwind first, Harbour
+# second, Vector Labs last (the profile has Python but none of the ML
+# stack). The two already-applied postings are excluded by default, so
+# the plain rank names Vector Labs as the only one left to apply to.
+python3 -m autojob rank --profile examples/profile.example.json \
+    --postings-dir examples --log "$WORK/applications/applications.jsonl" \
+    --include-applied
+python3 -m autojob rank --profile examples/profile.example.json \
+    --postings-dir examples --log "$WORK/applications/applications.jsonl"
+# Salary: all three example postings list CAD ranges; the profile target
+# is CAD 95,000–120,000. Vector Labs pays above it (130,000–160,000),
+# Northwind and Harbour meet it; the CAD medians are 105,000–130,000
+# (midpoint 117,500). The two applied postings are flagged with their ids.
+python3 -m autojob salary --profile examples/profile.example.json \
+    --postings-dir examples --log "$WORK/applications/applications.jsonl"
+# Offers: Northwind offers CAD 130,000 base + 10,000 bonus + 20,000 equity
+# over 4 years (first year 145,000 — above the 95,000–120,000 target on
+# base alone), Harbour offers CAD 105,000 + 5,000 bonus (first year
+# 110,000, meets the target). Both deadlines fall 14 days out, so 8 days
+# on the comparison shows 6 days left to decide; Northwind ranks first.
+OFFER_DEADLINE="$(date -d '+14 days' +%F)"
+python3 -m autojob offer --log "$WORK/applications/applications.jsonl" \
+    --record --id APP-001 --base 130000 --currency CAD --bonus 10000 \
+    --equity 20000 --vesting-years 4 --pto-days 20 --mode remote \
+    --deadline "$OFFER_DEADLINE" --today "$FUTURE"
+python3 -m autojob offer --log "$WORK/applications/applications.jsonl" \
+    --record --id APP-002 --base 105000 --currency CAD --bonus 5000 \
+    --mode hybrid --deadline "$OFFER_DEADLINE" --today "$FUTURE"
+python3 -m autojob offer --profile examples/profile.example.json \
+    --log "$WORK/applications/applications.jsonl" --today "$FUTURE"
+# Interviews: Harbour is at interview stage, so record its rounds — a
+# recruiter screen a day before the reference date (past) and a
+# hiring-manager round two days after it (upcoming, video, 45 minutes).
+# The schedule shows both sides of today.
+PAST_DAY="$(date -d '+7 days' +%F)"
+INTERVIEW_DAY="$(date -d '+10 days' +%F)"
+python3 -m autojob interview --log "$WORK/applications/applications.jsonl" \
+    --record --id APP-002 --date "$PAST_DAY" --round "Recruiter screen" \
+    --mode phone --duration-minutes 30 --today "$FUTURE"
+python3 -m autojob interview --log "$WORK/applications/applications.jsonl" \
+    --record --id APP-002 --date "$INTERVIEW_DAY" --round "Hiring manager" \
+    --interviewer "Priya Nair" --mode video --duration-minutes 45 \
+    --note "Bring the dashboard story." --today "$FUTURE"
+python3 -m autojob interview --log "$WORK/applications/applications.jsonl" \
+    --today "$FUTURE"
 echo "demo OK: packets in $WORK/applications (removed on exit)"

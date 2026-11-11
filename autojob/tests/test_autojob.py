@@ -17,20 +17,38 @@ from autojob.analytics import (analytics_json, analytics_report, by_company,
                                 compute_analytics, days_in_stage, funnel,
                                 history_of, reached_stages, score_stats,
                                 stale_applications)
+from autojob.digest import (build_digest, digest_json, gap_leaderboard,
+                            render_digest_markdown)
 from autojob.followup import (draft_followup, due_followups, followups_sent,
                                last_activity)
+from autojob.interview import (InterviewError, collect_interviews,
+                               interview_json, interviews_for,
+                               render_interview_markdown,
+                               validate_interview)
 from autojob.letter import draft_letter, review_notes
 from autojob.match import evidence_bullets, match_profile
+from autojob.plan import (build_plan, evidence_list, plan_json,
+                          quick_wins, render_plan_markdown)
 from autojob.posting import find_skills, parse_posting, parse_salary
 from autojob.prep import build_prep, prep_json, render_prep_markdown
 from autojob.profile import ProfileError, load_profile, total_experience_years, validate_profile
+from autojob.rank import rank_json, rank_postings, render_rank_markdown
+from autojob.salary import (analyze_salaries, render_salary_markdown,
+                            salary_json, target_from_profile)
+from autojob.offer import (OfferError, compare_offers, first_year_total,
+                           latest_offer, offer_json, render_offer_markdown,
+                           total_cash, validate_offer)
 from autojob.tailor import build_tailor, render_tailor_markdown, tailor_json
 from autojob.tracker import (TrackerError, add_application, read_log,
-                             record_followup, set_status, slug)
+                             record_followup, record_interview, record_offer,
+                             set_status, slug)
 
 HERE = Path(__file__).resolve().parent
 EXAMPLE_PROFILE = HERE.parent / "examples" / "profile.example.json"
 EXAMPLE_JOB = HERE.parent / "examples" / "job.example.md"
+EXAMPLE_JOB2 = HERE.parent / "examples" / "job2.example.md"
+EXAMPLE_JOB3 = HERE.parent / "examples" / "job3.example.md"
+EXAMPLES_DIR = HERE.parent / "examples"
 
 TODAY = datetime.date(2026, 11, 8)
 
@@ -126,6 +144,20 @@ class TestSalary(unittest.TestCase):
 
     def test_no_salary(self):
         self.assertIsNone(parse_salary("No pay mentioned here at all."))
+
+    def test_trailing_currency_code(self):
+        result = parse_salary("Salary: $95,000 - $120,000 CAD")
+        self.assertEqual(result["currency"], "CAD")
+        result = parse_salary("Pay is £40,000 - £50,000 GBP per year")
+        self.assertEqual(result["currency"], "GBP")
+        result = parse_salary("Salary $110,000 CAD")
+        self.assertEqual(result["currency"], "CAD")
+
+    def test_bare_symbol_stays_a_symbol(self):
+        result = parse_salary("Salary: $95,000 - $120,000")
+        self.assertEqual(result["currency"], "$")
+        result = parse_salary("Salary $110,000")
+        self.assertEqual(result["currency"], "$")
 
 
 class TestPosting(unittest.TestCase):
@@ -418,7 +450,7 @@ class TestCLI(unittest.TestCase):
 
     def test_version(self):
         self.assertTrue(__version__.startswith("0."))
-        self.assertEqual(__version__, "0.5.0")
+        self.assertEqual(__version__, "0.11.0")
 
 
 def _fixture_log(tmp):
@@ -1220,6 +1252,1700 @@ class TestTailor(unittest.TestCase):
                                    "--out-dir", tmp, "--dry-run"])
             self.assertEqual(code, 0)
             self.assertIn("tailored-resume.md", out)
+
+
+def _digest_entries():
+    """Three log entries: two with v0.6 skill data, one logged before it."""
+    northwind = {
+        "id": "APP-001", "company": "Northwind Analytics", "title": "Data Analyst",
+        "status": "applied", "applied_at": "2026-10-20",
+        "history": [{"status": "applied", "at": "2026-10-20"}],
+        "match_score": 0.625,
+        "required_matched": ["SQL", "Power BI", "Tableau", "Python",
+                             "Stakeholder Management"],
+        "required_missing": ["Communication"],
+        "preferred_matched": [],
+        "preferred_missing": ["dbt", "Snowflake", "A/B Testing"],
+    }
+    harbour = {
+        "id": "APP-002", "company": "Harbour Analytics",
+        "title": "Business Intelligence Analyst",
+        "status": "screening", "applied_at": "2026-11-01",
+        "history": [{"status": "applied", "at": "2026-11-01"},
+                    {"status": "screening", "at": "2026-11-02"}],
+        "match_score": 0.56,
+        "required_matched": ["SQL", "Power BI", "Python"],
+        "required_missing": ["Communication"],
+        "preferred_matched": [],
+        "preferred_missing": ["dbt", "Snowflake", "Looker"],
+    }
+    legacy = {
+        "id": "APP-003", "company": "Old Co", "title": "Analyst",
+        "status": "applied", "applied_at": "2026-10-01",
+        "history": [{"status": "applied", "at": "2026-10-01"}],
+        "match_score": 0.5,
+    }
+    return [northwind, harbour, legacy]
+
+
+class TestDigest(unittest.TestCase):
+    def test_leaderboard_counts_required_and_preferred(self):
+        board = gap_leaderboard(_digest_entries())
+        by_skill = {row["skill"]: row for row in board}
+        comm = by_skill["Communication"]
+        self.assertEqual((comm["asked_required"], comm["missing_required"]), (2, 2))
+        self.assertEqual((comm["asked_preferred"], comm["missing_preferred"]), (0, 0))
+        self.assertEqual(comm["companies"],
+                         ["Harbour Analytics", "Northwind Analytics"])
+        dbt = by_skill["dbt"]
+        self.assertEqual((dbt["asked_preferred"], dbt["missing_preferred"]), (2, 2))
+        self.assertEqual((dbt["asked_required"], dbt["missing_required"]), (0, 0))
+        self.assertEqual(by_skill["A/B Testing"]["asked"], 1)
+        self.assertEqual(by_skill["Looker"]["missing"], 1)
+
+    def test_leaderboard_order_is_most_missed_first(self):
+        skills = [row["skill"] for row in gap_leaderboard(_digest_entries())]
+        self.assertEqual(skills, ["Communication", "dbt", "Snowflake",
+                                  "A/B Testing", "Looker"])
+
+    def test_leaderboard_skips_entries_without_skill_data(self):
+        legacy_only = [_digest_entries()[2]]
+        self.assertEqual(gap_leaderboard(legacy_only), [])
+        # The legacy entry contributes nothing, not a phantom gap.
+        board = gap_leaderboard(_digest_entries())
+        self.assertNotIn("Analyst", [row["skill"] for row in board])
+
+    def test_leaderboard_matched_skill_is_not_a_gap(self):
+        board = gap_leaderboard(_digest_entries())
+        by_skill = {row["skill"]: row for row in board}
+        # SQL is asked for twice and matched twice: it is not a gap and
+        # does not belong on the leaderboard at all.
+        self.assertNotIn("SQL", by_skill)
+        self.assertNotIn("Power BI", by_skill)
+
+    def test_leaderboard_same_skill_both_kinds(self):
+        entries = [
+            {"id": "APP-001", "company": "A Co", "title": "Analyst",
+             "status": "applied", "applied_at": "2026-11-01",
+             "required_matched": [], "required_missing": ["SQL"],
+             "preferred_matched": [], "preferred_missing": []},
+            {"id": "APP-002", "company": "B Co", "title": "Analyst",
+             "status": "applied", "applied_at": "2026-11-02",
+             "required_matched": [], "required_missing": [],
+             "preferred_matched": [], "preferred_missing": ["SQL"]},
+        ]
+        board = gap_leaderboard(entries)
+        self.assertEqual(len(board), 1)
+        row = board[0]
+        self.assertEqual((row["asked_required"], row["missing_required"]), (1, 1))
+        self.assertEqual((row["asked_preferred"], row["missing_preferred"]), (1, 1))
+        self.assertEqual((row["asked"], row["missing"]), (2, 2))
+        self.assertEqual(row["companies"], ["A Co", "B Co"])
+
+    def test_build_digest_combines_funnel_stale_due_and_gaps(self):
+        digest = build_digest(_digest_entries(), today=TODAY, stale_days=14)
+        self.assertEqual(digest["generated_on"], "2026-11-08")
+        self.assertEqual(digest["n_applications"], 3)
+        self.assertEqual(digest["n_with_skill_data"], 2)
+        self.assertEqual(digest["n_without_skill_data"], 1)
+        self.assertEqual(digest["funnel"]["total"], 3)
+        self.assertEqual(digest["funnel"]["reached"]["screening"], 1)
+        self.assertEqual([item["id"] for item in digest["stale"]],
+                         ["APP-003", "APP-001"])
+        self.assertEqual([item["id"] for item in digest["due_followups"]],
+                         ["APP-003", "APP-001"])
+        self.assertEqual(digest["gap_leaderboard"][0]["skill"], "Communication")
+        self.assertAlmostEqual(digest["scores"]["average"], 0.562, places=3)
+
+    def test_digest_json_round_trip(self):
+        digest = build_digest(_digest_entries(), today=TODAY)
+        self.assertEqual(json.loads(digest_json(digest)), digest)
+
+    def test_render_empty_log(self):
+        text = render_digest_markdown(build_digest([], today=TODAY))
+        self.assertIn("no applications logged yet", text)
+
+    def test_render_marks_entries_without_skill_data(self):
+        text = render_digest_markdown(
+            build_digest(_digest_entries(), today=TODAY))
+        self.assertIn("Communication — missing in required in 2 of 2", text)
+        self.assertIn("dbt — missing in preferred in 2 of 2", text)
+        self.assertIn("1 application(s) logged before v0.6", text)
+        self.assertIn("Due a follow-up: 2", text)
+        self.assertIn("Stale — no movement in 14+ days: 2", text)
+
+    def test_render_no_gaps_when_everything_matched(self):
+        entries = [{
+            "id": "APP-001", "company": "A Co", "title": "Analyst",
+            "status": "applied", "applied_at": "2026-11-08",
+            "required_matched": ["SQL"], "required_missing": [],
+            "preferred_matched": ["dbt"], "preferred_missing": [],
+        }]
+        text = render_digest_markdown(build_digest(entries, today=TODAY))
+        self.assertIn("every skill the postings asked for is in the profile", text)
+
+
+class TestDigestCLI(unittest.TestCase):
+    def _run(self, argv):
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            code = main(argv)
+        return code, buf.getvalue()
+
+    def _apply_two(self, tmp):
+        for job in (EXAMPLE_JOB, EXAMPLE_JOB2):
+            code, _ = self._run(["apply", "--profile", str(EXAMPLE_PROFILE),
+                                 "--posting", str(job), "--out-dir", tmp])
+            self.assertEqual(code, 0)
+        return Path(tmp) / "applications.jsonl"
+
+    def test_digest_empty_log(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            code, out = self._run(["digest", "--log",
+                                   str(Path(tmp) / "missing.jsonl")])
+            self.assertEqual(code, 0)
+            self.assertIn("no applications logged yet", out)
+
+    def test_digest_json_flag(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._apply_two(tmp)
+            future = (datetime.date.today()
+                      + datetime.timedelta(days=8)).isoformat()
+            code, out = self._run(["digest", "--log", str(log),
+                                   "--today", future, "--json"])
+            self.assertEqual(code, 0)
+            digest = json.loads(out)
+            self.assertEqual(digest["n_applications"], 2)
+            self.assertEqual(digest["n_with_skill_data"], 2)
+            board = digest["gap_leaderboard"]
+            self.assertEqual(board[0]["skill"], "Communication")
+            self.assertEqual(board[0]["missing_required"], 2)
+            self.assertEqual(len(digest["due_followups"]), 2)
+
+    def test_digest_out_writes_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._apply_two(tmp)
+            out_path = Path(tmp) / "digest.md"
+            code, out = self._run(["digest", "--log", str(log),
+                                   "--out", str(out_path)])
+            self.assertEqual(code, 0)
+            self.assertIn("wrote", out)
+            self.assertIn("Application digest", out_path.read_text(encoding="utf-8"))
+            self.assertIn("Communication", out_path.read_text(encoding="utf-8"))
+
+    def test_digest_bad_today(self):
+        code, _ = self._run(["digest", "--today", "not-a-date"])
+        self.assertEqual(code, 1)
+
+    def test_digest_negative_stale_days(self):
+        code, _ = self._run(["digest", "--stale-days", "-1"])
+        self.assertEqual(code, 1)
+
+    def test_apply_records_posting_skills(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            code, _ = self._run(["apply", "--profile", str(EXAMPLE_PROFILE),
+                                 "--posting", str(EXAMPLE_JOB),
+                                 "--out-dir", tmp])
+            self.assertEqual(code, 0)
+            entries = read_log(Path(tmp) / "applications.jsonl")
+            self.assertEqual(len(entries), 1)
+            entry = entries[0]
+            self.assertEqual(entry["required_missing"], ["Communication"])
+            self.assertIn("SQL", entry["required_matched"])
+            self.assertEqual(entry["preferred_missing"],
+                             ["dbt", "Snowflake", "A/B Testing"])
+            self.assertEqual(entry["preferred_matched"], [])
+
+
+class TestPlan(unittest.TestCase):
+    def test_evidence_finds_skills_with_no_bullet(self):
+        profile = load_profile(EXAMPLE_PROFILE)
+        rows = evidence_list(profile, _digest_entries())
+        by_skill = {row["skill"]: row for row in rows}
+        # Stakeholder Management (3 yrs) and Tableau (2 yrs) are in the
+        # profile and matched by the Northwind posting, but no bullet
+        # mentions either one.
+        self.assertEqual(sorted(by_skill), ["Stakeholder Management", "Tableau"])
+        stakeholder = by_skill["Stakeholder Management"]
+        self.assertEqual((stakeholder["years"], stakeholder["level"]),
+                         (3, "intermediate"))
+        self.assertEqual((stakeholder["asked_required"],
+                          stakeholder["asked_preferred"]), (1, 0))
+        self.assertEqual(stakeholder["companies"], ["Northwind Analytics"])
+        self.assertEqual(by_skill["Tableau"]["years"], 2)
+
+    def test_evidenced_skills_are_not_listed(self):
+        profile = load_profile(EXAMPLE_PROFILE)
+        rows = evidence_list(profile, _digest_entries())
+        skills = [row["skill"] for row in rows]
+        # SQL, Power BI and Python are all mentioned in a bullet.
+        self.assertNotIn("SQL", skills)
+        self.assertNotIn("Power BI", skills)
+        self.assertNotIn("Python", skills)
+
+    def test_evidence_order_is_most_asked_first(self):
+        profile = load_profile(EXAMPLE_PROFILE)
+        rows = evidence_list(profile, _digest_entries())
+        # Both asked once: alphabetical tiebreak.
+        self.assertEqual([row["skill"] for row in rows],
+                         ["Stakeholder Management", "Tableau"])
+
+    def test_evidence_same_skill_required_and_preferred(self):
+        profile = load_profile(EXAMPLE_PROFILE)
+        entries = [
+            {"id": "APP-001", "company": "A Co", "title": "Analyst",
+             "status": "applied", "applied_at": "2026-11-01",
+             "required_matched": ["Tableau"], "required_missing": [],
+             "preferred_matched": [], "preferred_missing": []},
+            {"id": "APP-002", "company": "B Co", "title": "Analyst",
+             "status": "applied", "applied_at": "2026-11-02",
+             "required_matched": [], "required_missing": [],
+             "preferred_matched": ["Tableau"], "preferred_missing": []},
+        ]
+        rows = evidence_list(profile, entries)
+        self.assertEqual(len(rows), 1)
+        row = rows[0]
+        self.assertEqual((row["asked_required"], row["asked_preferred"]), (1, 1))
+        self.assertEqual(row["asked"], 2)
+        self.assertEqual(row["companies"], ["A Co", "B Co"])
+
+    def test_learn_reuses_leaderboard_order(self):
+        profile = load_profile(EXAMPLE_PROFILE)
+        plan = build_plan(profile, _digest_entries(), today=TODAY)
+        self.assertEqual([row["skill"] for row in plan["learn"]],
+                         ["Communication", "dbt", "Snowflake",
+                          "A/B Testing", "Looker"])
+        self.assertEqual(plan["learn"][0]["missing_required"], 2)
+
+    def test_suggested_role_is_the_most_recent(self):
+        profile = load_profile(EXAMPLE_PROFILE)
+        plan = build_plan(profile, _digest_entries(), today=TODAY)
+        self.assertEqual(plan["suggested_role"],
+                         {"title": "Data Analyst",
+                          "company": "Northwind Traders",
+                          "start": "2022-03"})
+
+    def test_suggested_role_undated_sorts_last(self):
+        profile = {"skills": [{"name": "SQL", "years": 4}],
+                   "experience": [
+                       {"title": "Old Role", "company": "Old Co",
+                        "start": "", "bullets": []},
+                       {"title": "New Role", "company": "New Co",
+                        "start": "2021-06", "bullets": []}]}
+        entries = [{"id": "APP-001", "company": "A Co", "title": "Analyst",
+                    "status": "applied", "applied_at": "2026-11-01",
+                    "required_matched": ["SQL"], "required_missing": [],
+                    "preferred_matched": [], "preferred_missing": []}]
+        plan = build_plan(profile, entries, today=TODAY)
+        self.assertEqual(plan["suggested_role"]["title"], "New Role")
+
+    def test_build_plan_counts_and_quick_wins(self):
+        profile = load_profile(EXAMPLE_PROFILE)
+        plan = build_plan(profile, _digest_entries(), today=TODAY)
+        self.assertEqual(plan["generated_on"], "2026-11-08")
+        self.assertEqual(plan["n_applications"], 3)
+        self.assertEqual(plan["n_with_skill_data"], 2)
+        self.assertEqual(plan["n_without_skill_data"], 1)
+        # The three most-missed skills each close 2 applications.
+        self.assertEqual(plan["quick_wins"], [
+            {"skill": "Communication", "kind": "learn", "closes": 2},
+            {"skill": "dbt", "kind": "learn", "closes": 2},
+            {"skill": "Snowflake", "kind": "learn", "closes": 2},
+        ])
+
+    def test_quick_wins_prefers_evidence_on_a_tie(self):
+        wins = quick_wins(
+            [{"skill": "Tableau", "asked": 1}],
+            [{"skill": "Looker", "missing": 1, "asked": 1}])
+        # Same closes: one bullet beats learning a skill.
+        self.assertEqual([item["skill"] for item in wins],
+                         ["Tableau", "Looker"])
+        self.assertEqual(wins[0]["kind"], "evidence")
+
+    def test_plan_skips_entries_without_skill_data(self):
+        profile = load_profile(EXAMPLE_PROFILE)
+        legacy_only = [_digest_entries()[2]]
+        plan = build_plan(profile, legacy_only, today=TODAY)
+        self.assertEqual(plan["evidence"], [])
+        self.assertEqual(plan["learn"], [])
+        self.assertEqual(plan["quick_wins"], [])
+        self.assertEqual(plan["n_without_skill_data"], 1)
+
+    def test_plan_json_round_trip(self):
+        profile = load_profile(EXAMPLE_PROFILE)
+        plan = build_plan(profile, _digest_entries(), today=TODAY)
+        self.assertEqual(json.loads(plan_json(plan)), plan)
+
+    def test_render_empty_log(self):
+        profile = load_profile(EXAMPLE_PROFILE)
+        text = render_plan_markdown(build_plan(profile, [], today=TODAY))
+        self.assertIn("no applications logged yet", text)
+
+    def test_render_nothing_to_close(self):
+        profile = load_profile(EXAMPLE_PROFILE)
+        entries = [{"id": "APP-001", "company": "A Co", "title": "Analyst",
+                    "status": "applied", "applied_at": "2026-11-08",
+                    "required_matched": ["SQL"], "required_missing": [],
+                    "preferred_matched": [], "preferred_missing": []}]
+        text = render_plan_markdown(build_plan(profile, entries, today=TODAY))
+        self.assertIn("Nothing to close", text)
+        self.assertNotIn("Quick wins", text)
+
+    def test_render_marks_entries_without_skill_data(self):
+        profile = load_profile(EXAMPLE_PROFILE)
+        text = render_plan_markdown(
+            build_plan(profile, _digest_entries(), today=TODAY))
+        self.assertIn("Stakeholder Management (3 yrs, intermediate)", text)
+        self.assertIn("Communication — missing in required in 2 of 2", text)
+        self.assertIn("1 application(s) logged before v0.6", text)
+        self.assertIn("Suggested place: your most recent role, Data Analyst "
+                      "at Northwind Traders", text)
+        self.assertIn("1. learn Communication — helps 2 application(s)", text)
+
+
+class TestPlanCLI(unittest.TestCase):
+    def _run(self, argv):
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            code = main(argv)
+        return code, buf.getvalue()
+
+    def _apply_two(self, tmp):
+        for job in (EXAMPLE_JOB, EXAMPLE_JOB2):
+            code, _ = self._run(["apply", "--profile", str(EXAMPLE_PROFILE),
+                                 "--posting", str(job), "--out-dir", tmp])
+            self.assertEqual(code, 0)
+        return Path(tmp) / "applications.jsonl"
+
+    def test_plan_empty_log(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            code, out = self._run(["plan", "--profile",
+                                   str(EXAMPLE_PROFILE), "--log",
+                                   str(Path(tmp) / "missing.jsonl")])
+            self.assertEqual(code, 0)
+            self.assertIn("no applications logged yet", out)
+
+    def test_plan_json_flag(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._apply_two(tmp)
+            code, out = self._run(["plan", "--profile",
+                                   str(EXAMPLE_PROFILE), "--log", str(log),
+                                   "--json"])
+            self.assertEqual(code, 0)
+            plan = json.loads(out)
+            self.assertEqual(plan["n_applications"], 2)
+            self.assertEqual(plan["n_with_skill_data"], 2)
+            self.assertEqual([row["skill"] for row in plan["evidence"]],
+                             ["Stakeholder Management", "Tableau"])
+            self.assertEqual(plan["learn"][0]["skill"], "Communication")
+            self.assertEqual(plan["quick_wins"][0]["skill"], "Communication")
+
+    def test_plan_out_writes_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._apply_two(tmp)
+            out_path = Path(tmp) / "plan.md"
+            code, out = self._run(["plan", "--profile",
+                                   str(EXAMPLE_PROFILE), "--log", str(log),
+                                   "--out", str(out_path)])
+            self.assertEqual(code, 0)
+            self.assertIn("wrote", out)
+            text = out_path.read_text(encoding="utf-8")
+            self.assertIn("Gap-closing plan", text)
+            self.assertIn("Stakeholder Management", text)
+
+    def test_plan_bad_today(self):
+        code, _ = self._run(["plan", "--profile", str(EXAMPLE_PROFILE),
+                             "--today", "not-a-date"])
+        self.assertEqual(code, 1)
+
+    def test_plan_missing_profile(self):
+        code, _ = self._run(["plan", "--profile", "/nonexistent.json"])
+        self.assertEqual(code, 2)
+
+    def test_plan_corrupt_log(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = Path(tmp) / "bad.jsonl"
+            log.write_text("{not json\n", encoding="utf-8")
+            code, _ = self._run(["plan", "--profile",
+                                 str(EXAMPLE_PROFILE), "--log", str(log)])
+            self.assertEqual(code, 2)
+
+
+class TestRank(unittest.TestCase):
+    def test_examples_rank_best_first(self):
+        profile = example_profile()
+        data = rank_postings(profile, EXAMPLES_DIR, include_applied=True)
+        self.assertEqual(data["n_files"], 3)
+        self.assertEqual(data["n_scored"], 3)
+        self.assertEqual(data["n_skipped"], 0)
+        titles = [row["title"] for row in data["ranked"]]
+        self.assertEqual(titles, ["Data Analyst",
+                                  "Business Intelligence Analyst",
+                                  "Machine Learning Engineer"])
+        self.assertEqual([row["score"] for row in data["ranked"]],
+                         [0.625, 0.562, 0.15])
+
+    def test_title_breaks_a_score_tie(self):
+        profile = example_profile()
+        with tempfile.TemporaryDirectory() as tmp:
+            # Two postings that match identically (SQL only, matched) get
+            # the same perfect score; the alphabetically first title wins.
+            for name, title in (("b.md", "B Analyst"), ("a.md", "A Analyst")):
+                (Path(tmp) / name).write_text(
+                    f"# {title} at Fictional Co\n\n## Requirements\n\n- SQL\n",
+                    encoding="utf-8")
+            data = rank_postings(profile, tmp)
+            self.assertEqual([row["title"] for row in data["ranked"]],
+                             ["A Analyst", "B Analyst"])
+            self.assertEqual(data["ranked"][0]["score"], 1.0)
+
+    def test_unmeasurable_posting_sorts_last(self):
+        profile = example_profile()
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "plain.md").write_text(
+                "# Mystery Role at Fictional Co\n\nNo skills listed at all.\n",
+                encoding="utf-8")
+            (Path(tmp) / "sql.md").write_text(
+                "# Data Analyst at Fictional Co\n\n## Requirements\n\n- SQL\n",
+                encoding="utf-8")
+            data = rank_postings(profile, tmp)
+            self.assertEqual(data["ranked"][-1]["title"], "Mystery Role")
+            self.assertIsNone(data["ranked"][-1]["score"])
+            self.assertEqual(data["ranked"][-1]["verdict"], "unknown")
+
+    def test_top_gaps_limited_to_three(self):
+        profile = example_profile()
+        data = rank_postings(profile, EXAMPLES_DIR, include_applied=True)
+        ml_row = data["ranked"][2]
+        self.assertEqual(ml_row["required_missing"],
+                         ["TensorFlow", "PyTorch", "Machine Learning",
+                          "Statistics"])
+        self.assertEqual(ml_row["top_gaps"],
+                         ["TensorFlow", "PyTorch", "Machine Learning"])
+
+    def test_min_score_drops_low_and_unmeasurable(self):
+        profile = example_profile()
+        data = rank_postings(profile, EXAMPLES_DIR, min_score=0.5,
+                             include_applied=True)
+        self.assertEqual(len(data["ranked"]), 2)
+        self.assertEqual(data["n_scored"], 3)
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "plain.md").write_text(
+                "# Mystery Role at Fictional Co\n\nNo skills listed.\n",
+                encoding="utf-8")
+            data = rank_postings(profile, tmp, min_score=0.5)
+            self.assertEqual(data["ranked"], [])
+
+    def test_applied_excluded_by_default_and_flagged_when_included(self):
+        profile = example_profile()
+        with tempfile.TemporaryDirectory() as tmp:
+            log = Path(tmp) / "applications.jsonl"
+            entry = add_application(log, company="Northwind Analytics",
+                                    title="Data Analyst")
+            data = rank_postings(profile, EXAMPLES_DIR, entries=[entry])
+            self.assertEqual([row["title"] for row in data["ranked"]],
+                             ["Business Intelligence Analyst",
+                              "Machine Learning Engineer"])
+            data = rank_postings(profile, EXAMPLES_DIR, entries=[entry],
+                                 include_applied=True)
+            northwind = data["ranked"][0]
+            self.assertTrue(northwind["applied"])
+            self.assertEqual(northwind["applied_id"], "APP-001")
+
+    def test_applied_match_is_case_insensitive(self):
+        profile = example_profile()
+        with tempfile.TemporaryDirectory() as tmp:
+            log = Path(tmp) / "applications.jsonl"
+            entry = add_application(log, company="NORTHWIND ANALYTICS",
+                                    title="DATA ANALYST")
+            data = rank_postings(profile, EXAMPLES_DIR, entries=[entry],
+                                 include_applied=True)
+            self.assertTrue(data["ranked"][0]["applied"])
+
+    def test_unreadable_file_is_skipped_not_fatal(self):
+        profile = example_profile()
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "broken.md").write_bytes(b"\xff\xfe not utf-8 \x00")
+            (Path(tmp) / "notes.json").write_text(
+                '{"not": "a posting"}', encoding="utf-8")
+            (Path(tmp) / "good.md").write_text(
+                "# Data Analyst at Fictional Co\n\n## Requirements\n\n- SQL\n",
+                encoding="utf-8")
+            data = rank_postings(profile, tmp)
+            # Only .md/.txt files count; the .json file is ignored entirely.
+            self.assertEqual(data["n_files"], 2)
+            self.assertEqual(data["n_skipped"], 1)
+            self.assertEqual(data["skipped"][0]["file"], "broken.md")
+            self.assertEqual(len(data["ranked"]), 1)
+
+    def test_missing_directory_raises(self):
+        profile = example_profile()
+        with self.assertRaises(ValueError):
+            rank_postings(profile, "/nonexistent-postings-dir")
+
+    def test_rank_json_round_trip(self):
+        profile = example_profile()
+        data = rank_postings(profile, EXAMPLES_DIR, include_applied=True)
+        parsed = json.loads(rank_json(data))
+        self.assertEqual(parsed["ranked"][0]["company"],
+                         "Northwind Analytics")
+        self.assertEqual(parsed["ranked"][0]["score"], 0.625)
+
+    def test_render_names_best_next_application(self):
+        profile = example_profile()
+        data = rank_postings(profile, EXAMPLES_DIR, include_applied=True)
+        text = render_rank_markdown(data)
+        self.assertIn("Best next application: Data Analyst — "
+                      "Northwind Analytics", text)
+        self.assertIn("required 5/6", text)
+        self.assertIn("top gaps: Communication", text)
+
+    def test_render_empty_and_all_applied(self):
+        profile = example_profile()
+        with tempfile.TemporaryDirectory() as tmp:
+            text = render_rank_markdown(rank_postings(profile, tmp))
+            self.assertIn("No postings to rank", text)
+            log = Path(tmp) / "applications.jsonl"
+            entries = [add_application(log, company="Northwind Analytics",
+                                       title="Data Analyst"),
+                       add_application(log, company="Harbour Analytics",
+                                       title="Business Intelligence Analyst"),
+                       add_application(log, company="Vector Labs",
+                                       title="Machine Learning Engineer")]
+            data = rank_postings(profile, EXAMPLES_DIR, entries=entries)
+            self.assertEqual(data["ranked"], [])
+            text = render_rank_markdown(
+                rank_postings(profile, EXAMPLES_DIR, entries=entries,
+                              include_applied=True))
+            self.assertIn("Best next application: none", text)
+            self.assertIn("[already applied as APP-001]", text)
+
+
+class TestRankCLI(unittest.TestCase):
+    def _run(self, argv):
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            code = main(argv)
+        return code, buf.getvalue()
+
+    def _apply_two(self, tmp):
+        for job in (EXAMPLE_JOB, EXAMPLE_JOB2):
+            code, _ = self._run(["apply", "--profile", str(EXAMPLE_PROFILE),
+                                 "--posting", str(job), "--out-dir", tmp])
+            self.assertEqual(code, 0)
+        return Path(tmp) / "applications.jsonl"
+
+    def test_rank_cli_include_applied_and_json(self):
+        code, out = self._run(["rank", "--profile", str(EXAMPLE_PROFILE),
+                               "--postings-dir", str(EXAMPLES_DIR),
+                               "--include-applied", "--json"])
+        self.assertEqual(code, 0)
+        data = json.loads(out)
+        self.assertEqual(len(data["ranked"]), 3)
+        self.assertEqual(data["ranked"][0]["title"], "Data Analyst")
+
+    def test_rank_cli_default_excludes_applied(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._apply_two(tmp)
+            code, out = self._run(["rank", "--profile",
+                                   str(EXAMPLE_PROFILE), "--postings-dir",
+                                   str(EXAMPLES_DIR), "--log", str(log)])
+            self.assertEqual(code, 0)
+            self.assertIn("Machine Learning Engineer", out)
+            self.assertNotIn("Northwind Analytics", out)
+            self.assertNotIn("Harbour Analytics", out)
+
+    def test_rank_cli_out_writes_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out_path = Path(tmp) / "rank.md"
+            code, out = self._run(["rank", "--profile",
+                                   str(EXAMPLE_PROFILE), "--postings-dir",
+                                   str(EXAMPLES_DIR), "--include-applied",
+                                   "--out", str(out_path)])
+            self.assertEqual(code, 0)
+            self.assertIn("wrote", out)
+            text = out_path.read_text(encoding="utf-8")
+            self.assertIn("Best next application", text)
+            self.assertIn("Vector Labs", text)
+
+    def test_rank_cli_min_score_out_of_range_exit_1(self):
+        code, _ = self._run(["rank", "--profile", str(EXAMPLE_PROFILE),
+                             "--postings-dir", str(EXAMPLES_DIR),
+                             "--min-score", "1.5"])
+        self.assertEqual(code, 1)
+
+    def test_rank_cli_missing_dir_exit_2(self):
+        code, _ = self._run(["rank", "--profile", str(EXAMPLE_PROFILE),
+                             "--postings-dir", "/nonexistent-postings-dir"])
+        self.assertEqual(code, 2)
+
+    def test_rank_cli_missing_profile_exit_2(self):
+        code, _ = self._run(["rank", "--profile", "/nonexistent.json",
+                             "--postings-dir", str(EXAMPLES_DIR)])
+        self.assertEqual(code, 2)
+
+    def test_rank_cli_corrupt_log_exit_2(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = Path(tmp) / "bad.jsonl"
+            log.write_text("{not json\n", encoding="utf-8")
+            code, _ = self._run(["rank", "--profile",
+                                 str(EXAMPLE_PROFILE), "--postings-dir",
+                                 str(EXAMPLES_DIR), "--log", str(log)])
+            self.assertEqual(code, 2)
+
+
+class TestSalaryAnalysis(unittest.TestCase):
+    def test_examples_sorted_best_paying_first(self):
+        profile = example_profile()
+        data = analyze_salaries(profile, EXAMPLES_DIR)
+        self.assertEqual(data["n_files"], 3)
+        self.assertEqual(data["n_scored"], 3)
+        self.assertEqual(data["n_skipped"], 0)
+        titles = [row["title"] for row in data["rows"]]
+        self.assertEqual(titles, ["Machine Learning Engineer",
+                                  "Business Intelligence Analyst",
+                                  "Data Analyst"])
+        self.assertEqual([row["verdict"] for row in data["rows"]],
+                         ["above target", "meets target", "meets target"])
+        self.assertEqual([row["midpoint"] for row in data["rows"]],
+                         [145000, 117500, 107500])
+
+    def test_examples_medians(self):
+        profile = example_profile()
+        data = analyze_salaries(profile, EXAMPLES_DIR)
+        self.assertEqual(set(data["medians"]), {"CAD"})
+        med = data["medians"]["CAD"]
+        self.assertEqual(med["n"], 3)
+        self.assertEqual(med["median_min"], 105000)
+        self.assertEqual(med["median_max"], 130000)
+        self.assertEqual(med["median_mid"], 117500)
+        self.assertEqual(data["counts"]["with_range"], 3)
+        self.assertEqual(data["counts"]["meets_target"], 2)
+        self.assertEqual(data["counts"]["above_target"], 1)
+        self.assertEqual(data["counts"]["below_target"], 0)
+        self.assertEqual(data["counts"]["not_compared"], 0)
+
+    def test_target_from_profile(self):
+        profile = example_profile()
+        target = target_from_profile(profile)
+        self.assertEqual(target, {"min": 95000, "max": 120000,
+                                  "currency": "CAD"})
+        no_target = copy.deepcopy(profile)
+        no_target["preferences"] = {}
+        self.assertIsNone(target_from_profile(no_target))
+        min_only = copy.deepcopy(profile)
+        del min_only["preferences"]["salary_max"]
+        self.assertEqual(target_from_profile(min_only),
+                         {"min": 95000, "max": None, "currency": "CAD"})
+
+    def test_below_target(self):
+        profile = example_profile()
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "low.md").write_text(
+                "# Analyst at Fictional Co\n\nSalary: $50,000 - $60,000 CAD\n",
+                encoding="utf-8")
+            data = analyze_salaries(profile, tmp)
+            self.assertEqual(data["rows"][0]["verdict"], "below target")
+            self.assertEqual(data["counts"]["below_target"], 1)
+
+    def test_min_only_target(self):
+        profile = example_profile()
+        del profile["preferences"]["salary_max"]
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "low.md").write_text(
+                "# Analyst at Fictional Co\n\nSalary: $50,000 - $60,000 CAD\n",
+                encoding="utf-8")
+            (Path(tmp) / "high.md").write_text(
+                "# Analyst at Other Co\n\nSalary: $90,000 - $150,000 CAD\n",
+                encoding="utf-8")
+            data = analyze_salaries(profile, tmp)
+            verdicts = {r["company"]: r["verdict"] for r in data["rows"]}
+            self.assertEqual(verdicts["Fictional Co"], "below target")
+            self.assertEqual(verdicts["Other Co"], "meets target")
+
+    def test_currency_mismatch_not_compared(self):
+        profile = example_profile()
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "usd.md").write_text(
+                "# Analyst at US Co\n\nSalary: $90,000 - $110,000 USD\n",
+                encoding="utf-8")
+            data = analyze_salaries(profile, tmp)
+            row = data["rows"][0]
+            self.assertEqual(row["verdict"], "not compared")
+            self.assertEqual(row["verdict_reason"],
+                             "posting is USD, target is CAD")
+            # USD ranges still get their own median group; they are never
+            # folded into the CAD medians.
+            self.assertEqual(set(data["medians"]), {"USD"})
+            self.assertEqual(data["medians"]["USD"]["median_mid"], 100000)
+
+    def test_bare_dollar_not_compared(self):
+        profile = example_profile()
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "bare.md").write_text(
+                "# Analyst at Fictional Co\n\nSalary: $95,000 - $120,000\n",
+                encoding="utf-8")
+            data = analyze_salaries(profile, tmp)
+            row = data["rows"][0]
+            self.assertEqual(row["verdict"], "not compared")
+            self.assertEqual(row["verdict_reason"],
+                             "posting does not state a currency code")
+            self.assertEqual(data["medians"], {})
+
+    def test_no_range_listed_sorts_last(self):
+        profile = example_profile()
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "plain.md").write_text(
+                "# Mystery Role at Fictional Co\n\nNo skills listed at all.\n",
+                encoding="utf-8")
+            (Path(tmp) / "paid.md").write_text(
+                "# Analyst at Fictional Co\n\nSalary: $95,000 - $120,000 CAD\n",
+                encoding="utf-8")
+            data = analyze_salaries(profile, tmp)
+            last = data["rows"][-1]
+            self.assertEqual(last["title"], "Mystery Role")
+            self.assertEqual(last["verdict"], "no range listed")
+            self.assertIsNone(last["midpoint"])
+            self.assertEqual(data["counts"]["without_range"], 1)
+
+    def test_hourly_listed_never_compared(self):
+        profile = example_profile()
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "hourly.md").write_text(
+                "# Analyst at Fictional Co\n\nSalary: $45 - $55 per hour\n",
+                encoding="utf-8")
+            data = analyze_salaries(profile, tmp)
+            row = data["rows"][0]
+            self.assertEqual(row["period"], "hourly")
+            self.assertEqual(row["verdict"], "hourly — not compared")
+            self.assertEqual(data["medians"], {})
+            self.assertEqual(data["counts"]["hourly"], 1)
+
+    def test_no_target_reports_without_comparing(self):
+        profile = example_profile()
+        profile["preferences"] = {}
+        data = analyze_salaries(profile, EXAMPLES_DIR)
+        self.assertTrue(all(r["verdict"] == "no target set"
+                            for r in data["rows"]))
+        self.assertEqual(data["medians"]["CAD"]["median_mid"], 117500)
+        text = render_salary_markdown(data)
+        self.assertIn("No salary target in the profile", text)
+
+    def test_median_even_count(self):
+        profile = example_profile()
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "a.md").write_text(
+                "# A Analyst at Fictional Co\n\nSalary: $100,000 - $110,000 CAD\n",
+                encoding="utf-8")
+            (Path(tmp) / "b.md").write_text(
+                "# B Analyst at Fictional Co\n\nSalary: $120,000 - $130,000 CAD\n",
+                encoding="utf-8")
+            data = analyze_salaries(profile, tmp)
+            med = data["medians"]["CAD"]
+            self.assertEqual(med["median_min"], 110000)
+            self.assertEqual(med["median_max"], 120000)
+            self.assertEqual(med["median_mid"], 115000)
+
+    def test_min_pay_drops_only_judgeable_rows(self):
+        profile = example_profile()
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "low.md").write_text(
+                "# Analyst at Low Co\n\nSalary: $50,000 - $60,000 CAD\n",
+                encoding="utf-8")
+            (Path(tmp) / "plain.md").write_text(
+                "# Mystery Role at Fictional Co\n\nNo skills listed at all.\n",
+                encoding="utf-8")
+            (Path(tmp) / "usd.md").write_text(
+                "# Analyst at US Co\n\nSalary: $200,000 - $250,000 USD\n",
+                encoding="utf-8")
+            data = analyze_salaries(profile, tmp, min_pay=100000)
+            titles = [row["title"] for row in data["rows"]]
+            # The CAD row below the floor is dropped; the no-range row
+            # and the USD row cannot be judged in CAD terms, so they stay.
+            self.assertEqual(titles, ["Analyst", "Mystery Role"])
+            self.assertEqual(data["n_scored"], 3)
+
+    def test_applied_flagged_with_id(self):
+        profile = example_profile()
+        with tempfile.TemporaryDirectory() as tmp:
+            log = Path(tmp) / "applications.jsonl"
+            entry = add_application(log, company="Vector Labs",
+                                    title="Machine Learning Engineer")
+            data = analyze_salaries(profile, EXAMPLES_DIR, entries=[entry])
+            vector = data["rows"][0]
+            self.assertTrue(vector["applied"])
+            self.assertEqual(vector["applied_id"], "APP-001")
+            self.assertEqual(data["counts"]["applied"], 1)
+
+    def test_unreadable_file_is_skipped_not_fatal(self):
+        profile = example_profile()
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "broken.md").write_bytes(b"\xff\xfe not utf-8 \x00")
+            (Path(tmp) / "good.md").write_text(
+                "# Analyst at Fictional Co\n\nSalary: $95,000 - $120,000 CAD\n",
+                encoding="utf-8")
+            data = analyze_salaries(profile, tmp)
+            self.assertEqual(data["n_files"], 2)
+            self.assertEqual(data["n_skipped"], 1)
+            self.assertEqual(data["skipped"][0]["file"], "broken.md")
+            self.assertEqual(len(data["rows"]), 1)
+
+    def test_missing_directory_raises(self):
+        profile = example_profile()
+        with self.assertRaises(ValueError):
+            analyze_salaries(profile, "/nonexistent-postings-dir")
+
+    def test_salary_json_round_trip(self):
+        profile = example_profile()
+        data = analyze_salaries(profile, EXAMPLES_DIR)
+        parsed = json.loads(salary_json(data))
+        self.assertEqual(parsed["rows"][0]["company"], "Vector Labs")
+        self.assertEqual(parsed["medians"]["CAD"]["median_max"], 130000)
+
+    def test_render_states_target_medians_and_assumption(self):
+        profile = example_profile()
+        data = analyze_salaries(profile, EXAMPLES_DIR)
+        text = render_salary_markdown(data)
+        self.assertIn("Target: CAD 95,000–120,000", text)
+        self.assertIn("CAD (3 with a range): median 105,000–130,000, "
+                      "median midpoint 117,500", text)
+        self.assertIn("Currencies are never converted", text)
+        self.assertIn("2 meet the target, 1 above the target.", text)
+        self.assertIn("Machine Learning Engineer — Vector Labs  "
+                      "CAD 130,000–160,000 (mid 145,000)  above target",
+                      text)
+
+
+class TestSalaryCLI(unittest.TestCase):
+    def _run(self, argv):
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            code = main(argv)
+        return code, buf.getvalue()
+
+    def test_salary_cli_examples(self):
+        code, out = self._run(["salary", "--profile", str(EXAMPLE_PROFILE),
+                               "--postings-dir", str(EXAMPLES_DIR)])
+        self.assertEqual(code, 0)
+        self.assertIn("Target: CAD 95,000–120,000", out)
+        self.assertIn("median 105,000–130,000", out)
+        self.assertIn("above target", out)
+
+    def test_salary_cli_json(self):
+        code, out = self._run(["salary", "--profile", str(EXAMPLE_PROFILE),
+                               "--postings-dir", str(EXAMPLES_DIR),
+                               "--json"])
+        self.assertEqual(code, 0)
+        data = json.loads(out)
+        self.assertEqual(len(data["rows"]), 3)
+        self.assertEqual(data["rows"][0]["title"],
+                         "Machine Learning Engineer")
+
+    def test_salary_cli_out_writes_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out_path = Path(tmp) / "salary.md"
+            code, out = self._run(["salary", "--profile",
+                                   str(EXAMPLE_PROFILE), "--postings-dir",
+                                   str(EXAMPLES_DIR),
+                                   "--out", str(out_path)])
+            self.assertEqual(code, 0)
+            self.assertIn("wrote", out)
+            text = out_path.read_text(encoding="utf-8")
+            self.assertIn("Salary analysis", text)
+            self.assertIn("Vector Labs", text)
+
+    def test_salary_cli_min_pay_negative_exit_1(self):
+        code, _ = self._run(["salary", "--profile", str(EXAMPLE_PROFILE),
+                             "--postings-dir", str(EXAMPLES_DIR),
+                             "--min-pay", "-1"])
+        self.assertEqual(code, 1)
+
+    def test_salary_cli_min_pay_without_target_currency_exit_1(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            profile_path = Path(tmp) / "profile.json"
+            profile = example_profile()
+            del profile["preferences"]["currency"]
+            profile_path.write_text(json.dumps(profile), encoding="utf-8")
+            code, _ = self._run(["salary", "--profile", str(profile_path),
+                                 "--postings-dir", str(EXAMPLES_DIR),
+                                 "--min-pay", "100000"])
+            self.assertEqual(code, 1)
+
+    def test_salary_cli_missing_dir_exit_2(self):
+        code, _ = self._run(["salary", "--profile", str(EXAMPLE_PROFILE),
+                             "--postings-dir", "/nonexistent-postings-dir"])
+        self.assertEqual(code, 2)
+
+    def test_salary_cli_missing_profile_exit_2(self):
+        code, _ = self._run(["salary", "--profile", "/nonexistent.json",
+                             "--postings-dir", str(EXAMPLES_DIR)])
+        self.assertEqual(code, 2)
+
+    def test_salary_cli_corrupt_log_exit_2(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = Path(tmp) / "bad.jsonl"
+            log.write_text("{not json\n", encoding="utf-8")
+            code, _ = self._run(["salary", "--profile",
+                                 str(EXAMPLE_PROFILE), "--postings-dir",
+                                 str(EXAMPLES_DIR), "--log", str(log)])
+            self.assertEqual(code, 2)
+
+
+class TestOffer(unittest.TestCase):
+    def _offer(self, **overrides):
+        data = {"base": 130000, "currency": "CAD"}
+        data.update(overrides)
+        return validate_offer(data, today="2026-11-08")
+
+    def _entries(self):
+        northwind = self._offer(base=130000, currency="CAD", bonus=10000,
+                                equity=20000, vesting_years=4, pto_days=20,
+                                work_mode="remote",
+                                deadline="2026-11-14")
+        harbour = self._offer(base=105000, currency="CAD", bonus=5000,
+                              work_mode="hybrid", deadline="2026-11-20")
+        return [
+            {"id": "APP-001", "company": "Northwind Analytics",
+             "title": "Data Analyst", "status": "interview",
+             "offers": [northwind]},
+            {"id": "APP-002", "company": "Harbour Analytics",
+             "title": "Business Intelligence Analyst", "status": "offer",
+             "offers": [harbour]},
+        ]
+
+    def test_validate_offer_annual_defaults(self):
+        offer = self._offer()
+        self.assertEqual(offer["base"], 130000)
+        self.assertEqual(offer["base_annual"], 130000)
+        self.assertEqual(offer["period"], "annual")
+        self.assertEqual(offer["currency"], "CAD")
+        self.assertIsNone(offer["bonus"])
+        self.assertIsNone(offer["equity"])
+        self.assertEqual(offer["recorded_at"], "2026-11-08")
+
+    def test_validate_offer_hourly_annualises_at_2080(self):
+        offer = self._offer(base=50, period="hourly")
+        self.assertEqual(offer["base_annual"], 50 * 2080)
+
+    def test_validate_offer_monthly_annualises_at_12(self):
+        offer = self._offer(base=10000, period="monthly")
+        self.assertEqual(offer["base_annual"], 120000)
+
+    def test_validate_offer_reports_every_error_at_once(self):
+        with self.assertRaises(OfferError) as caught:
+            validate_offer({"period": "weekly", "bonus": -5},
+                           today="2026-11-08")
+        message = str(caught.exception)
+        self.assertIn("base is required", message)
+        self.assertIn("currency is required", message)
+        self.assertIn("period must be", message)
+        self.assertIn("bonus must be 0 or more", message)
+
+    def test_validate_offer_bad_values(self):
+        with self.assertRaises(OfferError) as caught:
+            validate_offer({"base": 0, "currency": "cad",
+                            "vesting_years": 0, "pto_days": -1,
+                            "work_mode": "office",
+                            "start_date": "2026-13-01"},
+                           today="2026-11-08")
+        message = str(caught.exception)
+        self.assertIn("base must be a number above 0", message)
+        self.assertIn("currency must be a 3-letter code", message)
+        self.assertIn("vesting_years must be", message)
+        self.assertIn("pto_days must be", message)
+        self.assertIn("work_mode must be", message)
+        self.assertIn("start_date must be YYYY-MM-DD", message)
+
+    def test_total_cash_and_first_year(self):
+        offer = self._offer(bonus=10000, equity=20000, vesting_years=4)
+        self.assertEqual(total_cash(offer), 140000)
+        total, counted = first_year_total(offer)
+        self.assertEqual(total, 145000)
+        self.assertTrue(counted)
+
+    def test_equity_without_vesting_is_listed_not_counted(self):
+        offer = self._offer(bonus=10000, equity=20000)
+        total, counted = first_year_total(offer)
+        self.assertEqual(total, 140000)
+        self.assertFalse(counted)
+
+    def test_compare_ranks_by_first_year_total(self):
+        profile = example_profile()
+        data = compare_offers(self._entries(), profile=profile,
+                              today=TODAY)
+        self.assertEqual(data["counts"]["applications_with_offers"], 2)
+        self.assertEqual(data["counts"]["offers"], 2)
+        self.assertEqual(data["counts"]["comparable"], 2)
+        rows = data["rows"]
+        self.assertEqual(rows[0]["id"], "APP-001")
+        self.assertEqual(rows[0]["rank"], 1)
+        self.assertEqual(rows[0]["first_year_total"], 145000)
+        self.assertEqual(rows[0]["total_cash"], 140000)
+        self.assertEqual(rows[0]["verdict"], "above target")
+        self.assertEqual(rows[1]["id"], "APP-002")
+        self.assertEqual(rows[1]["rank"], 2)
+        self.assertEqual(rows[1]["first_year_total"], 110000)
+        self.assertEqual(rows[1]["verdict"], "meets target")
+        self.assertEqual(data["best"]["id"], "APP-001")
+        self.assertEqual(data["counts"]["above_target"], 1)
+        self.assertEqual(data["counts"]["meets_target"], 1)
+
+    def test_compare_below_target(self):
+        profile = example_profile()
+        entries = [{"id": "APP-001", "company": "Low Co",
+                    "title": "Analyst", "status": "offer",
+                    "offers": [self._offer(base=80000)]}]
+        data = compare_offers(entries, profile=profile, today=TODAY)
+        self.assertEqual(data["rows"][0]["verdict"], "below target")
+
+    def test_compare_currency_mismatch_not_compared(self):
+        profile = example_profile()
+        entries = [{"id": "APP-001", "company": "US Co",
+                    "title": "Analyst", "status": "offer",
+                    "offers": [self._offer(base=130000, currency="USD")]}]
+        data = compare_offers(entries, profile=profile, today=TODAY)
+        row = data["rows"][0]
+        self.assertEqual(row["verdict"], "not compared")
+        self.assertIn("USD", row["verdict_reason"])
+        self.assertIn("CAD", row["verdict_reason"])
+        self.assertIsNone(row["rank"])
+        self.assertIsNone(data["best"])
+        self.assertEqual(data["counts"]["not_compared"], 1)
+
+    def test_compare_no_target_lists_without_rank(self):
+        data = compare_offers(self._entries(), profile=None, today=TODAY)
+        self.assertEqual([r["verdict"] for r in data["rows"]],
+                         ["no target set", "no target set"])
+        self.assertEqual([r["rank"] for r in data["rows"]], [None, None])
+        self.assertIsNone(data["best"])
+        self.assertEqual(data["counts"]["no_target"], 2)
+
+    def test_compare_uses_latest_offer(self):
+        first = self._offer(base=120000)
+        second = validate_offer({"base": 135000, "currency": "CAD"},
+                                today="2026-11-10")
+        entries = [{"id": "APP-001", "company": "Northwind Analytics",
+                    "title": "Data Analyst", "status": "offer",
+                    "offers": [first, second]}]
+        data = compare_offers(entries, profile=example_profile(),
+                              today=TODAY)
+        row = data["rows"][0]
+        self.assertEqual(row["offer"]["base"], 135000)
+        self.assertEqual(row["n_offers"], 2)
+        self.assertEqual(latest_offer(entries[0])["base"], 135000)
+
+    def test_compare_deadline_flags(self):
+        entries = self._entries()
+        data = compare_offers(entries, profile=example_profile(),
+                              today=TODAY)
+        rows = {r["id"]: r for r in data["rows"]}
+        self.assertEqual(rows["APP-001"]["days_to_deadline"], 6)
+        self.assertFalse(rows["APP-001"]["deadline_passed"])
+        self.assertEqual(rows["APP-002"]["days_to_deadline"], 12)
+        past = [{"id": "APP-003", "company": "Late Co", "title": "Analyst",
+                 "status": "offer",
+                 "offers": [self._offer(deadline="2026-11-01")]}]
+        data = compare_offers(past, profile=example_profile(), today=TODAY)
+        self.assertTrue(data["rows"][0]["deadline_passed"])
+        self.assertEqual(data["rows"][0]["days_to_deadline"], -7)
+        self.assertEqual(data["counts"]["deadline_passed"], 1)
+
+    def test_compare_no_offers_empty(self):
+        data = compare_offers([{"id": "APP-001", "company": "No Offer Co",
+                                "title": "Analyst", "status": "applied",
+                                "offers": []}],
+                              profile=example_profile(), today=TODAY)
+        self.assertEqual(data["rows"], [])
+        self.assertEqual(data["counts"]["applications_with_offers"], 0)
+        self.assertIsNone(data["best"])
+        self.assertIn("No offers recorded yet",
+                      render_offer_markdown(data))
+
+    def test_render_marks_equity_without_vesting(self):
+        entries = [{"id": "APP-001", "company": "Northwind Analytics",
+                    "title": "Data Analyst", "status": "offer",
+                    "offers": [self._offer(equity=20000)]}]
+        data = compare_offers(entries, profile=example_profile(),
+                              today=TODAY)
+        text = render_offer_markdown(data)
+        self.assertIn("equity CAD 20,000", text)
+        self.assertIn("not counted: no vesting schedule", text)
+        self.assertIn("130,000 first year", text)  # equity excluded
+        self.assertIn("Best comparable offer", text)
+
+    def test_render_hourly_base_shows_stated_figure(self):
+        entries = [{"id": "APP-001", "company": "Hourly Co",
+                    "title": "Analyst", "status": "offer",
+                    "offers": [self._offer(base=50, period="hourly")]}]
+        data = compare_offers(entries, profile=example_profile(),
+                              today=TODAY)
+        text = render_offer_markdown(data)
+        self.assertIn("as stated CAD 50/hourly", text)
+        self.assertIn("104,000", text)
+
+    def test_record_offer_appends_and_allows_seconds(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = Path(tmp) / "log.jsonl"
+            add_application(log, "Northwind Analytics", "Data Analyst",
+                            today="2026-11-01")
+            entry = record_offer(log, "APP-001", self._offer(),
+                                 today="2026-11-08")
+            self.assertEqual(len(entry["offers"]), 1)
+            self.assertEqual(entry["history"][-1],
+                             {"kind": "offer", "at": "2026-11-08"})
+            entry = record_offer(
+                log, "APP-001",
+                validate_offer({"base": 135000, "currency": "CAD"},
+                               today="2026-11-10"),
+                today="2026-11-10")
+            self.assertEqual(len(entry["offers"]), 2)
+            self.assertEqual(read_log(log)[0]["status"], "applied")
+
+    def test_record_offer_refuses_terminal(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = Path(tmp) / "log.jsonl"
+            add_application(log, "Northwind Analytics", "Data Analyst",
+                            today="2026-11-01")
+            set_status(log, "APP-001", "rejected", today="2026-11-05")
+            with self.assertRaises(TrackerError):
+                record_offer(log, "APP-001", self._offer(),
+                             today="2026-11-08")
+
+    def test_record_offer_unknown_id(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = Path(tmp) / "log.jsonl"
+            add_application(log, "Northwind Analytics", "Data Analyst",
+                            today="2026-11-01")
+            with self.assertRaises(TrackerError):
+                record_offer(log, "APP-999", self._offer(),
+                             today="2026-11-08")
+
+
+class TestOfferCLI(unittest.TestCase):
+    def _run(self, argv):
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            code = main(argv)
+        return code, buf.getvalue()
+
+    def _log_with_offers(self, tmp):
+        log = Path(tmp) / "log.jsonl"
+        add_application(log, "Northwind Analytics", "Data Analyst",
+                        today="2026-11-01")
+        add_application(log, "Harbour Analytics",
+                        "Business Intelligence Analyst", today="2026-11-01")
+        return log
+
+    def test_offer_cli_record_and_compare(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._log_with_offers(tmp)
+            code, out = self._run(["offer", "--record", "--id", "APP-001",
+                                   "--log", str(log),
+                                   "--base", "130000", "--currency", "CAD",
+                                   "--bonus", "10000", "--equity", "20000",
+                                   "--vesting-years", "4", "--pto-days", "20",
+                                   "--mode", "remote",
+                                   "--deadline", "2026-11-14",
+                                   "--today", "2026-11-08"])
+            self.assertEqual(code, 0)
+            self.assertIn("recorded an offer for APP-001", out)
+            code, out = self._run(["offer", "--record", "--id", "APP-002",
+                                   "--log", str(log),
+                                   "--base", "105000", "--currency", "CAD",
+                                   "--bonus", "5000", "--mode", "hybrid",
+                                   "--deadline", "2026-11-20",
+                                   "--today", "2026-11-08"])
+            self.assertEqual(code, 0)
+            code, out = self._run(["offer", "--profile",
+                                   str(EXAMPLE_PROFILE), "--log", str(log),
+                                   "--today", "2026-11-08"])
+            self.assertEqual(code, 0)
+            self.assertIn("Best comparable offer", out)
+            self.assertIn("Northwind Analytics", out)
+            self.assertIn("145,000 first year", out)
+            self.assertIn("above target", out)
+            self.assertIn("meets target", out)
+            self.assertIn("decides in 6d", out)
+
+    def test_offer_cli_json(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._log_with_offers(tmp)
+            self._run(["offer", "--record", "--id", "APP-001",
+                       "--log", str(log), "--base", "130000",
+                       "--currency", "CAD", "--today", "2026-11-08"])
+            code, out = self._run(["offer", "--profile",
+                                   str(EXAMPLE_PROFILE), "--log", str(log),
+                                   "--json", "--today", "2026-11-08"])
+            self.assertEqual(code, 0)
+            data = json.loads(out)
+            self.assertEqual(len(data["rows"]), 1)
+            self.assertEqual(data["rows"][0]["rank"], 1)
+            self.assertEqual(data["best"]["id"], "APP-001")
+
+    def test_offer_cli_out_writes_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._log_with_offers(tmp)
+            out_path = Path(tmp) / "offers.md"
+            code, out = self._run(["offer", "--profile",
+                                   str(EXAMPLE_PROFILE), "--log", str(log),
+                                   "--out", str(out_path)])
+            self.assertEqual(code, 0)
+            self.assertIn("wrote", out)
+            self.assertIn("Offer comparison",
+                          out_path.read_text(encoding="utf-8"))
+
+    def test_offer_cli_no_offers(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._log_with_offers(tmp)
+            code, out = self._run(["offer", "--profile",
+                                   str(EXAMPLE_PROFILE), "--log", str(log)])
+            self.assertEqual(code, 0)
+            self.assertIn("No offers recorded yet", out)
+
+    def test_offer_cli_record_bad_base_exit_1(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._log_with_offers(tmp)
+            code, _ = self._run(["offer", "--record", "--id", "APP-001",
+                                 "--log", str(log), "--base", "-5",
+                                 "--currency", "CAD"])
+            self.assertEqual(code, 1)
+            self.assertEqual(read_log(log)[0].get("offers") or [], [])
+
+    def test_offer_cli_record_missing_currency_exit_1(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._log_with_offers(tmp)
+            code, _ = self._run(["offer", "--record", "--id", "APP-001",
+                                 "--log", str(log), "--base", "130000"])
+            self.assertEqual(code, 1)
+
+    def test_offer_cli_record_without_id_exit_1(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._log_with_offers(tmp)
+            code, _ = self._run(["offer", "--record", "--log", str(log),
+                                 "--base", "130000", "--currency", "CAD"])
+            self.assertEqual(code, 1)
+
+    def test_offer_cli_record_flags_without_record_exit_1(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._log_with_offers(tmp)
+            code, _ = self._run(["offer", "--log", str(log),
+                                 "--base", "130000", "--currency", "CAD"])
+            self.assertEqual(code, 1)
+
+    def test_offer_cli_record_terminal_exit_6(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._log_with_offers(tmp)
+            set_status(log, "APP-001", "rejected", today="2026-11-05")
+            code, _ = self._run(["offer", "--record", "--id", "APP-001",
+                                 "--log", str(log), "--base", "130000",
+                                 "--currency", "CAD"])
+            self.assertEqual(code, 6)
+
+    def test_offer_cli_record_unknown_id_exit_6(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._log_with_offers(tmp)
+            code, _ = self._run(["offer", "--record", "--id", "APP-999",
+                                 "--log", str(log), "--base", "130000",
+                                 "--currency", "CAD"])
+            self.assertEqual(code, 6)
+
+    def test_offer_cli_bad_today_exit_1(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._log_with_offers(tmp)
+            code, _ = self._run(["offer", "--profile",
+                                 str(EXAMPLE_PROFILE), "--log", str(log),
+                                 "--today", "2026-13-40"])
+            self.assertEqual(code, 1)
+
+
+class TestInterview(unittest.TestCase):
+    def _round(self, **overrides):
+        data = {"date": "2026-11-10", "round": "Hiring manager",
+                "interviewer": "Priya Nair", "mode": "video",
+                "duration_minutes": 45, "notes": "Bring the dashboard story."}
+        data.update(overrides)
+        return data
+
+    def _entries(self):
+        return [
+            {"id": "APP-001", "company": "Northwind Analytics",
+             "title": "Data Analyst", "status": "interview",
+             "interviews": [
+                 self._round(date="2026-11-10", round="Hiring manager"),
+                 self._round(date="2026-11-06", round="Recruiter screen",
+                             interviewer=None, mode="phone",
+                             duration_minutes=30, notes=None),
+                 self._round(date="2026-11-08", round="Panel",
+                             interviewer="Sam Ortiz", mode="onsite",
+                             duration_minutes=60, notes=None),
+             ]},
+            {"id": "APP-002", "company": "Harbour Analytics",
+             "title": "Business Intelligence Analyst", "status": "screening",
+             "interviews": [
+                 self._round(date="2026-11-09", round="Recruiter screen",
+                             interviewer=None, mode="phone",
+                             duration_minutes=30, notes=None),
+             ]},
+            {"id": "APP-003", "company": "Vector Labs",
+             "title": "Machine Learning Engineer", "status": "applied"},
+        ]
+
+    def test_validate_interview_valid_defaults(self):
+        interview = validate_interview(
+            {"date": "2026-11-10", "round": "  Hiring manager  ",
+             "interviewer": "  Priya Nair "},
+            today="2026-11-08")
+        self.assertEqual(interview["date"], "2026-11-10")
+        self.assertEqual(interview["round"], "Hiring manager")
+        self.assertEqual(interview["interviewer"], "Priya Nair")
+        self.assertIsNone(interview["mode"])
+        self.assertIsNone(interview["duration_minutes"])
+        self.assertIsNone(interview["notes"])
+        self.assertEqual(interview["recorded_at"], "2026-11-08")
+
+    def test_validate_interview_minimal(self):
+        interview = validate_interview(
+            {"date": "2026-11-10", "round": "Panel"}, today="2026-11-08")
+        self.assertEqual(interview["round"], "Panel")
+        self.assertIsNone(interview["interviewer"])
+
+    def test_validate_interview_reports_every_error_at_once(self):
+        with self.assertRaises(InterviewError) as caught:
+            validate_interview({"mode": "carrier pigeon",
+                                "duration_minutes": 0, "notes": 42,
+                                "interviewer": 7})
+        message = str(caught.exception)
+        self.assertIn("date is required", message)
+        self.assertIn("round is required", message)
+        self.assertIn("interviewer must be text", message)
+        self.assertIn("mode must be one of phone, video, onsite", message)
+        self.assertIn("duration_minutes must be a whole number above 0",
+                      message)
+        self.assertIn("notes must be text", message)
+
+    def test_validate_interview_bad_date(self):
+        with self.assertRaises(InterviewError):
+            validate_interview({"date": "2026-13-01", "round": "Panel"})
+
+    def test_validate_interview_bad_mode(self):
+        with self.assertRaises(InterviewError):
+            validate_interview(self._round(mode="telepathy"))
+
+    def test_validate_interview_bad_duration(self):
+        for bad in (0, -30, "45", 45.5, True):
+            with self.subTest(bad=bad):
+                with self.assertRaises(InterviewError):
+                    validate_interview(self._round(duration_minutes=bad))
+
+    def test_validate_interview_blank_round(self):
+        with self.assertRaises(InterviewError):
+            validate_interview({"date": "2026-11-10", "round": "   "})
+
+    def test_collect_splits_upcoming_and_past(self):
+        data = collect_interviews(self._entries(), today=TODAY)
+        self.assertEqual(data["counts"], {"upcoming": 3, "past": 1,
+                                          "today": 1})
+        self.assertEqual([r["round"] for r in data["upcoming"]],
+                         ["Panel", "Recruiter screen", "Hiring manager"])
+        self.assertEqual(data["upcoming"][0]["days_until"], 0)
+        self.assertEqual(data["upcoming"][1]["days_until"], 1)
+        self.assertEqual(data["upcoming"][2]["days_until"], 2)
+        self.assertEqual(data["past"][0]["round"], "Recruiter screen")
+        self.assertEqual(data["past"][0]["days_ago"], 2)
+
+    def test_collect_upcoming_sorted_soonest_first(self):
+        entries = self._entries()
+        entries[0]["interviews"] = list(reversed(entries[0]["interviews"]))
+        data = collect_interviews(entries, today=TODAY)
+        self.assertEqual([r["date"] for r in data["upcoming"]],
+                         ["2026-11-08", "2026-11-09", "2026-11-10"])
+
+    def test_collect_past_sorted_most_recent_first(self):
+        entries = self._entries()
+        entries[0]["interviews"].append(
+            self._round(date="2026-11-04", round="Intro call",
+                        interviewer=None, mode="phone",
+                        duration_minutes=15, notes=None))
+        data = collect_interviews(entries, today=TODAY)
+        self.assertEqual([r["date"] for r in data["past"]],
+                         ["2026-11-06", "2026-11-04"])
+
+    def test_collect_skips_unparseable_date(self):
+        entries = self._entries()
+        entries[0]["interviews"].append({"date": "soon", "round": "Panel"})
+        data = collect_interviews(entries, today=TODAY)
+        self.assertEqual(data["counts"]["upcoming"], 3)
+        self.assertEqual(data["counts"]["past"], 1)
+
+    def test_collect_empty_log(self):
+        data = collect_interviews([], today=TODAY)
+        self.assertEqual(data["counts"], {"upcoming": 0, "past": 0,
+                                          "today": 0})
+
+    def test_interviews_for_unknown_id(self):
+        entry, rounds = interviews_for(self._entries(), "APP-999",
+                                       today=TODAY)
+        self.assertIsNone(entry)
+        self.assertEqual(rounds, [])
+
+    def test_interviews_for_filters_one_application(self):
+        entry, rounds = interviews_for(self._entries(), "APP-001",
+                                       today=TODAY)
+        self.assertEqual(entry["company"], "Northwind Analytics")
+        self.assertEqual([r["round"] for r in rounds],
+                         ["Recruiter screen", "Panel", "Hiring manager"])
+        self.assertEqual(rounds[0]["days_ago"], 2)
+        self.assertEqual(rounds[1]["days_until"], 0)
+        self.assertEqual(rounds[2]["days_until"], 2)
+
+    def test_render_marks_today_and_days(self):
+        data = collect_interviews(self._entries(), today=TODAY)
+        text = render_interview_markdown(data)
+        self.assertIn("3 upcoming (1 today), 1 past", text)
+        self.assertIn("Panel", text)
+        self.assertIn("— today", text)
+        self.assertIn("— in 1d", text)
+        self.assertIn("— in 2d", text)
+        self.assertIn("— 2d ago", text)
+        self.assertIn("with Priya Nair", text)
+        self.assertIn("(video)", text)
+        self.assertIn("45 min", text)
+        self.assertIn("notes: Bring the dashboard story.", text)
+
+    def test_render_empty_state(self):
+        data = collect_interviews([], today=TODAY)
+        text = render_interview_markdown(data)
+        self.assertIn("0 upcoming, 0 past", text)
+        self.assertIn("No interviews recorded yet", text)
+
+    def test_interview_json_round_trip(self):
+        data = collect_interviews(self._entries(), today=TODAY)
+        parsed = json.loads(interview_json(data))
+        self.assertEqual(parsed["counts"]["upcoming"], 3)
+        self.assertEqual(parsed["upcoming"][0]["round"], "Panel")
+
+    def test_record_interview_appends_and_history(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = Path(tmp) / "log.jsonl"
+            add_application(log, "Northwind Analytics", "Data Analyst",
+                            today="2026-11-01")
+            interview = validate_interview(self._round(), today="2026-11-08")
+            entry = record_interview(log, "APP-001", interview,
+                                     today="2026-11-08")
+            self.assertEqual(len(entry["interviews"]), 1)
+            self.assertEqual(entry["interviews"][0]["round"],
+                             "Hiring manager")
+            self.assertEqual(entry["history"][-1],
+                             {"kind": "interview", "at": "2026-11-10",
+                              "round": "Hiring manager"})
+
+    def test_record_interview_allows_two_same_day(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = Path(tmp) / "log.jsonl"
+            add_application(log, "Northwind Analytics", "Data Analyst",
+                            today="2026-11-01")
+            record_interview(log, "APP-001",
+                             validate_interview(self._round(round="Panel"),
+                                                today="2026-11-08"),
+                             today="2026-11-08")
+            entry = record_interview(
+                log, "APP-001",
+                validate_interview(self._round(round="Hiring manager"),
+                                   today="2026-11-08"),
+                today="2026-11-08")
+            self.assertEqual(len(entry["interviews"]), 2)
+            self.assertEqual([r["round"] for r in entry["interviews"]],
+                             ["Panel", "Hiring manager"])
+
+    def test_record_interview_does_not_move_status(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = Path(tmp) / "log.jsonl"
+            add_application(log, "Northwind Analytics", "Data Analyst",
+                            today="2026-11-01")
+            entry = record_interview(
+                log, "APP-001",
+                validate_interview(self._round(), today="2026-11-08"),
+                today="2026-11-08")
+            self.assertEqual(entry["status"], "applied")
+
+    def test_record_interview_refuses_terminal(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = Path(tmp) / "log.jsonl"
+            add_application(log, "Northwind Analytics", "Data Analyst",
+                            today="2026-11-01")
+            set_status(log, "APP-001", "withdrawn", today="2026-11-05")
+            with self.assertRaises(TrackerError):
+                record_interview(log, "APP-001",
+                                 validate_interview(self._round(),
+                                                    today="2026-11-08"),
+                                 today="2026-11-08")
+
+    def test_record_interview_unknown_id(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = Path(tmp) / "log.jsonl"
+            add_application(log, "Northwind Analytics", "Data Analyst",
+                            today="2026-11-01")
+            with self.assertRaises(TrackerError):
+                record_interview(log, "APP-999",
+                                 validate_interview(self._round(),
+                                                    today="2026-11-08"),
+                                 today="2026-11-08")
+
+
+class TestInterviewCLI(unittest.TestCase):
+    def _run(self, argv):
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            code = main(argv)
+        return code, buf.getvalue()
+
+    def _log_with_rounds(self, tmp):
+        log = Path(tmp) / "log.jsonl"
+        add_application(log, "Northwind Analytics", "Data Analyst",
+                        today="2026-11-01")
+        add_application(log, "Harbour Analytics",
+                        "Business Intelligence Analyst", today="2026-11-01")
+        return log
+
+    def test_interview_cli_record_and_list(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._log_with_rounds(tmp)
+            code, out = self._run(["interview", "--record", "--id", "APP-001",
+                                   "--log", str(log),
+                                   "--date", "2026-11-10",
+                                   "--round", "Hiring manager",
+                                   "--interviewer", "Priya Nair",
+                                   "--mode", "video",
+                                   "--duration-minutes", "45",
+                                   "--today", "2026-11-08"])
+            self.assertEqual(code, 0)
+            self.assertIn("recorded an interview for APP-001", out)
+            self._run(["interview", "--record", "--id", "APP-001",
+                       "--log", str(log), "--date", "2026-11-06",
+                       "--round", "Recruiter screen", "--mode", "phone",
+                       "--today", "2026-11-08"])
+            code, out = self._run(["interview", "--log", str(log),
+                                   "--today", "2026-11-08"])
+            self.assertEqual(code, 0)
+            self.assertIn("1 upcoming, 1 past", out)
+            self.assertIn("Hiring manager", out)
+            self.assertIn("— in 2d", out)
+            self.assertIn("Recruiter screen", out)
+            self.assertIn("— 2d ago", out)
+
+    def test_interview_cli_list_id_filters(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._log_with_rounds(tmp)
+            self._run(["interview", "--record", "--id", "APP-001",
+                       "--log", str(log), "--date", "2026-11-10",
+                       "--round", "Hiring manager",
+                       "--today", "2026-11-08"])
+            self._run(["interview", "--record", "--id", "APP-002",
+                       "--log", str(log), "--date", "2026-11-09",
+                       "--round", "Recruiter screen",
+                       "--today", "2026-11-08"])
+            code, out = self._run(["interview", "--log", str(log),
+                                   "--id", "APP-002",
+                                   "--today", "2026-11-08"])
+            self.assertEqual(code, 0)
+            self.assertIn("1 upcoming, 0 past", out)
+            self.assertIn("Harbour Analytics", out)
+            self.assertNotIn("Northwind Analytics", out)
+
+    def test_interview_cli_list_id_unknown_exit_1(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._log_with_rounds(tmp)
+            code, _ = self._run(["interview", "--log", str(log),
+                                 "--id", "APP-999"])
+            self.assertEqual(code, 1)
+
+    def test_interview_cli_json(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._log_with_rounds(tmp)
+            self._run(["interview", "--record", "--id", "APP-001",
+                       "--log", str(log), "--date", "2026-11-10",
+                       "--round", "Hiring manager",
+                       "--today", "2026-11-08"])
+            code, out = self._run(["interview", "--log", str(log),
+                                   "--json", "--today", "2026-11-08"])
+            self.assertEqual(code, 0)
+            data = json.loads(out)
+            self.assertEqual(data["counts"]["upcoming"], 1)
+            self.assertEqual(data["upcoming"][0]["days_until"], 2)
+
+    def test_interview_cli_out_writes_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._log_with_rounds(tmp)
+            out_path = Path(tmp) / "interviews.md"
+            code, out = self._run(["interview", "--log", str(log),
+                                   "--out", str(out_path),
+                                   "--today", "2026-11-08"])
+            self.assertEqual(code, 0)
+            self.assertIn("wrote", out)
+            self.assertIn("Interviews —", out_path.read_text(encoding="utf-8"))
+
+    def test_interview_cli_no_interviews(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._log_with_rounds(tmp)
+            code, out = self._run(["interview", "--log", str(log)])
+            self.assertEqual(code, 0)
+            self.assertIn("No interviews recorded yet", out)
+
+    def test_interview_cli_record_missing_round_exit_1(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._log_with_rounds(tmp)
+            code, _ = self._run(["interview", "--record", "--id", "APP-001",
+                                 "--log", str(log), "--date", "2026-11-10"])
+            self.assertEqual(code, 1)
+            self.assertEqual(read_log(log)[0].get("interviews") or [], [])
+
+    def test_interview_cli_record_missing_date_exit_1(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._log_with_rounds(tmp)
+            code, _ = self._run(["interview", "--record", "--id", "APP-001",
+                                 "--log", str(log),
+                                 "--round", "Hiring manager"])
+            self.assertEqual(code, 1)
+
+    def test_interview_cli_record_flags_without_record_exit_1(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._log_with_rounds(tmp)
+            code, _ = self._run(["interview", "--log", str(log),
+                                 "--date", "2026-11-10",
+                                 "--round", "Hiring manager"])
+            self.assertEqual(code, 1)
+
+    def test_interview_cli_record_without_id_exit_1(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._log_with_rounds(tmp)
+            code, _ = self._run(["interview", "--record", "--log", str(log),
+                                 "--date", "2026-11-10",
+                                 "--round", "Hiring manager"])
+            self.assertEqual(code, 1)
+
+    def test_interview_cli_record_terminal_exit_6(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._log_with_rounds(tmp)
+            set_status(log, "APP-001", "rejected", today="2026-11-05")
+            code, _ = self._run(["interview", "--record", "--id", "APP-001",
+                                 "--log", str(log), "--date", "2026-11-10",
+                                 "--round", "Hiring manager"])
+            self.assertEqual(code, 6)
+
+    def test_interview_cli_record_unknown_id_exit_6(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._log_with_rounds(tmp)
+            code, _ = self._run(["interview", "--record", "--id", "APP-999",
+                                 "--log", str(log), "--date", "2026-11-10",
+                                 "--round", "Hiring manager"])
+            self.assertEqual(code, 6)
+
+    def test_interview_cli_bad_today_exit_1(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._log_with_rounds(tmp)
+            code, _ = self._run(["interview", "--log", str(log),
+                                 "--today", "2026-13-40"])
+            self.assertEqual(code, 1)
 
 
 if __name__ == "__main__":

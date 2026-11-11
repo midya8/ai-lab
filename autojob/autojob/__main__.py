@@ -14,10 +14,25 @@ Subcommands (all offline, stdlib only):
   tailor    --profile P --posting J [--out F] [--json]
   followup  [--log L] [--profile P] [--wait-days N] [--json] [--today YYYY-MM-DD]
   followup  --record --id APP-001 [--log L] [--note TEXT] [--today YYYY-MM-DD]
+  digest    [--log L] [--json] [--out F] [--stale-days N] [--wait-days N] [--today YYYY-MM-DD]
+  plan      --profile P [--log L] [--json] [--out F] [--today YYYY-MM-DD]
+  rank      --profile P --postings-dir D [--log L] [--min-score X] [--include-applied] [--json] [--out F]
+  salary    --profile P --postings-dir D [--log L] [--min-pay X] [--json] [--out F]
+  offer     [--log L] [--profile P] [--json] [--out F] [--today YYYY-MM-DD]
+  offer     --record --id APP-001 --base N --currency CAD [--bonus N]
+            [--equity N --vesting-years N] [--pto-days N]
+            [--mode remote|hybrid|onsite] [--period annual|hourly|monthly]
+            [--start YYYY-MM-DD] [--deadline YYYY-MM-DD] [--note TEXT]
+            [--today YYYY-MM-DD]
+  interview [--log L] [--id APP-001] [--json] [--out F] [--today YYYY-MM-DD]
+  interview --record --id APP-001 --date YYYY-MM-DD --round LABEL
+            [--interviewer NAME] [--mode phone|video|onsite]
+            [--duration-minutes N] [--notes TEXT] [--today YYYY-MM-DD]
 
 Exit codes: 0 ok · 1 usage error · 2 profile/posting load error ·
 3 match below --fail-under · 4 draft/apply refused below --min-coverage ·
-5 duplicate application · 6 illegal status transition or follow-up refused.
+5 duplicate application · 6 illegal status transition, follow-up refused,
+offer refused, or interview refused.
 
 autojob prepares application packets for a human to review and submit. It
 never submits anything and never invents experience: every fact in a draft
@@ -34,15 +49,26 @@ from pathlib import Path
 
 from . import __version__
 from .analytics import analytics_json, analytics_report, compute_analytics
+from .digest import build_digest, digest_json, render_digest_markdown
 from .followup import due_followups, followup_json, followup_report
+from .interview import (InterviewError, collect_interviews,
+                        interview_json, interviews_for,
+                        render_interview_markdown, validate_interview)
 from .letter import draft_letter, review_notes
 from .match import match_profile
+from .offer import (OfferError, compare_offers, offer_json,
+                    render_offer_markdown, validate_offer)
+from .plan import build_plan, plan_json, render_plan_markdown
 from .posting import parse_posting
 from .prep import build_prep, prep_json, render_prep_markdown
 from .profile import ProfileError, load_profile, skill_map
+from .rank import rank_json, rank_postings, render_rank_markdown
 from .report import match_json, match_report
+from .salary import (analyze_salaries, render_salary_markdown, salary_json,
+                     target_from_profile)
 from .tailor import build_tailor, render_tailor_markdown, tailor_json
-from .tracker import (TrackerError, add_application, read_log, record_followup,
+from .tracker import (TrackerError, add_application, read_log,
+                      record_followup, record_interview, record_offer,
                       set_status, slug)
 
 DEFAULT_OUT_DIR = "applications"
@@ -186,6 +212,10 @@ def _cmd_apply(args):
             source=args.source,
             match_score=match["score"],
             packet_dir=str(packet),
+            required_matched=match["required_matched"],
+            required_missing=match["required_missing"],
+            preferred_matched=match["preferred_matched"],
+            preferred_missing=match["preferred_missing"],
         )
     except TrackerError as exc:
         print(f"error: {exc}", file=sys.stderr)
@@ -307,6 +337,271 @@ def _cmd_followup(args):
     return 0
 
 
+def _cmd_digest(args):
+    try:
+        entries = read_log(args.log)
+    except TrackerError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    if args.today is not None:
+        try:
+            today = datetime.date.fromisoformat(args.today)
+        except ValueError:
+            print(f"error: --today must be YYYY-MM-DD, got {args.today!r}",
+                  file=sys.stderr)
+            return 1
+    else:
+        today = datetime.date.today()
+    if args.stale_days < 0:
+        print("error: --stale-days must be 0 or more", file=sys.stderr)
+        return 1
+    if args.wait_days is not None and args.wait_days < 0:
+        print("error: --wait-days must be 0 or more", file=sys.stderr)
+        return 1
+    data = build_digest(entries, today=today,
+                        stale_days=args.stale_days, wait_days=args.wait_days)
+    text = digest_json(data) if args.json else render_digest_markdown(data)
+    if args.out:
+        Path(args.out).write_text(text, encoding="utf-8")
+        print(f"wrote {args.out}")
+    else:
+        print(text, end="")
+    return 0
+
+
+def _cmd_plan(args):
+    profile = _load_profile(args.profile)
+    if profile is None:
+        return 2
+    try:
+        entries = read_log(args.log)
+    except TrackerError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    if args.today is not None:
+        try:
+            today = datetime.date.fromisoformat(args.today)
+        except ValueError:
+            print(f"error: --today must be YYYY-MM-DD, got {args.today!r}",
+                  file=sys.stderr)
+            return 1
+    else:
+        today = datetime.date.today()
+    data = build_plan(profile, entries, today=today)
+    text = plan_json(data) if args.json else render_plan_markdown(data)
+    if args.out:
+        Path(args.out).write_text(text, encoding="utf-8")
+        print(f"wrote {args.out}")
+    else:
+        print(text, end="")
+    return 0
+
+
+def _cmd_rank(args):
+    profile = _load_profile(args.profile)
+    if profile is None:
+        return 2
+    if args.min_score is not None and not 0.0 <= args.min_score <= 1.0:
+        print("error: --min-score must be between 0 and 1, "
+              f"got {args.min_score}", file=sys.stderr)
+        return 1
+    try:
+        entries = read_log(args.log)
+    except TrackerError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    try:
+        data = rank_postings(profile, args.postings_dir, entries,
+                             min_score=args.min_score,
+                             include_applied=args.include_applied)
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    text = rank_json(data) if args.json else render_rank_markdown(data)
+    if args.out:
+        Path(args.out).write_text(text, encoding="utf-8")
+        print(f"wrote {args.out}")
+    else:
+        print(text, end="")
+    return 0
+
+
+def _cmd_salary(args):
+    profile = _load_profile(args.profile)
+    if profile is None:
+        return 2
+    if args.min_pay is not None and args.min_pay < 0:
+        print(f"error: --min-pay must be 0 or more, got {args.min_pay}",
+              file=sys.stderr)
+        return 1
+    if args.min_pay is not None:
+        # A floor only means something in the target's currency; without
+        # one there is nothing to compare it against.
+        target = target_from_profile(profile)
+        if target is None or target.get("currency") is None:
+            print("error: --min-pay needs a salary target with a currency "
+                  "in the profile", file=sys.stderr)
+            return 1
+    try:
+        entries = read_log(args.log)
+    except TrackerError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    try:
+        data = analyze_salaries(profile, args.postings_dir, entries,
+                                min_pay=args.min_pay)
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    text = salary_json(data) if args.json else render_salary_markdown(data)
+    if args.out:
+        Path(args.out).write_text(text, encoding="utf-8")
+        print(f"wrote {args.out}")
+    else:
+        print(text, end="")
+    return 0
+
+
+def _cmd_offer(args):
+    if args.today is not None:
+        try:
+            today = datetime.date.fromisoformat(args.today)
+        except ValueError:
+            print(f"error: --today must be YYYY-MM-DD, got {args.today!r}",
+                  file=sys.stderr)
+            return 1
+    else:
+        today = datetime.date.today()
+    record_only = [args.base, args.currency, args.bonus, args.equity,
+                   args.vesting_years, args.pto_days, args.mode,
+                   args.start, args.deadline, args.note]
+    if args.record:
+        if not args.id:
+            print("error: --record needs --id APP-001", file=sys.stderr)
+            return 1
+        try:
+            offer = validate_offer({
+                "base": args.base,
+                "currency": args.currency,
+                "period": args.period,
+                "bonus": args.bonus,
+                "equity": args.equity,
+                "vesting_years": args.vesting_years,
+                "pto_days": args.pto_days,
+                "work_mode": args.mode,
+                "start_date": args.start,
+                "deadline": args.deadline,
+                "note": args.note,
+            }, today=today.isoformat())
+        except OfferError as exc:
+            print(f"error: cannot record offer: {exc}", file=sys.stderr)
+            return 1
+        try:
+            entry = record_offer(args.log, args.id, offer,
+                                 today=today.isoformat())
+        except TrackerError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 6
+        print(f"recorded an offer for {entry['id']}: {entry['company']} — "
+              f"{entry['title']} ({offer['currency']} "
+              f"{offer['base_annual']:,.0f} base annual)")
+        return 0
+    if args.id or any(value is not None for value in record_only):
+        print("error: --id, --base, --currency, --bonus, --equity, "
+              "--vesting-years, --pto-days, --mode, --start, --deadline "
+              "and --note need --record", file=sys.stderr)
+        return 1
+    profile = None
+    if args.profile:
+        profile = _load_profile(args.profile)
+        if profile is None:
+            return 2
+    try:
+        entries = read_log(args.log)
+    except TrackerError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    data = compare_offers(entries, profile=profile, today=today)
+    text = offer_json(data) if args.json else render_offer_markdown(data)
+    if args.out:
+        Path(args.out).write_text(text, encoding="utf-8")
+        print(f"wrote {args.out}")
+    else:
+        print(text, end="")
+    return 0
+
+
+def _cmd_interview(args):
+    if args.today is not None:
+        try:
+            today = datetime.date.fromisoformat(args.today)
+        except ValueError:
+            print(f"error: --today must be YYYY-MM-DD, got {args.today!r}",
+                  file=sys.stderr)
+            return 1
+    else:
+        today = datetime.date.today()
+    record_only = [args.date, args.round, args.interviewer, args.mode,
+                   args.duration_minutes, args.notes]
+    if args.record:
+        if not args.id:
+            print("error: --record needs --id APP-001", file=sys.stderr)
+            return 1
+        try:
+            interview = validate_interview({
+                "date": args.date,
+                "round": args.round,
+                "interviewer": args.interviewer,
+                "mode": args.mode,
+                "duration_minutes": args.duration_minutes,
+                "notes": args.notes,
+            }, today=today.isoformat())
+        except InterviewError as exc:
+            print(f"error: cannot record interview: {exc}", file=sys.stderr)
+            return 1
+        try:
+            entry = record_interview(args.log, args.id, interview,
+                                     today=today.isoformat())
+        except TrackerError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 6
+        print(f"recorded an interview for {entry['id']}: {entry['company']} — "
+              f"{entry['title']} ({interview['round']} on {interview['date']})")
+        return 0
+    if any(value is not None for value in record_only):
+        print("error: --date, --round, --interviewer, --mode, "
+              "--duration-minutes and --notes need --record", file=sys.stderr)
+        return 1
+    try:
+        entries = read_log(args.log)
+    except TrackerError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    if args.id:
+        entry, rounds = interviews_for(entries, args.id, today=today)
+        if entry is None:
+            print(f"error: no application with id {args.id!r}", file=sys.stderr)
+            return 1
+        upcoming = sorted((r for r in rounds if r["days_until"] is not None),
+                          key=lambda r: (r["date"], r["round"] or ""))
+        past = sorted((r for r in rounds if r["days_ago"] is not None),
+                      key=lambda r: (r["date"], r["round"] or ""),
+                      reverse=True)
+        data = {"upcoming": upcoming, "past": past,
+                "counts": {"upcoming": len(upcoming), "past": len(past),
+                           "today": sum(1 for r in upcoming
+                                        if r["days_until"] == 0)}}
+    else:
+        data = collect_interviews(entries, today=today)
+    text = interview_json(data) if args.json else render_interview_markdown(data)
+    if args.out:
+        Path(args.out).write_text(text, encoding="utf-8")
+        print(f"wrote {args.out}")
+    else:
+        print(text, end="")
+    return 0
+
+
 def _cmd_report(args):
     try:
         entries = read_log(args.log)
@@ -421,6 +716,138 @@ def build_parser():
     p.add_argument("--note", default=None,
                    help="with --record: a short note stored with the follow-up")
     p.set_defaults(func=_cmd_followup)
+
+    p = sub.add_parser("digest", help="one-page digest over the whole log: "
+                                       "funnel, stale, due follow-ups, and "
+                                       "the skills postings keep asking for")
+    p.add_argument("--log", default=f"{DEFAULT_OUT_DIR}/applications.jsonl")
+    p.add_argument("--json", action="store_true")
+    p.add_argument("--out", default=None,
+                   help="write the digest to this file instead of stdout")
+    p.add_argument("--stale-days", type=int, default=14,
+                   help="flag applications with no movement in this many days (default 14)")
+    p.add_argument("--wait-days", type=int, default=None,
+                   help="override the per-stage follow-up wait for every stage")
+    p.add_argument("--today", default=None,
+                   help="reference date YYYY-MM-DD (default: today)")
+    p.set_defaults(func=_cmd_digest)
+
+    p = sub.add_parser("plan", help="gap-closing plan over the log: skills "
+                                      "you have but cannot prove, skills to "
+                                      "learn, and the quick wins")
+    p.add_argument("--profile", required=True)
+    p.add_argument("--log", default=f"{DEFAULT_OUT_DIR}/applications.jsonl")
+    p.add_argument("--json", action="store_true")
+    p.add_argument("--out", default=None,
+                   help="write the plan to this file instead of stdout")
+    p.add_argument("--today", default=None,
+                   help="reference date YYYY-MM-DD (default: today)")
+    p.set_defaults(func=_cmd_plan)
+
+    p = sub.add_parser("rank", help="rank a folder of postings by fit: "
+                                     "best application first, already-applied "
+                                     "postings left out unless asked for")
+    p.add_argument("--profile", required=True)
+    p.add_argument("--postings-dir", required=True,
+                   help="directory of .md / .txt postings to rank")
+    p.add_argument("--log", default=f"{DEFAULT_OUT_DIR}/applications.jsonl")
+    p.add_argument("--min-score", type=float, default=None,
+                   help="drop postings scoring below this (0-1)")
+    p.add_argument("--include-applied", action="store_true",
+                   help="also rank postings already in the log")
+    p.add_argument("--json", action="store_true")
+    p.add_argument("--out", default=None,
+                   help="write the ranking to this file instead of stdout")
+    p.set_defaults(func=_cmd_rank)
+
+    p = sub.add_parser("salary", help="compare what a folder of postings "
+                                       "pays against the profile's salary "
+                                       "target, with per-currency medians")
+    p.add_argument("--profile", required=True)
+    p.add_argument("--postings-dir", required=True,
+                   help="directory of .md / .txt postings to analyse")
+    p.add_argument("--log", default=f"{DEFAULT_OUT_DIR}/applications.jsonl")
+    p.add_argument("--min-pay", type=float, default=None,
+                   help="drop postings whose max is below this, in the "
+                        "target's currency (needs a salary target with "
+                        "a currency in the profile)")
+    p.add_argument("--json", action="store_true")
+    p.add_argument("--out", default=None,
+                   help="write the analysis to this file instead of stdout")
+    p.set_defaults(func=_cmd_salary)
+
+    p = sub.add_parser("offer", help="compare recorded offers against the "
+                                       "profile's salary target, or record "
+                                       "one with --record")
+    p.add_argument("--log", default=f"{DEFAULT_OUT_DIR}/applications.jsonl")
+    p.add_argument("--profile", default=None,
+                   help="profile file: supplies the salary target for "
+                        "verdicts and ranking (without it, offers are "
+                        "listed, not compared)")
+    p.add_argument("--json", action="store_true")
+    p.add_argument("--out", default=None,
+                   help="write the comparison to this file instead of stdout")
+    p.add_argument("--today", default=None,
+                   help="reference date YYYY-MM-DD for deadlines (default: today)")
+    p.add_argument("--record", action="store_true",
+                   help="record an offer instead of comparing")
+    p.add_argument("--id", default=None,
+                   help="with --record: the application to record for")
+    p.add_argument("--base", type=float, default=None,
+                   help="with --record: annual base (or per period, see --period)")
+    p.add_argument("--currency", default=None,
+                   help="with --record: 3-letter currency code, e.g. CAD")
+    p.add_argument("--period", default=None,
+                   choices=["annual", "hourly", "monthly"],
+                   help="with --record: how --base is stated "
+                        "(default: annual; hourly annualises at 2,080 hours)")
+    p.add_argument("--bonus", type=float, default=None,
+                   help="with --record: annual bonus (assumed annual)")
+    p.add_argument("--equity", type=float, default=None,
+                   help="with --record: equity value; counts towards the "
+                        "first-year total only with --vesting-years")
+    p.add_argument("--vesting-years", type=int, default=None,
+                   help="with --record: years the equity vests over")
+    p.add_argument("--pto-days", type=int, default=None,
+                   help="with --record: paid time off days")
+    p.add_argument("--mode", default=None,
+                   choices=["remote", "hybrid", "onsite"],
+                   help="with --record: work mode of the offer")
+    p.add_argument("--start", default=None,
+                   help="with --record: start date YYYY-MM-DD")
+    p.add_argument("--deadline", default=None,
+                   help="with --record: decision deadline YYYY-MM-DD")
+    p.add_argument("--note", default=None,
+                   help="with --record: a short note stored with the offer")
+    p.set_defaults(func=_cmd_offer)
+
+    p = sub.add_parser("interview", help="list recorded interview rounds, "
+                                          "or record one with --record")
+    p.add_argument("--log", default=f"{DEFAULT_OUT_DIR}/applications.jsonl")
+    p.add_argument("--json", action="store_true")
+    p.add_argument("--out", default=None,
+                   help="write the schedule to this file instead of stdout")
+    p.add_argument("--today", default=None,
+                   help="reference date YYYY-MM-DD (default: today)")
+    p.add_argument("--record", action="store_true",
+                   help="record an interview instead of listing")
+    p.add_argument("--id", default=None,
+                   help="with --record: the application to record for; "
+                        "without it: show only this application's rounds")
+    p.add_argument("--date", default=None,
+                   help="with --record: interview date YYYY-MM-DD")
+    p.add_argument("--round", default=None,
+                   help="with --record: round label, e.g. 'Hiring manager'")
+    p.add_argument("--interviewer", default=None,
+                   help="with --record: interviewer name")
+    p.add_argument("--mode", default=None,
+                   choices=["phone", "video", "onsite"],
+                   help="with --record: how the interview happens")
+    p.add_argument("--duration-minutes", type=int, default=None,
+                   help="with --record: scheduled length in minutes")
+    p.add_argument("--note", dest="notes", default=None,
+                   help="with --record: a short note stored with the round")
+    p.set_defaults(func=_cmd_interview)
 
     p = sub.add_parser("report", help="funnel analytics over logged applications")
     p.add_argument("--log", default=f"{DEFAULT_OUT_DIR}/applications.jsonl")

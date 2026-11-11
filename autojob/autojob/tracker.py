@@ -66,8 +66,16 @@ def next_id(entries):
 
 
 def add_application(log_path, company, title, source=None, match_score=None,
-                    packet_dir=None, today=None):
-    """Append an application. Refuses duplicates on (company, title)."""
+                    packet_dir=None, today=None,
+                    required_matched=None, required_missing=None,
+                    preferred_matched=None, preferred_missing=None):
+    """Append an application. Refuses duplicates on (company, title).
+
+    The four skill lists (v0.6) record what the posting asked for and
+    which of those the profile matched, so the digest can count gaps
+    across applications. They are stored only when supplied — entries
+    logged by older callers simply carry no skill data.
+    """
     entries = read_log(log_path)
     for entry in entries:
         if _norm(entry["company"]) == _norm(company) and _norm(entry["title"]) == _norm(title):
@@ -88,6 +96,14 @@ def add_application(log_path, company, title, source=None, match_score=None,
         "match_score": match_score,
         "packet_dir": packet_dir,
     }
+    if required_matched is not None:
+        entry["required_matched"] = list(required_matched)
+    if required_missing is not None:
+        entry["required_missing"] = list(required_missing)
+    if preferred_matched is not None:
+        entry["preferred_matched"] = list(preferred_matched)
+    if preferred_missing is not None:
+        entry["preferred_missing"] = list(preferred_missing)
     entries.append(entry)
     _write_log(log_path, entries)
     return entry
@@ -142,6 +158,82 @@ def set_status(log_path, app_id, new_status, today=None):
             history = _ensure_history(entry)
             entry["status"] = new_status
             history.append({"status": new_status, "at": today})
+            _write_log(log_path, entries)
+            return entry
+    raise TrackerError(f"no application with id {app_id!r}")
+
+
+def record_offer(log_path, app_id, offer, today=None):
+    """Record an offer on an application.
+
+    Appends the (already validated) offer dict to the entry's ``offers``
+    list and a ``{"kind": "offer", "at": today}`` event to its history.
+    Multiple offers per application are allowed — a renegotiated offer
+    is a new record, not an overwrite; the comparison uses the latest.
+    Refuses terminal applications: there is no offer to record once an
+    application is hired, rejected, or withdrawn. Recording an offer
+    does not move the application's status — that stays explicit
+    through ``set_status``. ``today`` defaults to the real current
+    date; pass an explicit date in tests.
+    """
+    if today is None:
+        today = datetime.date.today().isoformat()
+    entries = read_log(log_path)
+    for entry in entries:
+        if entry["id"] == app_id:
+            if entry.get("status") in TERMINAL:
+                raise TrackerError(
+                    f"cannot record an offer for {app_id}: status is "
+                    f"{entry['status']!r} (terminal)"
+                )
+            _ensure_history(entry)
+            offers = entry.get("offers")
+            if not isinstance(offers, list):
+                offers = []
+                entry["offers"] = offers
+            offers.append(offer)
+            entry["history"].append({"kind": "offer", "at": today})
+            _write_log(log_path, entries)
+            return entry
+    raise TrackerError(f"no application with id {app_id!r}")
+
+
+def record_interview(log_path, app_id, interview, today=None):
+    """Record an interview round on an application.
+
+    Appends the (already validated) interview dict to the entry's
+    ``interviews`` list and a ``{"kind": "interview", "at": date,
+    "round": label}`` event to its history. Multiple rounds per
+    application are allowed — including two on the same day — so a
+    round is never deduplicated; a re-recorded round is a new record,
+    not an overwrite. Refuses terminal applications: there is no
+    interview to schedule once an application is hired, rejected, or
+    withdrawn. Recording a round does not move the application's
+    status — that stays explicit through ``set_status``, the same rule
+    as offers. ``today`` defaults to the real current date; pass an
+    explicit date in tests.
+    """
+    if today is None:
+        today = datetime.date.today().isoformat()
+    entries = read_log(log_path)
+    for entry in entries:
+        if entry["id"] == app_id:
+            if entry.get("status") in TERMINAL:
+                raise TrackerError(
+                    f"cannot record an interview for {app_id}: status is "
+                    f"{entry['status']!r} (terminal)"
+                )
+            _ensure_history(entry)
+            rounds = entry.get("interviews")
+            if not isinstance(rounds, list):
+                rounds = []
+                entry["interviews"] = rounds
+            rounds.append(interview)
+            entry["history"].append({
+                "kind": "interview",
+                "at": interview["date"],
+                "round": interview.get("round"),
+            })
             _write_log(log_path, entries)
             return entry
     raise TrackerError(f"no application with id {app_id!r}")

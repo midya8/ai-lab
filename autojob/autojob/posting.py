@@ -46,6 +46,16 @@ _SINGLE_SALARY_RE = re.compile(
     r"(?P<val>\d{1,3}(?:,\d{3})*(?:\.\d+)?|\d+(?:\.\d+)?)\s*(?P<k>[kK])?"
 )
 
+# A currency code written after the figures ("$95,000 - $120,000 CAD"):
+# it names the currency the bare "$" leaves ambiguous, so it wins over
+# the symbol when present.
+_TRAILING_CURRENCY_RE = re.compile(r"\s*(CAD|USD|GBP|EUR|AUD)\b")
+
+
+def _currency_after(text, end):
+    match = _TRAILING_CURRENCY_RE.match(text, end)
+    return match.group(1) if match else None
+
 
 def _number(raw, k_marker):
     value = float(raw.replace(",", ""))
@@ -58,19 +68,25 @@ def parse_salary(text):
     """Parse the first salary range in the text, or None.
 
     Returns ``{"min": ..., "max": ..., "currency": ..., "raw": ...}``.
-    A lone figure (``$110,000``) is returned as min == max.
+    A lone figure (``$110,000``) is returned as min == max. The
+    currency is a code (``CAD``) when the posting states one — either
+    before the figures or right after them — otherwise the symbol
+    (``$``) or None when no currency is given at all.
     """
     match = _SALARY_RE.search(text)
     if match:
         lo = _number(match.group("lo"), match.group("lok"))
         hi = _number(match.group("hi"), match.group("hik"))
-        cur = match.group("cur") or match.group("cur2") or ""
+        cur = _currency_after(text, match.end())
+        if cur is None:
+            cur = match.group("cur") or match.group("cur2") or ""
         return {"min": lo, "max": hi, "currency": cur or None, "raw": match.group(0).strip()}
     single = _SINGLE_SALARY_RE.search(text)
     if single:
         value = _number(single.group("val"), single.group("k"))
+        cur = _currency_after(text, single.end()) or single.group("cur")
         return {"min": value, "max": value,
-                "currency": single.group("cur") or None,
+                "currency": cur or None,
                 "raw": single.group(0).strip()}
     return None
 
