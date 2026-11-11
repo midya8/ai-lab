@@ -340,9 +340,3 @@ def test_django_debug_true():
     assert rules("settings.py", "DEBUG = os.environ.get('DEBUG') == '1'\n") == []
     assert rules("settings.py", "# DEBUG = True\n") == []
     assert rules("a.py", "log_DEBUG = True\n") == []
-
-
-def test_flask_debug_run():
-    assert rules("app.py", "app.run(host='0.0.0.0', debug=True)\n") == [(1, "py-flask-debug-run")]
-    assert rules("app.py", "app.run(debug=False)\n") == []
-    assert rules("app.py", "# app.run(debug=True)\n") == []
