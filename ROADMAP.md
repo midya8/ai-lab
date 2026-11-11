@@ -189,6 +189,7 @@
 - reviewkit: AST rule py-fstring-no-placeholder (f-string with no placeholders; 99 tests)
 - reviewkit: AST rule py-blocking-in-async (time.sleep/requests inside async def; 100 tests)
 - reviewkit: AST rule py-useless-comparison (comparison as a bare statement; 101 tests)
+- reviewkit: line rule py-mktemp (insecure tempfile.mktemp; 102 tests)
 
 
 ## Next

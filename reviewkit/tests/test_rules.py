@@ -230,3 +230,8 @@ def test_blocking_in_async():
 def test_useless_comparison():
     assert rules("a.py", "def f(x):\n    x == 3\n") == [(2, "py-useless-comparison")]
     assert rules("a.py", "def f(x):\n    assert x == 3\n    y = x == 3\n    return y\n") == []
+
+
+def test_mktemp():
+    assert rules("a.py", "import tempfile\np = tempfile.mktemp()\n") == [(2, "py-mktemp")]
+    assert rules("a.py", "import tempfile\np = tempfile.mkstemp()\n") == []
