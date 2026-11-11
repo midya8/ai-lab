@@ -11,6 +11,7 @@ python -m codesearch dups --root ..                                  # near-dupl
 python -m codesearch calls --root .. Searcher.similar               # callers and callees (name-based)
 python -m codesearch undocumented --root ..                    # public defs missing docstrings, most-referenced first
 python -m codesearch complexity --root .. --min 10             # cyclomatic complexity ranking (McCabe, AST)
+python -m codesearch hotspots --root .. --min 5               # complexity x references: what to refactor first
 python -m codesearch eval bench/queries_dev.json --misses            # score the search itself
 ```
 

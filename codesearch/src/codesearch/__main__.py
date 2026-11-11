@@ -178,6 +178,22 @@ def cmd_complexity(args) -> int:
     return 0
 
 
+def cmd_hotspots(args) -> int:
+    from .hotspots import hotspots
+
+    ix, _ = _load(args)
+    res = hotspots(ix.chunks, Path(args.root).resolve(), min_complexity=args.min, include_tests=args.tests)
+    if args.json:
+        print(json.dumps([{"id": c.id, "line": c.start, "complexity": cx, "references": r, "risk": k}
+                          for c, cx, r, k in res[:args.k]], indent=2))
+        return 0
+    print("risk  cx  refs  location")
+    for c, cx, r, k in res[:args.k]:
+        print(f"{k:>4} {cx:>3} {r:>5}  {c.path}:{c.start}  {c.qualname} [{c.kind}]")
+    print(f"{len(res)} function(s) at or above complexity {args.min}; risk = complexity x (1 + references)")
+    return 0
+
+
 def cmd_dups(args) -> int:
     ix, _ = _load(args)
     pairs = Searcher(ix).duplicates(threshold=args.threshold, min_lines=args.min_lines,
@@ -296,6 +312,13 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--min", type=int, default=10, help="only report complexity >= this")
     sp.add_argument("--tests", action="store_true", help="include test code")
     sp.set_defaults(fn=cmd_complexity)
+
+    sp = sub.add_parser("hotspots", help="complex functions many others depend on (refactoring priority)")
+    common(sp)
+    sp.add_argument("-k", type=int, default=20)
+    sp.add_argument("--min", type=int, default=5, help="only consider complexity >= this")
+    sp.add_argument("--tests", action="store_true", help="include test code")
+    sp.set_defaults(fn=cmd_hotspots)
 
     sp = sub.add_parser("dups", help="near-duplicate functions")
     common(sp)
