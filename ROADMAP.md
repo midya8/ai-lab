@@ -213,6 +213,7 @@
 - reviewkit: py-django-debug-true rule (119 tests)
 - codesearch: `undocumented` command (public definitions lacking docstrings, ranked by name-based reference count; 3 tests)
 - codesearch: `complexity` command (McCabe cyclomatic complexity per function via AST; dogfooded on this monorepo, top hit reviewkit ast_findings at 121; 3 tests)
+- voicekit v0.1 (NEW): offline voice-command pipeline on synthetic formant speech — streaming VAD, MFCC, MLP vs DTW, open-set rejection, intent grammar, CLI, evaluation protocol (81 tests)
 
 
 ## Next
@@ -235,3 +236,4 @@
 16. vecdb follow-ups: (done flat SQ8) (done HNSW tombstone repair) (done SQ8 in IVF cells + persistence, v0.8), (done OPQ class) (done OPQ inside IVFIndex), (done multi-threaded batch search), (done hybrid BM25+vector core) (done HybridCollection save/load, v0.10) (done HybridCollection.explain: per-hit dense/BM25 ranks, v0.11) (done HybridCollection.query_batch) (done configurable + persisted BM25 k1/b) (done HybridCollection.query_terms must/must_not lexical constraints) wire into ragkit/docqa and benchmark fusion quality, real-embedding benchmark
 17. microgrid follow-ups: (done conv2d/pooling) (done iterative backward) (done transformer blocks) (done char-LM training + generation on the corpus, memorisation disclosed) (done AdamW/clip/cosine schedule) (done parity vs tiny-transformer) (done leak-free stdlib-source corpus run) (done KV-cache generation) (done 3-seed + wd ablation) (done int8 KV cache + top-k/top-p sampling) (done int8-KV perplexity) (done weight-only quantisation) (done GPTQ-style rounding vs RTN) (done group-wise scales: helps at <=3 bits only) (done sequential Hessian re-collection: helps most at 2-3 bits) -> next: a new project
 18. specdec follow-ups: (done peaky target re-test) (done adaptive k) (done multi-draft recursive rejection at one position) (done m-ary tree along accepted path) (done microgrid real draft/target pair, v0.7: c=0.49 limits gain) (done backoff lookup draft: ties best fixed n, no gain) (done batched verification API, v0.9: exact, no wall-clock win without KV cache) (done CLI: calibrate+benchmark on any file) full branching-tree verification, KV-cached verification
+19. voicekit follow-ups: CNN word classifier on microgrid, per-word thresholds from validation data, streaming wake-word mode with posterior smoothing, better VAD below 5 dB, a real-speech benchmark from a download-free source

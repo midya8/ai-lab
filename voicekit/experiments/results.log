@@ -1,0 +1,15 @@
+[  18.3s] train: 1271 samples (79 missed by VAD)
+[  20.1s] trained MLP, MLP (no spectral subtraction), DTW templates
+[  24.9s] {'snr_db': 0, 'vad_miss': 0.43333333333333335, 'mlp_acc': 0.9150326797385621, 'mlp_end_to_end': 0.5185185185185185, 'mlp_nosub_acc': 0.9215686274509803, 'dtw_acc': 0.8562091503267973, 'known_accept_correct': 0.948905109489051, 'unknown_rejected': 0.875}
+[  30.4s] {'snr_db': 5, 'vad_miss': 0.1111111111111111, 'mlp_acc': 0.9458333333333333, 'mlp_end_to_end': 0.8407407407407408, 'mlp_nosub_acc': 0.9416666666666667, 'dtw_acc': 0.8333333333333334, 'known_accept_correct': 0.9528301886792453, 'unknown_rejected': 0.9285714285714286}
+[  36.4s] {'snr_db': 10, 'vad_miss': 0.003703703703703704, 'mlp_acc': 0.9591078066914498, 'mlp_end_to_end': 0.9555555555555556, 'mlp_nosub_acc': 0.9628252788104089, 'dtw_acc': 0.9256505576208178, 'known_accept_correct': 0.9916317991631799, 'unknown_rejected': 0.7}
+[  42.5s] {'snr_db': 20, 'vad_miss': 0.0, 'mlp_acc': 0.9740740740740741, 'mlp_end_to_end': 0.9740740740740741, 'mlp_nosub_acc': 0.9740740740740741, 'dtw_acc': 0.9296296296296296, 'known_accept_correct': 1.0, 'unknown_rejected': 0.8}
+[  48.6s] {'snr_db': 30, 'vad_miss': 0.0, 'mlp_acc': 0.9777777777777777, 'mlp_end_to_end': 0.9777777777777777, 'mlp_nosub_acc': 0.9814814814814815, 'dtw_acc': 0.9333333333333333, 'known_accept_correct': 1.0, 'unknown_rejected': 0.8666666666666667}
+[  53.2s] wide speakers {'mlp_acc': 0.8814814814814815, 'dtw_acc': 0.8814814814814815, 'vad_missed': 0}
+[  54.0s] stream {'tp': 96, 'fp': 0, 'fn': 0, 'wrong_word': 0, 'precision': 1.0, 'recall': 1.0, 'f1': 1.0, 'snr_db': 20}
+[  54.7s] stream {'tp': 95, 'fp': 0, 'fn': 1, 'wrong_word': 0, 'precision': 1.0, 'recall': 0.9895833333333334, 'f1': 0.9947643979057591, 'snr_db': 10}
+[  55.5s] stream {'tp': 76, 'fp': 4, 'fn': 20, 'wrong_word': 2, 'precision': 0.95, 'recall': 0.7916666666666666, 'f1': 0.8636363636363635, 'snr_db': 5}
+[  58.2s] noise-only {'white': {'seconds': 300.0, 'false_events': 0, 'per_hour': 0.0}, 'pink': {'seconds': 300.0, 'false_events': 0, 'per_hour': 0.0}, 'hum': {'seconds': 300.0, 'false_events': 0, 'per_hour': 0.0}}
+[  59.8s] intents {'snr_db': 20, 'commands': 120, 'correct': 120, 'command_accuracy': 1.0}
+[  61.4s] intents {'snr_db': 10, 'commands': 120, 'correct': 119, 'command_accuracy': 0.9916666666666667}
+[  61.4s] wrote experiments/results.json
