@@ -212,6 +212,7 @@
 - reviewkit: py-hardcoded-bearer rule (literal Bearer tokens; 118 tests)
 - reviewkit: py-django-debug-true rule (119 tests)
 - codesearch: `undocumented` command (public definitions lacking docstrings, ranked by name-based reference count; 3 tests)
+- codesearch: `complexity` command (McCabe cyclomatic complexity per function via AST; dogfooded on this monorepo, top hit reviewkit ast_findings at 121; 3 tests)
 
 
 ## Next

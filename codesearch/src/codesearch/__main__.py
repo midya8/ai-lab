@@ -1,4 +1,4 @@
-"""codesearch command line: index, watch, search, similar, calls, undocumented, dups, eval, stats."""
+"""codesearch command line: index, watch, search, similar, calls, undocumented, complexity, dups, eval, stats."""
 from __future__ import annotations
 
 import argparse
@@ -152,6 +152,20 @@ def cmd_undocumented(args) -> int:
     return 0
 
 
+def cmd_complexity(args) -> int:
+    from .complexity import rank
+
+    ix, _ = _load(args)
+    res = rank(ix.chunks, Path(args.root).resolve(), min_score=args.min, include_tests=args.tests)
+    if args.json:
+        print(json.dumps([{"id": c.id, "line": c.start, "complexity": n} for c, n in res[:args.k]], indent=2))
+        return 0
+    for c, n in res[:args.k]:
+        print(f"{n:>3}  {c.path}:{c.start}  {c.qualname} [{c.kind}]")
+    print(f"{len(res)} function(s) at or above complexity {args.min}")
+    return 0
+
+
 def cmd_dups(args) -> int:
     ix, _ = _load(args)
     pairs = Searcher(ix).duplicates(threshold=args.threshold, min_lines=args.min_lines,
@@ -256,6 +270,13 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--min-lines", type=int, default=3, help="skip bodies shorter than this")
     sp.add_argument("--tests", action="store_true", help="include test code")
     sp.set_defaults(fn=cmd_undocumented)
+
+    sp = sub.add_parser("complexity", help="functions ranked by cyclomatic complexity")
+    common(sp)
+    sp.add_argument("-k", type=int, default=20)
+    sp.add_argument("--min", type=int, default=10, help="only report complexity >= this")
+    sp.add_argument("--tests", action="store_true", help="include test code")
+    sp.set_defaults(fn=cmd_complexity)
 
     sp = sub.add_parser("dups", help="near-duplicate functions")
     common(sp)
