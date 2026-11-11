@@ -225,3 +225,8 @@ def test_blocking_in_async():
     src = "import time\nasync def f():\n    def g():\n        time.sleep(1)\n    await h()\n"
     assert rules("a.py", src) == []
     assert rules("a.py", "import time\ndef f():\n    time.sleep(1)\n") == []
+
+
+def test_useless_comparison():
+    assert rules("a.py", "def f(x):\n    x == 3\n") == [(2, "py-useless-comparison")]
+    assert rules("a.py", "def f(x):\n    assert x == 3\n    y = x == 3\n    return y\n") == []

@@ -355,6 +355,10 @@ def ast_findings(ctx: FileContext, source: str, complexity_threshold: int = 10) 
 
     nested_fstr: set = set()
     for node in ast.walk(tree):
+        if isinstance(node, ast.Expr) and isinstance(node.value, ast.Compare):
+            add(node.lineno, "py-useless-comparison", "medium",
+                "Comparison used as a statement has no effect (missing assert or assignment?).",
+                "Use `assert ...`, assign the result, or delete the line.")
         if isinstance(node, ast.AsyncFunctionDef):
             stack = list(node.body)
             while stack:
@@ -529,6 +533,7 @@ RULE_TABLE.update({
     "py-self-compare": ("low", "Name compared with itself."),
     "py-duplicate-except": ("medium", "Exception type caught twice in one try."),
     "py-blocking-in-async": ("medium", "time.sleep / requests call inside async def."),
+    "py-useless-comparison": ("medium", "Comparison as a bare statement has no effect."),
     "py-fstring-no-placeholder": ("low", "f-string without any placeholder."),
     "py-compare-bool": ("low", "`== True` / `== False` instead of truthiness."),
     "py-unreachable-code": ("medium", "Statements after return/raise/continue/break."),
