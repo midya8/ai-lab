@@ -261,7 +261,7 @@ def test_chmod_world_writable():
 
 
 def test_flask_debug():
-    assert rules("a.py", "app.run(host='0.0.0.0', debug=True)\n") == [(1, "py-flask-debug")]
+    assert rules("a.py", "app.run(debug=True)\n") == [(1, "py-flask-debug")]
     assert rules("a.py", "app.run(debug=False)\n") == []
 
 
@@ -288,3 +288,10 @@ def test_trust_remote_code():
 def test_dangerous_deserialization():
     assert rules("a.py", "db = FAISS.load_local(d, emb, allow_dangerous_deserialization=True)\n") == [(1, "py-dangerous-deserialization")]
     assert rules("a.py", "db = FAISS.load_local(d, emb)\n") == []
+
+
+def test_bind_all_interfaces():
+    assert rules("a.py", "app.run(host='0.0.0.0', port=80)\n") == [(1, "py-bind-all-interfaces")]
+    assert rules("a.py", "s.bind((\"0.0.0.0\", 80))\n") == [(1, "py-bind-all-interfaces")]
+    assert rules("a.py", "app.run(host='127.0.0.1')\n") == []
+    assert rules("a.py", "ip = '10.0.0.0'\n") == []

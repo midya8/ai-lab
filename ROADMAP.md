@@ -198,6 +198,7 @@
 - reviewkit: py-flask-debug and py-xml-untrusted rules (108 tests)
 - reviewkit: py-trust-remote-code rule (111 tests)
 - reviewkit: py-dangerous-deserialization rule (112 tests)
+- reviewkit: py-bind-all-interfaces rule (host="0.0.0.0" / bind((0.0.0.0,...)), 113 tests)
 
 
 ## Next
