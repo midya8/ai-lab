@@ -355,6 +355,20 @@ def ast_findings(ctx: FileContext, source: str, complexity_threshold: int = 10) 
 
     nested_fstr: set = set()
     for node in ast.walk(tree):
+        if isinstance(node, ast.AsyncFunctionDef):
+            stack = list(node.body)
+            while stack:
+                n = stack.pop()
+                if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda, ast.ClassDef)):
+                    continue
+                if (isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+                        and isinstance(n.func.value, ast.Name)
+                        and ((n.func.value.id == "time" and n.func.attr == "sleep")
+                             or (n.func.value.id == "requests" and n.func.attr in _REQUEST_FUNCS))):
+                    add(n.lineno, "py-blocking-in-async", "medium",
+                        "Blocking call inside `async def` stalls the whole event loop.",
+                        "Use `await asyncio.sleep(...)`, an async HTTP client, or `asyncio.to_thread(...)`.")
+                stack.extend(ast.iter_child_nodes(n))
         for field in ("body", "orelse", "finalbody"):
             block = getattr(node, field, None)
             if not isinstance(block, list):
@@ -514,6 +528,7 @@ RULE_TABLE.update({
     "py-not-in-style": ("low", "`not a in b` / `not a is b` instead of `not in` / `is not`."),
     "py-self-compare": ("low", "Name compared with itself."),
     "py-duplicate-except": ("medium", "Exception type caught twice in one try."),
+    "py-blocking-in-async": ("medium", "time.sleep / requests call inside async def."),
     "py-fstring-no-placeholder": ("low", "f-string without any placeholder."),
     "py-compare-bool": ("low", "`== True` / `== False` instead of truthiness."),
     "py-unreachable-code": ("medium", "Statements after return/raise/continue/break."),

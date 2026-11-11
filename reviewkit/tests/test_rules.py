@@ -217,3 +217,11 @@ def test_fstring_no_placeholder():
     assert rules("a.py", "x = f'hello'\n") == [(1, "py-fstring-no-placeholder")]
     assert rules("a.py", "x = f'hi {name}'\n") == []
     assert rules("a.py", "x = f'{v:>{w}}'\n") == []
+
+
+def test_blocking_in_async():
+    src = "import time\nasync def f():\n    time.sleep(1)\n"
+    assert rules("a.py", src) == [(3, "py-blocking-in-async")]
+    src = "import time\nasync def f():\n    def g():\n        time.sleep(1)\n    await h()\n"
+    assert rules("a.py", src) == []
+    assert rules("a.py", "import time\ndef f():\n    time.sleep(1)\n") == []
