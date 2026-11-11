@@ -325,3 +325,11 @@ def test_cleartext_http():
     assert rules("a.py", "requests.get('http://127.0.0.1/x', timeout=5)\n") == []
     assert rules("a.py", "requests.get('https://example.com', timeout=5)\n") == []
     assert rules("a.py", "# requests.get('http://example.com', timeout=5)\n") == []
+
+
+def test_hardcoded_bearer():
+    tok = "abcdEFGH" + "1234ijkl" + "5678mnop"
+    assert rules("a.py", "h = {'Authorization': 'Bearer %s'}\n" % tok) == [(1, "py-hardcoded-bearer")]
+    assert rules("a.py", "h = {'Authorization': f'Bearer {token}'}\n") == []
+    assert rules("a.py", "h = 'Bearer short'\n") == []
+    assert rules("a.py", "# h = 'Bearer %s'\n" % tok) == []

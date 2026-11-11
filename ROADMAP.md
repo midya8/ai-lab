@@ -203,6 +203,7 @@
 - reviewkit: py-log-secret rule (115 tests)
 - reviewkit: py-hardcoded-tmp rule (fixed /tmp path in open(); 116 tests)
 - reviewkit: py-cleartext-http rule (non-local http:// in requests/httpx calls; 117 tests)
+- reviewkit: py-hardcoded-bearer rule (literal Bearer tokens; 118 tests)
 
 
 ## Next
