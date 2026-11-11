@@ -182,3 +182,10 @@ def test_not_in_style():
     assert rules("a.py", "if not x is None:\n    pass\n") == [(1, "py-not-in-style")]
     assert rules("a.py", "if x not in y:\n    pass\n") == []
     assert rules("a.py", "if not (x in y and z):\n    pass\n") == []
+
+
+def test_self_compare():
+    assert rules("a.py", "if x == x:\n    pass\n") == [(1, "py-self-compare")]
+    assert rules("a.py", "if a < a:\n    pass\n") == [(1, "py-self-compare")]
+    assert rules("a.py", "if x == y:\n    pass\n") == []
+    assert rules("a.py", "if x.a == x.a:\n    pass\n") == []

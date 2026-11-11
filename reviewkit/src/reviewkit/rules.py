@@ -439,6 +439,12 @@ def ast_findings(ctx: FileContext, source: str, complexity_threshold: int = 10) 
                     f"`not a {'in' if word == 'not in' else 'is'} b` reads ambiguously; use the dedicated operator.",
                     f"Write `a {word} b`.")
         elif isinstance(node, ast.Compare):
+            if len(node.ops) == 1 and isinstance(node.left, ast.Name) and isinstance(node.comparators[0], ast.Name) \
+                    and node.left.id == node.comparators[0].id \
+                    and isinstance(node.ops[0], (ast.Eq, ast.NotEq, ast.Lt, ast.Gt, ast.LtE, ast.GtE, ast.Is, ast.IsNot)):
+                add(node.lineno, "py-self-compare", "low",
+                    f"`{node.left.id}` is compared with itself; the result is constant (except NaN checks).",
+                    "Fix the typo'd operand, or use `math.isnan` for NaN checks.")
             for op, comp in zip(node.ops, node.comparators):
                 if isinstance(comp, ast.UnaryOp) and isinstance(comp.op, (ast.USub, ast.UAdd)):
                     comp = comp.operand
@@ -472,6 +478,7 @@ RULE_TABLE.update({
     "py-compare-none": ("low", "`== None` / `!= None` instead of `is None`."),
     "py-raise-notimplemented": ("medium", "`raise NotImplemented` (should be NotImplementedError)."),
     "py-not-in-style": ("low", "`not a in b` / `not a is b` instead of `not in` / `is not`."),
+    "py-self-compare": ("low", "Name compared with itself."),
     "py-duplicate-dict-key": ("medium", "Dict literal repeats a constant key."),
     "py-syntax-error": ("critical", "Changed Python file does not parse."),
     "py-taint-sql": ("high", "Untrusted input flows into SQL query text."),
