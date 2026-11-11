@@ -268,3 +268,8 @@ def test_flask_debug():
 def test_xml_untrusted():
     assert rules("a.py", "import xml.etree.ElementTree as ET\nt = ET.fromstring(data)\n") == [(2, "py-xml-untrusted")]
     assert rules("a.py", "import defusedxml.ElementTree as D\nt = D.fromstring(data)\n") == []
+
+
+def test_jinja_autoescape_off():
+    assert rules("a.py", "env = Environment(loader=l, autoescape=False)\n") == [(1, "py-jinja-autoescape-off")]
+    assert rules("a.py", "env = Environment(loader=l, autoescape=True)\n") == []
