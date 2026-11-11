@@ -242,3 +242,9 @@ def test_insecure_random_secret():
     assert rules("a.py", bad) == [(2, "py-insecure-random-secret")]
     assert rules("a.py", "import secrets\ntoken = secrets.token_urlsafe(16)\n") == []
     assert rules("a.py", "import random\ndelay = random.random()\n") == []
+
+
+def test_ssl_unverified():
+    assert rules("a.py", "import ssl\nc = ssl._create_unverified_context()\n") == [(2, "py-ssl-unverified")]
+    assert rules("a.py", "import ssl\nc = ssl.create_default_context()\nc.check_hostname = False\n") == [(3, "py-ssl-unverified")]
+    assert rules("a.py", "import ssl\nc = ssl.create_default_context()\n") == []

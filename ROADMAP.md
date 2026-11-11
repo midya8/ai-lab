@@ -193,6 +193,7 @@
 - docqa: GroundedGenerator, routed generative answers with a number/word grounding verifier and extractive fallback (10 tests)
 - reviewkit: line rule py-insecure-random-secret (random used for tokens/passwords; 103 tests)
 - visionlab: photometric (contrast) augmentation; fixes trained-family contrast, collapses to chance on an unseen contrast-about-mean shift (66 tests)
+- reviewkit: py-ssl-unverified rule (104 tests)
 
 
 ## Next
