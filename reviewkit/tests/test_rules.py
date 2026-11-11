@@ -273,3 +273,8 @@ def test_xml_untrusted():
 def test_jinja_autoescape_off():
     assert rules("a.py", "env = Environment(loader=l, autoescape=False)\n") == [(1, "py-jinja-autoescape-off")]
     assert rules("a.py", "env = Environment(loader=l, autoescape=True)\n") == []
+
+
+def test_jwt_no_verify():
+    assert rules("a.py", "c = jwt.decode(tok, key, options={'verify_signature': False})\n") == [(1, "py-jwt-no-verify")]
+    assert rules("a.py", "c = jwt.decode(tok, key, algorithms=['HS256'])\n") == []
