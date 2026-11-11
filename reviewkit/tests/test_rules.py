@@ -235,3 +235,10 @@ def test_useless_comparison():
 def test_mktemp():
     assert rules("a.py", "import tempfile\np = tempfile.mktemp()\n") == [(2, "py-mktemp")]
     assert rules("a.py", "import tempfile\np = tempfile.mkstemp()\n") == []
+
+
+def test_insecure_random_secret():
+    bad = "import random\ntoken = ''.join(random.choice('abc') for _ in range(8))\n"
+    assert rules("a.py", bad) == [(2, "py-insecure-random-secret")]
+    assert rules("a.py", "import secrets\ntoken = secrets.token_urlsafe(16)\n") == []
+    assert rules("a.py", "import random\ndelay = random.random()\n") == []

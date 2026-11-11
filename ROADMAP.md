@@ -191,6 +191,7 @@
 - reviewkit: AST rule py-useless-comparison (comparison as a bare statement; 101 tests)
 - reviewkit: line rule py-mktemp (insecure tempfile.mktemp; 102 tests)
 - docqa: GroundedGenerator, routed generative answers with a number/word grounding verifier and extractive fallback (10 tests)
+- reviewkit: line rule py-insecure-random-secret (random used for tokens/passwords; 103 tests)
 
 
 ## Next
