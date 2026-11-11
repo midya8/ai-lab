@@ -302,3 +302,10 @@ def test_os_system():
     assert rules("a.py", "os.popen(f'ls {d}')\n") == [(1, "py-os-system")]
     assert rules("a.py", "os.system('clear')\n") == []
     assert rules("a.py", "# os.system(cmd)\n") == []
+
+
+def test_log_secret():
+    assert rules("a.py", "logger.info('pw=%s', password)\n") == [(1, "py-log-secret")]
+    assert rules("a.py", "logging.debug(f'key {api_key}')\n") == [(1, "py-log-secret")]
+    assert rules("a.py", "logger.info('user logged in')\n") == []
+    assert rules("a.py", "# logger.info(password)\n") == []
