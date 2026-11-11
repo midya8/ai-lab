@@ -201,6 +201,7 @@
 - reviewkit: py-bind-all-interfaces rule (host="0.0.0.0" / bind((0.0.0.0,...)), 113 tests)
 - reviewkit: line rule py-os-system (os.system/os.popen with non-constant command; 114 tests)
 - reviewkit: py-log-secret rule (115 tests)
+- reviewkit: py-hardcoded-tmp rule (fixed /tmp path in open(); 116 tests)
 
 
 ## Next

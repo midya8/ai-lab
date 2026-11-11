@@ -309,3 +309,10 @@ def test_log_secret():
     assert rules("a.py", "logging.debug(f'key {api_key}')\n") == [(1, "py-log-secret")]
     assert rules("a.py", "logger.info('user logged in')\n") == []
     assert rules("a.py", "# logger.info(password)\n") == []
+
+
+def test_hardcoded_tmp():
+    assert rules("a.py", "f = open('/tmp/out.txt', 'w')\n") == [(1, "py-hardcoded-tmp")]
+    assert rules("a.py", "open(f'/tmp/{name}')\n") == [(1, "py-hardcoded-tmp")]
+    assert rules("a.py", "open(path)\n") == []
+    assert rules("a.py", "# open('/tmp/x')\n") == []
