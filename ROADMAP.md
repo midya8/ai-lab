@@ -216,6 +216,7 @@
 - voicekit v0.1 (NEW): offline voice-command pipeline on synthetic formant speech — streaming VAD, MFCC, MLP vs DTW, open-set rejection, intent grammar, CLI, evaluation protocol (81 tests)
 - bpekit v0.1: from-scratch byte-level BPE tokenizer (7 tests)
 - bpekit: train_fast incremental trainer, identical merges, ~15x faster on 4.4 MB (11 tests)
+- bpekit: GPT-2-style vocab.json/merges.txt export + validated import (round-trip identical encodings; 15 tests)
 
 
 ## Next

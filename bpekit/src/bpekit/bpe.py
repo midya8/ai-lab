@@ -136,3 +136,59 @@ class BPETokenizer:
         with open(path) as f:
             d = json.load(f)
         return cls(d["merges"], d["specials"])
+
+
+def bytes_to_unicode():
+    """GPT-2's reversible byte -> printable-unicode-char map."""
+    bs = list(range(ord("!"), ord("~") + 1)) + list(range(0xA1, 0xAD)) + list(range(0xAE, 0x100))
+    cs, n = bs[:], 0
+    for b in range(256):
+        if b not in bs:
+            bs.append(b); cs.append(256 + n); n += 1
+    return dict(zip(bs, map(chr, cs)))
+
+
+def export_gpt2(tok: BPETokenizer, vocab_path, merges_path):
+    """Write GPT-2/HuggingFace-style vocab.json + merges.txt.
+
+    Token strings use the GPT-2 byte-to-unicode alphabet. Only the merge table is
+    portable: this package's pre-split regex is simpler than GPT-2's, so ids from
+    a library using its own regex can differ on contractions and some punctuation.
+    """
+    b2u = bytes_to_unicode()
+    s = lambda i: "".join(b2u[b] for b in tok.vocab[i])
+    vocab = {s(i): i for i in range(256 + len(tok.merges))}
+    for name, i in tok.specials.items():
+        vocab[name] = i
+    with open(vocab_path, "w", encoding="utf-8") as f:
+        json.dump(vocab, f, ensure_ascii=False)
+    with open(merges_path, "w", encoding="utf-8") as f:
+        f.write("#version: 0.2\n")
+        for a, b in tok.merges:
+            f.write(f"{s(a)} {s(b)}\n")
+
+
+def import_gpt2(vocab_path, merges_path, specials=()):
+    """Rebuild a BPETokenizer from vocab.json + merges.txt written by export_gpt2
+    (or any byte-level BPE with the GPT-2 alphabet and merge ids in rank order)."""
+    u2b = {c: b for b, c in bytes_to_unicode().items()}
+    with open(vocab_path, encoding="utf-8") as f:
+        vocab = json.load(f)
+    to_id = lambda t: vocab[t]
+    merges = []
+    with open(merges_path, encoding="utf-8") as f:
+        for line in f:
+            line = line.rstrip("\n")
+            if not line or line.startswith("#version"):
+                continue
+            a, b = line.split(" ")
+            merges.append((to_id(a), to_id(b)))
+    for n, (a, b) in enumerate(merges):
+        if a >= 256 + n or b >= 256 + n:
+            raise ValueError(f"merge {n} uses a token id defined later; vocab does not match merge order")
+    tok = BPETokenizer(merges, specials)
+    for t, i in vocab.items():
+        if i < len(tok.vocab) and t not in specials:
+            if bytes(u2b[c] for c in t) != tok.vocab[i]:
+                raise ValueError(f"vocab id {i} does not match merge order")
+    return tok
