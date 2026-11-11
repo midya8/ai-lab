@@ -38,6 +38,45 @@ def train(text: str, vocab_size: int = 300, specials=("<|endoftext|>",)) -> "BPE
     return BPETokenizer(merges, specials)
 
 
+def train_fast(text: str, vocab_size: int = 300, specials=("<​|endoftext|>",)) -> "BPETokenizer":
+    """Same merges as :func:`train`, but pair counts are updated incrementally.
+
+    Keeps a pair -> {words containing it} index, so each merge only touches the
+    words that actually contain the winning pair instead of rescanning the corpus.
+    """
+    if vocab_size < 256:
+        raise ValueError("vocab_size must be >= 256")
+    words = Counter(_SPLIT.findall(text))
+    seqs = {w: list(w.encode("utf-8")) for w in words}
+    stats, where = Counter(), {}
+    for w, s in seqs.items():
+        for p in zip(s, s[1:]):
+            stats[p] += words[w]
+            where.setdefault(p, set()).add(w)
+    merges = []
+    for n in range(256, vocab_size):
+        if not stats:
+            break
+        best = max(stats, key=lambda p: (stats[p], -p[0], -p[1]))
+        if stats[best] < 2:
+            break
+        merges.append(best)
+        for w in list(where.get(best, ())):
+            s, c = seqs[w], words[w]
+            for p in zip(s, s[1:]):
+                stats[p] -= c
+                if stats[p] <= 0:
+                    del stats[p]
+            s = _merge(s, best, n)
+            seqs[w] = s
+            for p in zip(s, s[1:]):
+                stats[p] += c
+                where.setdefault(p, set()).add(w)
+        where.pop(best, None)
+        stats.pop(best, None)
+    return BPETokenizer(merges, specials)
+
+
 class BPETokenizer:
     def __init__(self, merges, specials=()):
         self.merges = [tuple(m) for m in merges]

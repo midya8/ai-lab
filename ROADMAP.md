@@ -215,6 +215,7 @@
 - codesearch: `complexity` command (McCabe cyclomatic complexity per function via AST; dogfooded on this monorepo, top hit reviewkit ast_findings at 121; 3 tests)
 - voicekit v0.1 (NEW): offline voice-command pipeline on synthetic formant speech — streaming VAD, MFCC, MLP vs DTW, open-set rejection, intent grammar, CLI, evaluation protocol (81 tests)
 - bpekit v0.1: from-scratch byte-level BPE tokenizer (7 tests)
+- bpekit: train_fast incremental trainer, identical merges, ~15x faster on 4.4 MB (11 tests)
 
 
 ## Next

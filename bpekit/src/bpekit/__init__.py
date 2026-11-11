@@ -1,2 +1,2 @@
-from .bpe import BPETokenizer, train
-__all__ = ["BPETokenizer", "train"]
+from .bpe import BPETokenizer, train, train_fast
+__all__ = ["BPETokenizer", "train", "train_fast"]

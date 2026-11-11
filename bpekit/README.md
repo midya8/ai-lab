@@ -22,3 +22,8 @@ PYTHONPATH=src python -m bpekit train corpus.txt -v 400 -o tok.json
 PYTHONPATH=src python -m bpekit encode tok.json "hello world"
 PYTHONPATH=src python -m bpekit eval corpus.txt -v 400   # held-out bytes/token
 ```
+
+
+## Fast trainer
+
+`train_fast` produces identical merges to `train` (tested on random corpora across vocab sizes) but updates pair counts incrementally via a pair-to-words index. Measured here on 4.4 MB of stdlib Python source, vocab 1500 (1244 merges learned before no pair repeated): `train` 89.5 s vs `train_fast` 5.8 s (~15x), same merges and 2.976 bytes/token. Single run on one machine; timing is indicative only.
