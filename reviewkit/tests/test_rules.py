@@ -295,3 +295,10 @@ def test_bind_all_interfaces():
     assert rules("a.py", "s.bind((\"0.0.0.0\", 80))\n") == [(1, "py-bind-all-interfaces")]
     assert rules("a.py", "app.run(host='127.0.0.1')\n") == []
     assert rules("a.py", "ip = '10.0.0.0'\n") == []
+
+
+def test_os_system():
+    assert rules("a.py", "os.system('ls ' + d)\n") == [(1, "py-os-system")]
+    assert rules("a.py", "os.popen(f'ls {d}')\n") == [(1, "py-os-system")]
+    assert rules("a.py", "os.system('clear')\n") == []
+    assert rules("a.py", "# os.system(cmd)\n") == []

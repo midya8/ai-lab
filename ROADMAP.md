@@ -199,6 +199,7 @@
 - reviewkit: py-trust-remote-code rule (111 tests)
 - reviewkit: py-dangerous-deserialization rule (112 tests)
 - reviewkit: py-bind-all-interfaces rule (host="0.0.0.0" / bind((0.0.0.0,...)), 113 tests)
+- reviewkit: line rule py-os-system (os.system/os.popen with non-constant command; 114 tests)
 
 
 ## Next
