@@ -190,6 +190,7 @@
 - reviewkit: AST rule py-blocking-in-async (time.sleep/requests inside async def; 100 tests)
 - reviewkit: AST rule py-useless-comparison (comparison as a bare statement; 101 tests)
 - reviewkit: line rule py-mktemp (insecure tempfile.mktemp; 102 tests)
+- docqa: GroundedGenerator, routed generative answers with a number/word grounding verifier and extractive fallback (10 tests)
 
 
 ## Next
@@ -203,7 +204,7 @@
 7. ticket-triage: (done urgency head) (done active learning) (done multi-label tags) (done tag-aware routing) (done SLA-breach simulation) -> next: feed live router output into the simulator
 8. llm-router: (done v0.1) -> (done latency tracking) (done semantic cache) (done learned complexity classifier) (done persistence)
 9. promptlab: (done v0.1) -> v0.2 multi-sample done; (done GitHub Action + summary); (done LLM-judge checks + calibration) (done pairwise judge + position-swap bias audit) (done multi-judge ensembles + Fleiss kappa, v0.5) (done pairwise gate) (done ensemble gate) (done cost metering + budgets) (done HTTP-backed models/judges) (done concurrent cases, --workers) (done shared 429 cooldown across workers) (done concurrent ensemble judge calls)
-10. docqa: (done v0.1) -> (done paraphrase) (done broad benchmark) (done yes/no fixes) (done agentkit integration) (done agentflow worker) (done HTTP service) (done cache + metrics) (done typo-tolerant spelling) (done hybrid retrieval, null result) next: docqa on llm-router; answer-stage semantic scoring
+10. docqa: (done v0.1) -> (done paraphrase) (done broad benchmark) (done yes/no fixes) (done agentkit integration) (done agentflow worker) (done HTTP service) (done cache + metrics) (done typo-tolerant spelling) (done hybrid retrieval, null result) (done docqa on llm-router: grounded generation) next: answer-stage semantic scoring
 11. autojob: (done v0.1 — profile validation, posting parse, transparent match scoring, facts-only cover-letter drafts, review notes, JSONL tracker; never submits; 49 tests) (done v0.2 — status history + funnel analytics, 66 tests) (done v0.3 — interview-prep packets, 77 tests) (done v0.4 — follow-up reminders with facts-only draft emails, 93 tests) (done v0.5 — tailored resume sections: skills matrix, lead-with order, role ranking, summary ingredients; 107 tests)
 12. visionlab follow-ups: (done GAP head vs dense under shift) (done batch-norm) (done certified robustness via IBP) -> next: contrast/photometric augmentation to fix the GAP head's contrast brittleness, tighter bounds (CROWN / zonotope) to certify the FGSM-trained net, IBP-compatible BatchNorm
 13. reviewkit follow-ups: a fresh held-out set (the current one is now tuned-on); (done moved-code detection, 80 tests); (done light intra-function taint for SQL/shell/eval, 88 tests); run the Action on a real PR in a scratch repo; docqa/ragkit-style repo-context retrieval for the LLM pass; JS/TS AST via a parser

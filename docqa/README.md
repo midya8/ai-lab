@@ -115,3 +115,9 @@ curl -s localhost:8000/metrics    # Prometheus text (counters, cache gauge, late
 ```
 
 Repeat questions are served from a thread-safe LRU + TTL cache and carry an `X-Cache: HIT|MISS` header. The key ignores case, punctuation and whitespace but keeps word order and every word, so reworded questions are cache misses by design (a wrong hit is worse than a miss). A hit echoes the caller's own phrasing in `question`. Latency percentiles are nearest-rank over the last 1024 `/ask` calls; unknown routes are bucketed as `other` so scanners cannot inflate label cardinality. Library use: `make_server(qa, cache=AnswerCache(...), metrics=Metrics())`.
+
+## Generative answers with a grounding check (`docqa/generative.py`)
+
+`GroundedGenerator(qa, router)` adds an optional LLM-written answer on top of the extractive one. Retrieved evidence goes into a prompt; a verifier then checks that every number in the answer appears in the evidence and that each sentence's content words are >= 70% covered by it. Plugged into [llm-router](../llm-router) the verifier becomes a cascade: the cheapest model answers first, and a stronger one is tried only while the answer fails the check. If no model produces a grounded answer (or all fail / the budget is gone) it returns DocQA's extractive answer instead; with no evidence it abstains without calling a model.
+
+This is a lexical check: it catches invented figures and off-topic sentences, not a fluent claim that recombines evidence words wrongly. Tests use scripted providers (no real LLM was called), so they show the control flow is correct, not how a real model scores. 10 tests in `tests/test_generative.py` (run with `no_proxy=127.0.0.1` for the server tests).
