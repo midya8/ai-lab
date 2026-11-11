@@ -56,6 +56,19 @@ Typical misses are vocabulary gaps ("how many tokens will this prompt use" → `
 unchanged files are never re-parsed. Polling is stdlib-only and portable; it is not instant
 (latency up to one interval). `--cycles N` stops after N polls (used by the tests).
 
+## JSON-lines server
+
+`codesearch serve --root .` loads the index once and answers one JSON request per stdin line:
+
+```bash
+echo '{"id":1,"op":"search","query":"retry with backoff","k":3}' | python -m codesearch serve --root . --no-store
+```
+
+Ops: `search` (query, k, mode, kinds, path, tests), `similar` (ident, k), `stats`, `refresh` (re-sync
+after files change), `ping`. Replies are `{"id", "ok", "result"}` or `{"id", "ok": false, "error"}`;
+a malformed line gets an error reply and the server keeps going. The index is not auto-refreshed:
+send `refresh` (or run `watch` alongside).
+
 ## Limitations
 
 Python only (JS/TS would need another parser). Lexical matching: a query that shares no words with the code or docstring and whose meaning LSA cannot bridge will miss. No embeddings from a neural model — that is the obvious next experiment and would be an optional extra, not a dependency. Dynamically generated functions are invisible. `dups` is quadratic in the number of functions (fine to ~10k).

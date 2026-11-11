@@ -91,6 +91,15 @@ def cmd_watch(args) -> int:
     return 0
 
 
+def cmd_serve(args) -> int:
+    from .server import serve
+
+    root = Path(args.root).resolve()
+    store = None if args.no_store else Path(args.store) if args.store else root / DEFAULT_STORE
+    serve(root, store, sys.stdin, sys.stdout, include=args.include or None)
+    return 0
+
+
 def cmd_search(args) -> int:
     from .tokens import terms
 
@@ -182,6 +191,9 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--interval", type=float, default=1.0, help="seconds between polls")
     sp.add_argument("--cycles", type=int, help="stop after this many polls (default: run until Ctrl-C)")
     sp.set_defaults(fn=cmd_watch)
+
+    sp = sub.add_parser("serve", help="JSON-lines server on stdin/stdout for editors and agents")
+    common(sp); sp.set_defaults(fn=cmd_serve)
 
     sp = sub.add_parser("search", help="natural-language or identifier search")
     sp.add_argument("query", nargs="+")
