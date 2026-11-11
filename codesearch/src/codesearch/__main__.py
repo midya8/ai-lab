@@ -194,6 +194,20 @@ def cmd_hotspots(args) -> int:
     return 0
 
 
+def cmd_longest(args) -> int:
+    from .longest import longest
+
+    ix, _ = _load(args)
+    res = longest(ix.chunks, min_lines=args.min, include_tests=args.tests)
+    if args.json:
+        print(json.dumps([{"id": c.id, "line": c.start, "lines": n} for c, n in res[:args.k]], indent=2))
+        return 0
+    for c, n in res[:args.k]:
+        print(f"{n:>4}  {c.path}:{c.start}  {c.qualname} [{c.kind}]")
+    print(f"{len(res)} function(s) of at least {args.min} lines")
+    return 0
+
+
 def cmd_dups(args) -> int:
     ix, _ = _load(args)
     pairs = Searcher(ix).duplicates(threshold=args.threshold, min_lines=args.min_lines,
@@ -319,6 +333,13 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--min", type=int, default=5, help="only consider complexity >= this")
     sp.add_argument("--tests", action="store_true", help="include test code")
     sp.set_defaults(fn=cmd_hotspots)
+
+    sp = sub.add_parser("longest", help="functions ranked by line count")
+    common(sp)
+    sp.add_argument("-k", type=int, default=20)
+    sp.add_argument("--min", type=int, default=40, help="only report functions with >= this many lines")
+    sp.add_argument("--tests", action="store_true", help="include test code")
+    sp.set_defaults(fn=cmd_longest)
 
     sp = sub.add_parser("dups", help="near-duplicate functions")
     common(sp)
