@@ -463,6 +463,10 @@ def ast_findings(ctx: FileContext, source: str, complexity_threshold: int = 10) 
                     add(node.lineno, "py-is-literal", "medium",
                         "`is` compares identity, not value; comparing with a literal is unreliable.",
                         "Use `==` / `!=`.")
+                if isinstance(op, (ast.Eq, ast.NotEq)) and isinstance(comp, ast.Constant) and isinstance(comp.value, bool):
+                    add(node.lineno, "py-compare-bool", "low",
+                        f"Comparing with `{comp.value}` using `==` is redundant and misfires for 1/0 and numpy values.",
+                        "Test truthiness directly (`if x:` / `if not x:`), or use `is True` / `is False` if the exact bool matters.")
                 if isinstance(op, (ast.Eq, ast.NotEq)) and isinstance(comp, ast.Constant) and comp.value is None:
                     add(node.lineno, "py-compare-none", "low",
                         "`== None` / `!= None` can be overridden by `__eq__` (numpy/pandas return arrays).",
@@ -489,6 +493,7 @@ RULE_TABLE.update({
     "py-raise-notimplemented": ("medium", "`raise NotImplemented` (should be NotImplementedError)."),
     "py-not-in-style": ("low", "`not a in b` / `not a is b` instead of `not in` / `is not`."),
     "py-self-compare": ("low", "Name compared with itself."),
+    "py-compare-bool": ("low", "`== True` / `== False` instead of truthiness."),
     "py-unreachable-code": ("medium", "Statements after return/raise/continue/break."),
     "py-duplicate-dict-key": ("medium", "Dict literal repeats a constant key."),
     "py-syntax-error": ("critical", "Changed Python file does not parse."),

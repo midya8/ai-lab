@@ -184,6 +184,7 @@
 - reviewkit: AST rule py-not-in-style (`not a in b` / `not a is b`; 94 tests)
 - reviewkit: AST rule py-self-compare (name compared with itself; 95 tests)
 - reviewkit: AST rule py-unreachable-code (statements after return/raise/continue/break; 96 tests)
+- reviewkit: AST rule py-compare-bool (`== True` / `!= False`; 97 tests)
 
 
 ## Next
