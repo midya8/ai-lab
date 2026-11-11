@@ -214,6 +214,7 @@
 - codesearch: `undocumented` command (public definitions lacking docstrings, ranked by name-based reference count; 3 tests)
 - codesearch: `complexity` command (McCabe cyclomatic complexity per function via AST; dogfooded on this monorepo, top hit reviewkit ast_findings at 121; 3 tests)
 - voicekit v0.1 (NEW): offline voice-command pipeline on synthetic formant speech — streaming VAD, MFCC, MLP vs DTW, open-set rejection, intent grammar, CLI, evaluation protocol (81 tests)
+- bpekit v0.1: from-scratch byte-level BPE tokenizer (7 tests)
 
 
 ## Next
