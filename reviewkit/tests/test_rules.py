@@ -248,3 +248,13 @@ def test_ssl_unverified():
     assert rules("a.py", "import ssl\nc = ssl._create_unverified_context()\n") == [(2, "py-ssl-unverified")]
     assert rules("a.py", "import ssl\nc = ssl.create_default_context()\nc.check_hostname = False\n") == [(3, "py-ssl-unverified")]
     assert rules("a.py", "import ssl\nc = ssl.create_default_context()\n") == []
+
+
+def test_tar_extractall():
+    assert rules("a.py", "import tarfile\nt = tarfile.open(p)\nt.extractall(d)\n") == [(3, "py-tar-extractall")]
+    assert rules("a.py", "import tarfile\nt = tarfile.open(p)\nt.extractall(d, filter='data')\n") == []
+
+
+def test_chmod_world_writable():
+    assert rules("a.py", "import os\nos.chmod(p, 0o777)\n") == [(2, "py-chmod-world-writable")]
+    assert rules("a.py", "import os\nos.chmod(p, 0o600)\n") == []

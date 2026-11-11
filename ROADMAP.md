@@ -194,6 +194,7 @@
 - reviewkit: line rule py-insecure-random-secret (random used for tokens/passwords; 103 tests)
 - visionlab: photometric (contrast) augmentation; fixes trained-family contrast, collapses to chance on an unseen contrast-about-mean shift (66 tests)
 - reviewkit: py-ssl-unverified rule (104 tests)
+- reviewkit: py-tar-extractall and py-chmod-world-writable rules (106 tests)
 
 
 ## Next
