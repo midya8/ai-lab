@@ -278,3 +278,8 @@ def test_jinja_autoescape_off():
 def test_jwt_no_verify():
     assert rules("a.py", "c = jwt.decode(tok, key, options={'verify_signature': False})\n") == [(1, "py-jwt-no-verify")]
     assert rules("a.py", "c = jwt.decode(tok, key, algorithms=['HS256'])\n") == []
+
+
+def test_trust_remote_code():
+    assert rules("a.py", "m = AutoModel.from_pretrained(n, trust_remote_code=True)\n") == [(1, "py-trust-remote-code")]
+    assert rules("a.py", "m = AutoModel.from_pretrained(n, trust_remote_code=False)\n") == []
