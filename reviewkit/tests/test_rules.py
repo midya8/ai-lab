@@ -333,3 +333,10 @@ def test_hardcoded_bearer():
     assert rules("a.py", "h = {'Authorization': f'Bearer {token}'}\n") == []
     assert rules("a.py", "h = 'Bearer short'\n") == []
     assert rules("a.py", "# h = 'Bearer %s'\n" % tok) == []
+
+
+def test_django_debug_true():
+    assert rules("settings.py", "DEBUG = True\n") == [(1, "py-django-debug-true")]
+    assert rules("settings.py", "DEBUG = os.environ.get('DEBUG') == '1'\n") == []
+    assert rules("settings.py", "# DEBUG = True\n") == []
+    assert rules("a.py", "log_DEBUG = True\n") == []
