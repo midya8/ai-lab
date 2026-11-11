@@ -316,3 +316,12 @@ def test_hardcoded_tmp():
     assert rules("a.py", "open(f'/tmp/{name}')\n") == [(1, "py-hardcoded-tmp")]
     assert rules("a.py", "open(path)\n") == []
     assert rules("a.py", "# open('/tmp/x')\n") == []
+
+
+def test_cleartext_http():
+    assert rules("a.py", "requests.get('http://example.com/api', timeout=5)\n") == [(1, "py-cleartext-http")]
+    assert rules("a.py", "r = httpx.post(f'http://svc.internal/{x}', timeout=5)\n") == [(1, "py-cleartext-http")]
+    assert rules("a.py", "requests.get('http://localhost:8000/x', timeout=5)\n") == []
+    assert rules("a.py", "requests.get('http://127.0.0.1/x', timeout=5)\n") == []
+    assert rules("a.py", "requests.get('https://example.com', timeout=5)\n") == []
+    assert rules("a.py", "# requests.get('http://example.com', timeout=5)\n") == []
