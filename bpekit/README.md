@@ -13,3 +13,12 @@ ids = tok.encode("hello world"); assert tok.decode(ids) == "hello world"
 ```
 
 Test: `PYTHONPATH=src python -m pytest -q` (7 tests). Training is pure Python and O(merges x unique words); fine for MB-scale corpora, not GB.
+
+
+## CLI
+
+```bash
+PYTHONPATH=src python -m bpekit train corpus.txt -v 400 -o tok.json
+PYTHONPATH=src python -m bpekit encode tok.json "hello world"
+PYTHONPATH=src python -m bpekit eval corpus.txt -v 400   # held-out bytes/token
+```
