@@ -130,3 +130,17 @@ def test_metrics():
     lo, hi = wilson(90, 100)
     assert lo < 0.9 < hi and 0.82 < lo and hi < 0.96
     assert wilson(0, 0) == (0.0, 1.0)
+
+
+def test_photometric_training_runs_and_changes_weights():
+    import numpy as np
+    from visionlab.data import make_dataset
+    from visionlab.model import ModelConfig, build_cnn
+    from visionlab.train import train
+    X, y = make_dataset(128, seed=0)
+    outs = []
+    for ph in (0.0, 0.6):
+        m = build_cnn(ModelConfig(seed=0, head="gap", batchnorm=True))
+        train(m, X, y, epochs=1, seed=0, photometric=ph, log=None)
+        outs.append(m.predict_proba(X[:8]) if hasattr(m, "predict_proba") else m.forward(X[:8]))
+    assert not np.allclose(outs[0], outs[1])

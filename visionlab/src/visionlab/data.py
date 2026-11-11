@@ -77,6 +77,19 @@ def augment(X: np.ndarray, rng: np.random.Generator) -> np.ndarray:
     return out
 
 
+def photometric_augment(X: np.ndarray, rng: np.random.Generator, min_contrast: float = 0.3) -> np.ndarray:
+    """Per-image contrast loss: each image is multiplied by c ~ U(min_contrast, 1), then clipped.
+
+    Same family as the ``contrast`` perturbation in ``robust.natural_report`` (X * c), so a gain on that
+    test is partly "trained on the test perturbation"; ``contrast_about_mean`` in the experiment is the
+    unseen variant.
+    """
+    if not 0 < min_contrast <= 1:
+        raise ValueError("min_contrast must be in (0, 1]")
+    c = rng.uniform(min_contrast, 1.0, (len(X),) + (1,) * (X.ndim - 1)).astype(X.dtype)
+    return np.clip(X * c, 0, 1).astype(X.dtype)
+
+
 def ascii_art(img: np.ndarray) -> str:
     """Tiny terminal rendering of a (H,W) or (1,H,W) image."""
     img = np.asarray(img).reshape(img.shape[-2:])

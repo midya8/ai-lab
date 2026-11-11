@@ -76,6 +76,16 @@ Clean accuracy is unchanged within seed noise (+-0.01); robustness at and below 
 
 The dense head loses 62 points between 0 and 4 px of shift; the width-16 GAP + BN model loses 5 and, with 38 % fewer parameters, is within noise of the dense model on clean data. BatchNorm is what makes the small GAP net trainable in 12 epochs (+4 points clean) but it does *not* help the dense head (-2 points, one fewer point of noise robustness). The price of the GAP head is photometric brittleness: at contrast 0.5 it keeps 0.656 against the dense model's 0.902, and noise 0.3 is about the same. A plausible cause is that averaging over the whole image makes the decision depend on global activation level, which dimming changes; I did not test this explanation. The comparison is not parameter-matched except for the last row, only 12 epochs and 3 seeds were run, and "clean" is equal for dense and the last GAP row only within seed noise.
 
+**Contrast augmentation: fixes the family it trains on, not contrast in general** (`train(..., photometric=p)` multiplies each training image by c ~ U(1-p, 1); `experiments/photometric.py`, GAP + BN width 16, mean of 3 seeds, 1,000 test images).
+
+| photometric | clean | x0.5 | x0.3 | about-mean 0.5 | about-mean 0.3 |
+|---|---|---|---|---|---|
+| 0 | 0.978 | 0.656 | 0.171 | 0.403 | 0.179 |
+| 0.5 | 0.967 | 0.958 | 0.583 | 0.170 | 0.167 |
+| 0.7 | 0.960 | 0.962 | 0.917 | 0.168 | 0.167 |
+
+Scaling by c (the `contrast` column of the robustness report) goes from 0.656 to 0.96 at x0.5 for about 1-2 points of clean accuracy. But that is the very perturbation trained on. On an unseen one, contrast about the mean ((x-0.5)*c+0.5, which also lifts the dark background), accuracy is *worse* than the baseline (0.403 -> 0.170, chance is 0.167): the network learned "dim means shrink", not contrast invariance. Treat the x-c numbers as in-distribution; real photometric robustness needs augmentation that covers brightness and offset too (not done here).
+
 **Certified robustness by interval bound propagation** (`certify.py`, `experiments/certified_robustness.py`, mean of 3 seeds, 800 test images, raw output in `experiments/certified_robustness.out.txt`). An attack can only show a model is *broken*; a bound can show it is *safe*. The input box [x-eps, x+eps] (clipped to [0,1]) is pushed through the network as a centre and radius per activation, giving sound bounds on every logit; an image is **certified** when the lower bound of `logit_y - logit_j` is positive for all `j`. Certified accuracy is a proven lower bound on accuracy under *any* L-inf attack of that size; PGD accuracy is an upper bound, so the true robust accuracy sits between them.
 
 | model | clean | certified @0.01 | @0.02 | @0.03 | @0.05 | PGD-20 @0.03 | median certified radius |

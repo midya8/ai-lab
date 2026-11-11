@@ -9,7 +9,7 @@ import numpy as np
 
 from .attacks import fgsm
 from .certify import ibp_loss_backward
-from .data import augment
+from .data import augment, photometric_augment
 from .layers import BatchNorm2D
 from .metrics import accuracy
 from .model import cross_entropy
@@ -18,7 +18,7 @@ from .optim import Adam
 
 def train(model, Xtr, ytr, Xva=None, yva=None, epochs=10, batch=64, lr=2e-3, weight_decay=1e-4,
           seed=0, aug=True, adv_eps=0.0, label_smoothing=0.0, ibp_eps=0.0, ibp_warmup=0.4,
-          ibp_kappa=0.5, log=print):
+          ibp_kappa=0.5, photometric=0.0, log=print):
     """Train in place; returns a list of per-epoch dicts (loss, train_acc, val_acc, seconds).
 
     adv_eps > 0 adds, for every batch, FGSM examples crafted against the current model
@@ -29,6 +29,7 @@ def train(model, Xtr, ytr, Xva=None, yva=None, epochs=10, batch=64, lr=2e-3, wei
     eps ramps linearly from 0 to ibp_eps and kappa from 1 to ibp_kappa over the first ``ibp_warmup``
     fraction of the steps, then both stay put. Not available with BatchNorm2D or together with adv_eps.
     """
+    # photometric > 0: per-image contrast augmentation, c ~ U(1 - photometric, 1) (see data.photometric_augment)
     if ibp_eps > 0 and adv_eps > 0:
         raise ValueError("choose either adv_eps (FGSM) or ibp_eps (interval bound propagation)")
     if ibp_eps > 0 and any(isinstance(l, BatchNorm2D) for l in model.layers):
@@ -49,6 +50,8 @@ def train(model, Xtr, ytr, Xva=None, yva=None, epochs=10, batch=64, lr=2e-3, wei
             xb, yb = Xtr[idx], ytr[idx]
             if aug:
                 xb = augment(xb, rng)
+            if photometric > 0:
+                xb = photometric_augment(xb, rng, 1.0 - photometric)
             if adv_eps > 0:
                 xb = np.concatenate([xb, fgsm(model, xb, yb, adv_eps)])
                 yb = np.concatenate([yb, yb])

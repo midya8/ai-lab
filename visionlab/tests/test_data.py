@@ -1,3 +1,4 @@
+import pytest
 import numpy as np
 
 from visionlab.data import CLASSES, ascii_art, augment, make_dataset, render
@@ -44,3 +45,15 @@ def test_augment_preserves_pixel_multiset_and_shape():
 def test_ascii_art_dimensions():
     art = ascii_art(np.zeros((1, 6, 4)))
     assert len(art.splitlines()) == 6 and len(art.splitlines()[0]) == 8
+
+
+def test_photometric_augment_scales_and_validates():
+    from visionlab.data import photometric_augment
+    X, _ = make_dataset(30, seed=2)
+    A = photometric_augment(X, np.random.default_rng(0), 0.4)
+    assert A.shape == X.shape and A.dtype == X.dtype
+    assert (A <= X + 1e-7).all() and A.max() <= 1
+    ratio = A.reshape(30, -1).max(1) / X.reshape(30, -1).max(1)
+    assert ratio.min() >= 0.39 and ratio.max() <= 1.0 + 1e-6 and ratio.std() > 0.05
+    with pytest.raises(ValueError):
+        photometric_augment(X, np.random.default_rng(0), 0.0)
