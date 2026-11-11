@@ -189,3 +189,9 @@ def test_self_compare():
     assert rules("a.py", "if a < a:\n    pass\n") == [(1, "py-self-compare")]
     assert rules("a.py", "if x == y:\n    pass\n") == []
     assert rules("a.py", "if x.a == x.a:\n    pass\n") == []
+
+
+def test_unreachable_code():
+    assert rules("a.py", "def f():\n    return 1\n    print(2)\n") == [(3, "py-unreachable-code")]
+    assert rules("a.py", "for i in x:\n    if i:\n        continue\n        y = 1\n") == [(4, "py-unreachable-code")]
+    assert rules("a.py", "def f():\n    if a:\n        return 1\n    return 2\n") == []

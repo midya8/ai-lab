@@ -354,6 +354,16 @@ def ast_findings(ctx: FileContext, source: str, complexity_threshold: int = 10) 
                     pickle_aliases.add(a.asname or a.name)
 
     for node in ast.walk(tree):
+        for field in ("body", "orelse", "finalbody"):
+            block = getattr(node, field, None)
+            if not isinstance(block, list):
+                continue
+            for i, stmt in enumerate(block[:-1]):
+                if isinstance(stmt, (ast.Return, ast.Raise, ast.Continue, ast.Break)):
+                    add(block[i + 1].lineno, "py-unreachable-code", "medium",
+                        f"Code after `{type(stmt).__name__.lower()}` on line {stmt.lineno} can never run.",
+                        "Delete the dead statements or move the control-flow exit.")
+                    break
         if isinstance(node, ast.Lambda):
             for d in list(node.args.defaults) + [d for d in node.args.kw_defaults if d is not None]:
                 if _is_mutable_default(d):
@@ -479,6 +489,7 @@ RULE_TABLE.update({
     "py-raise-notimplemented": ("medium", "`raise NotImplemented` (should be NotImplementedError)."),
     "py-not-in-style": ("low", "`not a in b` / `not a is b` instead of `not in` / `is not`."),
     "py-self-compare": ("low", "Name compared with itself."),
+    "py-unreachable-code": ("medium", "Statements after return/raise/continue/break."),
     "py-duplicate-dict-key": ("medium", "Dict literal repeats a constant key."),
     "py-syntax-error": ("critical", "Changed Python file does not parse."),
     "py-taint-sql": ("high", "Untrusted input flows into SQL query text."),
