@@ -419,6 +419,16 @@ def ast_findings(ctx: FileContext, source: str, complexity_threshold: int = 10) 
                     "`assert (cond, msg)` asserts a non-empty tuple, which is always true; the check never fails.",
                     "Write `assert cond, msg` without the parentheses around both.")
         elif isinstance(node, ast.Try):
+            seen_exc = set()
+            for h in node.handlers:
+                names = [h.type] if h.type is not None and not isinstance(h.type, ast.Tuple) else (list(h.type.elts) if h.type is not None else [])
+                for t in names:
+                    nm = ast.unparse(t)
+                    if nm in seen_exc:
+                        add(h.lineno, "py-duplicate-except", "medium",
+                            f"`except {nm}` already handled by an earlier clause in this try; this handler never runs.",
+                            "Remove the duplicate or catch the intended exception type.")
+                    seen_exc.add(nm)
             for stmt in node.finalbody:
                 for sub in ast.walk(stmt):
                     if isinstance(sub, ast.Return):
@@ -493,6 +503,7 @@ RULE_TABLE.update({
     "py-raise-notimplemented": ("medium", "`raise NotImplemented` (should be NotImplementedError)."),
     "py-not-in-style": ("low", "`not a in b` / `not a is b` instead of `not in` / `is not`."),
     "py-self-compare": ("low", "Name compared with itself."),
+    "py-duplicate-except": ("medium", "Exception type caught twice in one try."),
     "py-compare-bool": ("low", "`== True` / `== False` instead of truthiness."),
     "py-unreachable-code": ("medium", "Statements after return/raise/continue/break."),
     "py-duplicate-dict-key": ("medium", "Dict literal repeats a constant key."),

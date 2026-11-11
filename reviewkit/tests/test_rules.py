@@ -202,3 +202,12 @@ def test_compare_bool():
     assert rules("a.py", "if x != False:\n    pass\n") == [(1, "py-compare-bool")]
     assert rules("a.py", "if x is True:\n    pass\n") == []
     assert rules("a.py", "if x == 1:\n    pass\n") == []
+
+
+def test_duplicate_except():
+    src = "try:\n    pass\nexcept ValueError:\n    raise\nexcept ValueError:\n    raise\n"
+    assert rules("a.py", src) == [(5, "py-duplicate-except")]
+    src = "try:\n    pass\nexcept (KeyError, ValueError):\n    raise\nexcept ValueError:\n    raise\n"
+    assert rules("a.py", src) == [(5, "py-duplicate-except")]
+    src = "try:\n    pass\nexcept KeyError:\n    raise\nexcept ValueError:\n    raise\n"
+    assert rules("a.py", src) == []
