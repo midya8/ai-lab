@@ -197,6 +197,7 @@
 - reviewkit: py-tar-extractall and py-chmod-world-writable rules (106 tests)
 - reviewkit: py-flask-debug and py-xml-untrusted rules (108 tests)
 - reviewkit: py-trust-remote-code rule (111 tests)
+- reviewkit: py-dangerous-deserialization rule (112 tests)
 
 
 ## Next

@@ -283,3 +283,8 @@ def test_jwt_no_verify():
 def test_trust_remote_code():
     assert rules("a.py", "m = AutoModel.from_pretrained(n, trust_remote_code=True)\n") == [(1, "py-trust-remote-code")]
     assert rules("a.py", "m = AutoModel.from_pretrained(n, trust_remote_code=False)\n") == []
+
+
+def test_dangerous_deserialization():
+    assert rules("a.py", "db = FAISS.load_local(d, emb, allow_dangerous_deserialization=True)\n") == [(1, "py-dangerous-deserialization")]
+    assert rules("a.py", "db = FAISS.load_local(d, emb)\n") == []
