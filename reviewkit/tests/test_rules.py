@@ -258,3 +258,13 @@ def test_tar_extractall():
 def test_chmod_world_writable():
     assert rules("a.py", "import os\nos.chmod(p, 0o777)\n") == [(2, "py-chmod-world-writable")]
     assert rules("a.py", "import os\nos.chmod(p, 0o600)\n") == []
+
+
+def test_flask_debug():
+    assert rules("a.py", "app.run(host='0.0.0.0', debug=True)\n") == [(1, "py-flask-debug")]
+    assert rules("a.py", "app.run(debug=False)\n") == []
+
+
+def test_xml_untrusted():
+    assert rules("a.py", "import xml.etree.ElementTree as ET\nt = ET.fromstring(data)\n") == [(2, "py-xml-untrusted")]
+    assert rules("a.py", "import defusedxml.ElementTree as D\nt = D.fromstring(data)\n") == []

@@ -195,6 +195,7 @@
 - visionlab: photometric (contrast) augmentation; fixes trained-family contrast, collapses to chance on an unseen contrast-about-mean shift (66 tests)
 - reviewkit: py-ssl-unverified rule (104 tests)
 - reviewkit: py-tar-extractall and py-chmod-world-writable rules (106 tests)
+- reviewkit: py-flask-debug and py-xml-untrusted rules (108 tests)
 
 
 ## Next
