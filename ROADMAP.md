@@ -186,6 +186,7 @@
 - reviewkit: AST rule py-unreachable-code (statements after return/raise/continue/break; 96 tests)
 - reviewkit: AST rule py-compare-bool (`== True` / `!= False`; 97 tests)
 - reviewkit: AST rule py-duplicate-except (exception type caught twice in one try; 98 tests)
+- reviewkit: AST rule py-fstring-no-placeholder (f-string with no placeholders; 99 tests)
 
 
 ## Next

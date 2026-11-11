@@ -353,6 +353,7 @@ def ast_findings(ctx: FileContext, source: str, complexity_threshold: int = 10) 
                 if a.name in _PICKLE_NAMES:
                     pickle_aliases.add(a.asname or a.name)
 
+    nested_fstr: set = set()
     for node in ast.walk(tree):
         for field in ("body", "orelse", "finalbody"):
             block = getattr(node, field, None)
@@ -418,6 +419,15 @@ def ast_findings(ctx: FileContext, source: str, complexity_threshold: int = 10) 
                 add(node.lineno, "py-assert-tuple", "high",
                     "`assert (cond, msg)` asserts a non-empty tuple, which is always true; the check never fails.",
                     "Write `assert cond, msg` without the parentheses around both.")
+        elif isinstance(node, ast.JoinedStr):
+            if id(node) not in nested_fstr:
+                for v in node.values:
+                    if isinstance(v, ast.FormattedValue) and isinstance(v.format_spec, ast.JoinedStr):
+                        nested_fstr.add(id(v.format_spec))
+                if not any(isinstance(v, ast.FormattedValue) for v in node.values):
+                    add(node.lineno, "py-fstring-no-placeholder", "low",
+                        "f-string has no placeholders; the `f` prefix does nothing and often hides a forgotten `{...}`.",
+                        "Drop the `f` prefix or add the intended placeholder.")
         elif isinstance(node, ast.Try):
             seen_exc = set()
             for h in node.handlers:
@@ -504,6 +514,7 @@ RULE_TABLE.update({
     "py-not-in-style": ("low", "`not a in b` / `not a is b` instead of `not in` / `is not`."),
     "py-self-compare": ("low", "Name compared with itself."),
     "py-duplicate-except": ("medium", "Exception type caught twice in one try."),
+    "py-fstring-no-placeholder": ("low", "f-string without any placeholder."),
     "py-compare-bool": ("low", "`== True` / `== False` instead of truthiness."),
     "py-unreachable-code": ("medium", "Statements after return/raise/continue/break."),
     "py-duplicate-dict-key": ("medium", "Dict literal repeats a constant key."),

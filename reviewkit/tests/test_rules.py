@@ -211,3 +211,9 @@ def test_duplicate_except():
     assert rules("a.py", src) == [(5, "py-duplicate-except")]
     src = "try:\n    pass\nexcept KeyError:\n    raise\nexcept ValueError:\n    raise\n"
     assert rules("a.py", src) == []
+
+
+def test_fstring_no_placeholder():
+    assert rules("a.py", "x = f'hello'\n") == [(1, "py-fstring-no-placeholder")]
+    assert rules("a.py", "x = f'hi {name}'\n") == []
+    assert rules("a.py", "x = f'{v:>{w}}'\n") == []
