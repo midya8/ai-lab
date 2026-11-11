@@ -197,6 +197,37 @@ class Searcher:
         out.sort(key=lambda t: (-t[1], t[0].id))
         return out
 
+    def unreferenced(self, include_tests: bool = False, ignore: tuple[str, ...] = ("main",)) -> list[Chunk]:
+        """Dead-code candidates: functions/methods/classes whose name no other chunk mentions.
+
+        Name-based, so it errs toward keeping code (a same-named variable elsewhere counts as a
+        reference). Dunder methods, test functions, names in `ignore`, and chunks mentioned only
+        by themselves or by a container that encloses them are reported as unreferenced only when
+        no outside chunk mentions the name. Dynamic use (getattr, entry points, decorators that
+        register) is invisible, so treat results as candidates to review.
+        """
+        ix = self.index
+        out = []
+        for i, c in enumerate(ix.chunks):
+            if c.kind == "module" or c.is_test or c.name in ignore:
+                continue
+            if c.name.startswith("__") and c.name.endswith("__"):
+                continue
+            used = False
+            for j, d in enumerate(ix.chunks):
+                if j == i or d.kind == "module" or (d.is_test and not include_tests):
+                    continue
+                if c.name not in d.ids:
+                    continue
+                if d.path == c.path and d.start <= c.start and d.end >= c.end:
+                    continue  # enclosing container
+                used = True
+                break
+            if not used:
+                out.append(c)
+        out.sort(key=lambda c: c.id)
+        return out
+
     def resolve(self, ident: str) -> int:
         ix = self.index
         if ident in ix.id_to_idx:

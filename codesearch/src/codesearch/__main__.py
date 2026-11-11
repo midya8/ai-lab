@@ -1,4 +1,4 @@
-"""codesearch command line: index, watch, search, similar, calls, undocumented, complexity, dups, eval, stats."""
+"""codesearch command line: index, watch, search, similar, calls, undocumented, unreferenced, complexity, dups, eval, stats."""
 from __future__ import annotations
 
 import argparse
@@ -152,6 +152,18 @@ def cmd_undocumented(args) -> int:
     return 0
 
 
+def cmd_unreferenced(args) -> int:
+    ix, _ = _load(args)
+    res = Searcher(ix).unreferenced(include_tests=args.tests, ignore=tuple(args.ignore))
+    if args.json:
+        print(json.dumps([{"id": c.id, "line": c.start} for c in res[:args.k]], indent=2))
+        return 0
+    for c in res[:args.k]:
+        print(f"{c.path}:{c.start}  {c.qualname} [{c.kind}]")
+    print(f"{len(res)} definition(s) never mentioned elsewhere (candidates, name-based)")
+    return 0
+
+
 def cmd_complexity(args) -> int:
     from .complexity import rank
 
@@ -270,6 +282,13 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--min-lines", type=int, default=3, help="skip bodies shorter than this")
     sp.add_argument("--tests", action="store_true", help="include test code")
     sp.set_defaults(fn=cmd_undocumented)
+
+    sp = sub.add_parser("unreferenced", help="dead-code candidates: definitions no other code mentions")
+    common(sp)
+    sp.add_argument("-k", type=int, default=50)
+    sp.add_argument("--ignore", action="append", default=["main"], help="names to skip (repeatable)")
+    sp.add_argument("--tests", action="store_true", help="count mentions from test code as references")
+    sp.set_defaults(fn=cmd_unreferenced)
 
     sp = sub.add_parser("complexity", help="functions ranked by cyclomatic complexity")
     common(sp)

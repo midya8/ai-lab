@@ -72,6 +72,8 @@ after files change), `ping`. Replies are `{"id", "ok", "result"}` or `{"id", "ok
 a malformed line gets an error reply and the server keeps going. The index is not auto-refreshed:
 send `refresh` (or run `watch` alongside).
 
+`unreferenced` lists dead-code candidates: definitions whose name no other non-test chunk mentions (dunders, `main`, and `--ignore` names skipped; `--tests` counts test mentions). Name-based, so it errs toward keeping code; dynamic use (getattr, registries) is invisible.
+
 ## Limitations
 
 `calls` is a name-based call graph: no type or import resolution, so a name defined in several places links to all of them and a non-call mention (a variable with the same name) counts as a caller. Python only (JS/TS would need another parser). Lexical matching: a query that shares no words with the code or docstring and whose meaning LSA cannot bridge will miss. No embeddings from a neural model — that is the obvious next experiment and would be an optional extra, not a dependency. Dynamically generated functions are invisible. `dups` is quadratic in the number of functions (fine to ~10k).
