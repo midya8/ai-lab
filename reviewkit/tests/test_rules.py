@@ -312,9 +312,9 @@ def test_log_secret():
 
 
 def test_hardcoded_tmp():
-    assert rules("a.py", "f = open('/tmp/out.txt', 'w')\n") == [(1, "py-hardcoded-tmp")]
-    assert rules("a.py", "open(f'/tmp/{name}')\n") == [(1, "py-hardcoded-tmp")]
-    assert rules("a.py", "open(path)\n") == []
+    assert rules("a.py", "f = open('/tmp/out.txt', 'w', encoding='utf-8')\n") == [(1, "py-hardcoded-tmp")]
+    assert rules("a.py", "open(f'/tmp/{name}', encoding='utf-8')\n") == [(1, "py-hardcoded-tmp")]
+    assert rules("a.py", "open(path, encoding='utf-8')\n") == []
     assert rules("a.py", "# open('/tmp/x')\n") == []
 
 
@@ -375,3 +375,12 @@ def test_naive_now():
     assert rules("a.py", "import datetime\nx = datetime.datetime.today()\n") == [(2, "py-naive-now")]
     assert rules("a.py", "from datetime import datetime, timezone\nx = datetime.now(timezone.utc)\n") == []
     assert rules("a.py", "import time\nx = time.now()\n") == []
+
+
+def test_open_no_encoding():
+    assert rules("a.py", "f = open('x.txt')\n") == [(1, "py-open-no-encoding")]
+    assert rules("a.py", "f = open('x.txt', 'w')\n") == [(1, "py-open-no-encoding")]
+    assert rules("a.py", "f = open('x.txt', mode='r')\n") == [(1, "py-open-no-encoding")]
+    assert rules("a.py", "f = open('x.txt', encoding='utf-8')\n") == []
+    assert rules("a.py", "f = open('x.bin', 'rb')\n") == []
+    assert rules("a.py", "f = open('x', 'r', -1, 'utf-8')\n") == []

@@ -239,6 +239,7 @@
 - bpekit: `truncate` token-budget truncation (head/tail/middle, UTF-8 safe; 57 tests)
 - logsentry: seasonality-aware volume detector `detect_seasonal` (6 tests, v0.7)
 - reviewkit: AST rule py-naive-now (`datetime.now()`/`today()` without tz; 123 tests)
+- reviewkit: AST rule py-open-no-encoding (text-mode `open()` without encoding; 124 tests)
 
 
 ## Next

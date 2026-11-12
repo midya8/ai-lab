@@ -493,6 +493,19 @@ def ast_findings(ctx: FileContext, source: str, complexity_threshold: int = 10) 
                 add(node.lineno, "py-unsafe-deserialize", "high",
                     "Deserialising with pickle-style formats executes code embedded in the data.",
                     "Use JSON (or a schema-validated format) for anything that crosses a trust boundary.")
+            if isinstance(f, ast.Name) and f.id == "open" and node.args and not any(k.arg is None for k in node.keywords):
+                mode = None
+                if len(node.args) > 1 and isinstance(node.args[1], ast.Constant):
+                    mode = node.args[1].value
+                for k in node.keywords:
+                    if k.arg == "mode" and isinstance(k.value, ast.Constant):
+                        mode = k.value.value
+                if (len(node.args) < 2 or mode is not None) and (mode is None or isinstance(mode, str)) \
+                        and "b" not in (mode or "") and len(node.args) < 4 \
+                        and "encoding" not in {k.arg for k in node.keywords}:
+                    add(node.lineno, "py-open-no-encoding", "low",
+                        "`open()` in text mode without `encoding` depends on the platform locale (cp1252 on Windows).",
+                        "Pass `encoding=\"utf-8\"` explicitly, or open in binary mode.")
             if (isinstance(f, ast.Attribute) and f.attr in ("now", "today") and not node.args and not node.keywords
                     and ((isinstance(f.value, ast.Name) and f.value.id in ("datetime", "dt"))
                          or (isinstance(f.value, ast.Attribute) and f.value.attr == "datetime"))):
@@ -624,6 +637,7 @@ RULE_TABLE.update({
     "py-raise-notimplemented": ("high", "`raise NotImplemented` instead of `NotImplementedError`."),
     "py-assert-tuple": ("high", "`assert` on a non-empty tuple is always true."),
     "py-float-equality": ("low", "`==` / `!=` against a non-integer float literal."),
+    "py-open-no-encoding": ("low", "Text-mode `open()` without `encoding=`."),
     "py-naive-now": ("low", "`datetime.now()` / `today()` with no timezone."),
     "py-utcnow": ("low", "`datetime.utcnow()` / `utcfromtimestamp` (naive, deprecated)."),
     "py-return-in-finally": ("medium", "`return` inside `finally` swallows exceptions."),
