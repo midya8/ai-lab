@@ -23,3 +23,4 @@ from .multilabel import (  # noqa: F401
     inject_multilabel_noise,
     rank_multilabel_issues,
 )
+from .balance import class_balance, label_shift  # noqa: F401

@@ -136,3 +136,7 @@ better-calibrated probability, not a better detector, on this data.
 ### Relabel suggestions
 
 `suggest_relabels(P, y, mask, min_confidence=0.8, min_margin=0.3)` proposes a new label for flagged rows only when the model is clearly sure; the rest stay flagged for human review. The thresholds are defaults, not tuned on a benchmark.
+
+## Balance and label shift
+
+`class_balance(y, rare_fraction=0.05)` reports per-class counts, the max/min imbalance ratio and classes under the rarity cutoff (the 5% default is a convention, not tuned). `label_shift(y_train, y_test)` gives total-variation distance and a chi-square statistic of test counts against the train distribution; classes unseen in train are listed and make chi2 infinite. It checks label marginals only, not feature drift.
