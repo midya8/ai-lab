@@ -22,6 +22,9 @@ Features are every column that parses as a number; the label can be any string. 
 5. **Outliers.** Mean k-NN distance scored *within each labelled class* with a robust (median/MAD) z, so a point that is ordinary globally but far from its own class is found.
 6. **Report.** Markdown or JSON: class balance (given vs estimated true share), flagged rows with the suggested label and probabilities, duplicate groups, outliers. Flagged rows are *candidates for a human*, not verdicts.
 
+
+`datadoctor.per_class_summary(P, y, mask, names)` breaks the flagged rows down per given class (size, flagged, rate, mean self-confidence) and lists the most common given -> suggested confusions, so you can see which classes are dirtiest.
+
 ## Measured
 
 Synthetic data with injected noise, so the truth is known. Two datasets (5-class overlapping Gaussians, a model trained on clean labels reaches about 0.89 test accuracy; 4 classes that are each two far-apart modes, which a linear model cannot separate), two probability models, five noise settings, 3 seeds, 1,800 training rows, 600 clean test rows. Full table in [`experiments/results.md`](experiments/results.md). A slice:

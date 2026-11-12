@@ -103,3 +103,28 @@ def test_class_with_no_examples_does_not_crash():
     y = np.array([0, 0, 1, 1])  # class 2 absent
     mask = find_label_issues(Pp, y, "both")
     assert mask.shape == (4,)
+
+
+def test_per_class_summary_counts_and_confusions():
+    from datadoctor.confident import per_class_summary
+
+    y = np.array([0] * 4 + [1] * 4 + [2] * 4)
+    mask = np.zeros(12, dtype=bool)
+    mask[[3, 7]] = True
+    s = per_class_summary(P, y, mask, names=["a", "b", "c"])
+    rows = {r["class"]: r for r in s["classes"]}
+    assert rows["a"]["flagged"] == 1 and rows["a"]["size"] == 4 and rows["a"]["rate"] == 0.25
+    assert rows["c"]["flagged"] == 0
+    assert s["classes"][0]["rate"] >= s["classes"][-1]["rate"]
+    assert {(c["given"], c["suggested"]) for c in s["confusions"]} == {("a", "b"), ("b", "c")}
+    assert sum(c["count"] for c in s["confusions"]) == 2
+
+
+def test_per_class_summary_default_mask_and_bad_names():
+    from datadoctor.confident import per_class_summary
+
+    y = np.array([0] * 4 + [1] * 4 + [2] * 4)
+    s = per_class_summary(P, y)
+    assert sum(r["flagged"] for r in s["classes"]) == sum(c["count"] for c in s["confusions"])
+    with pytest.raises(ValueError):
+        per_class_summary(P, y, names=["x"])

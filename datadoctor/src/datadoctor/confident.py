@@ -154,3 +154,50 @@ def find_label_issues(P: np.ndarray, y: np.ndarray, method: str = "both") -> np.
     if method == "both":
         return by_class & by_rate
     raise ValueError(f"unknown method: {method}")
+
+
+def per_class_summary(P: np.ndarray, y: np.ndarray, mask: np.ndarray | None = None, names: list[str] | None = None) -> dict:
+    """Break flagged label issues down by given class and by most likely true class.
+
+    Returns ``{"classes": [...], "confusions": [...]}``. Each class row has its size, number
+    flagged, flagged rate and mean self-confidence; ``confusions`` lists (given, suggested,
+    count) for flagged rows, where *suggested* is the model's top class among the others,
+    sorted by count. Answers "which classes are dirtiest and what are they confused with".
+    """
+    P = np.asarray(P, dtype=float)
+    y = np.asarray(y, dtype=int)
+    n, K = P.shape
+    if mask is None:
+        mask = find_label_issues(P, y)
+    mask = np.asarray(mask, dtype=bool)
+    nm = names or [str(i) for i in range(K)]
+    if len(nm) != K:
+        raise ValueError("names must have one entry per class")
+    sc = self_confidence(P, y)
+    classes = []
+    for k in range(K):
+        idx = y == k
+        size = int(idx.sum())
+        flagged = int((mask & idx).sum())
+        classes.append(
+            {
+                "class": nm[k],
+                "size": size,
+                "flagged": flagged,
+                "rate": flagged / size if size else 0.0,
+                "mean_self_confidence": float(sc[idx].mean()) if size else float("nan"),
+            }
+        )
+    classes.sort(key=lambda r: (-r["rate"], r["class"]))
+    other = P.copy()
+    other[np.arange(n), y] = -np.inf
+    sugg = other.argmax(axis=1)
+    counts: dict[tuple[int, int], int] = {}
+    for i in np.flatnonzero(mask):
+        key = (int(y[i]), int(sugg[i]))
+        counts[key] = counts.get(key, 0) + 1
+    conf = [
+        {"given": nm[a], "suggested": nm[b], "count": c}
+        for (a, b), c in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
+    ]
+    return {"classes": classes, "confusions": conf}
