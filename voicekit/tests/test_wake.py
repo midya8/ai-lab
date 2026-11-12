@@ -49,3 +49,22 @@ def test_end_to_end_stream_with_intent_parsing():
     assert "stop" not in [e.word for e in kept]
     parsed = parse_events(kept)
     assert all(it is None or it.words[0] in {"lights", "on"} for _, it in parsed)
+
+
+def test_merge_duplicates_joins_split_word():
+    from voicekit.wake import merge_duplicates
+    out = merge_duplicates([ev("on", 1.0, 1.2, .7), ev("on", 1.25, 1.5, .9)])
+    assert len(out) == 1 and out[0].start_s == 1.0 and out[0].end_s == 1.5 and out[0].confidence == .9
+
+
+def test_merge_duplicates_keeps_distinct_or_distant():
+    from voicekit.wake import merge_duplicates
+    evs = [ev("on", 1.0, 1.2), ev("off", 1.25, 1.5), ev("on", 2.0, 2.2)]
+    assert merge_duplicates(evs) == evs
+    assert len(merge_duplicates([ev("on", 0, .2), ev("on", .5, .7)], gap_s=0.1)) == 2
+
+
+def test_merge_duplicates_unsorted_and_overlap():
+    from voicekit.wake import merge_duplicates
+    out = merge_duplicates([ev("on", 1.1, 1.4), ev("on", 1.0, 1.3)])
+    assert len(out) == 1 and out[0].end_s == 1.4

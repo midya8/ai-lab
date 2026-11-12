@@ -49,3 +49,20 @@ class WakeGate:
             if kept is not None:
                 out.append(kept)
         return out
+
+
+def merge_duplicates(events: list[Event], gap_s: float = 0.15) -> list[Event]:
+    """Collapse back-to-back detections of the same word into one event.
+
+    A word split by the segmenter (e.g. at a plosive closure) can be reported twice. Consecutive
+    events with the same word whose gap is <= ``gap_s`` (or that overlap) are merged: the span is
+    the union and the confidence is the maximum.
+    """
+    out: list[Event] = []
+    for ev in sorted(events, key=lambda e: e.start_s):
+        prev = out[-1] if out else None
+        if prev is not None and prev.word == ev.word and ev.start_s - prev.end_s <= gap_s:
+            out[-1] = Event(prev.word, max(prev.confidence, ev.confidence), prev.start_s, max(prev.end_s, ev.end_s))
+        else:
+            out.append(ev)
+    return out
