@@ -140,3 +140,8 @@ better-calibrated probability, not a better detector, on this data.
 ## Balance and label shift
 
 `class_balance(y, rare_fraction=0.05)` reports per-class counts, the max/min imbalance ratio and classes under the rarity cutoff (the 5% default is a convention, not tuned). `label_shift(y_train, y_test)` gives total-variation distance and a chi-square statistic of test counts against the train distribution; classes unseen in train are listed and make chi2 infinite. It checks label marginals only, not feature drift.
+
+
+## Feature drift
+
+`feature_drift(X_train, X_test, names)` ranks features by two-sample KS statistic (asymptotic p-value, Bonferroni-corrected) and PSI (quantile bins of train), flagging `p < alpha/d` or `PSI > 0.25`. Covariate drift only; it says nothing about label shift (see `label_shift`). 5 tests.

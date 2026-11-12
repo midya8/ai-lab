@@ -24,3 +24,4 @@ from .multilabel import (  # noqa: F401
     rank_multilabel_issues,
 )
 from .balance import class_balance, label_shift  # noqa: F401
+from .drift import feature_drift, ks_statistic, psi  # noqa: F401
