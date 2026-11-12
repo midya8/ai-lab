@@ -235,6 +235,7 @@
 - bpekit: `extend` adds domain merges while keeping old ids stable (48 tests)
 - reviewkit: AST rule py-utcnow (naive/deprecated `datetime.utcnow`; 121 tests)
 - reviewkit: AST rule py-float-equality (`==`/`!=` vs non-integer float literal; 122 tests)
+- bpekit: fertility metric (tokens/word, p95, single-token share, worst words; 3 tests, 51 total)
 
 
 ## Next

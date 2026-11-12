@@ -82,3 +82,7 @@ Chunks cut only at word boundaries, never exceed `max_tokens` (except a single w
 ## Vocabulary extension (`bpekit.extend`)
 
 `extend(tok, domain_text, n_new)` keeps every existing merge (old token ids unchanged) and continues BPE training on new text, starting from the old tokenizer's segmentation. Special tokens come after the merges, so their ids shift by the number of merges added. Tested: old merges preserved, lossless round-trip, better compression on the domain text without lengthening the original text, deterministic, early stop when no pair repeats (4 tests, 48 total). Model embeddings for the new ids would still need training; no downstream claim is made.
+
+## Fertility (`bpekit.fertility`)
+
+`fertility(tok, text)` encodes each `\w+` word separately and reports mean tokens per word, the 95th-percentile cost, the share of words that are a single token, and the distinct words that cost the most. It is a quick check of how well a vocabulary fits a domain (a code vocabulary on prose, say). It measures segmentation only, not downstream model quality (3 tests).
