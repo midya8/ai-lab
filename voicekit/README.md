@@ -153,4 +153,9 @@ with per-word thresholds from validation data, and a streaming wake-word mode wi
 `calibrate_thresholds(model, X_val, y_val, target_precision=0.95)` picks, per word, the lowest confidence
 threshold whose validation precision meets the target (falls back to 0.99 if unreachable). Pass the
 resulting dict as `Recognizer(model, threshold=thr)`. Validation data must be disjoint from training data.
-No benchmark claim is made yet for how much this improves stream F1 over a single global threshold.
+Benchmark (`experiments/threshold_benchmark.py`, 12 streams x 8 words at each of 20/10/5 dB, 288 words; train seed 0,
+validation seed 3100, unseen test seeds): stream F1 is **0.953 at the default global 0.6, 0.957 at the best global
+threshold (0.8, picked on validation streams), 0.955 with per-word calibration**. Differences are 1-3 words out of
+288 (3 vs 0 vs 3 false positives), i.e. **a null result**: per-word thresholds do not measurably beat a global one here,
+because the MLP is already confident and the validation F1 curve is flat from 0.3 to 0.9. Calibration may matter more
+with a weaker model or real speech; this benchmark cannot show it.
