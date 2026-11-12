@@ -248,6 +248,7 @@
 - bpekit: `pack` sequence packing into fixed-length rows with doc-start offsets (3 tests, 64 total)
 - bpekit: `undertrained` lists rarely/never-emitted merged tokens (glitch-token candidates; 3 tests)
 - reviewkit: AST-free rule py-cleartext-protocol (FTP/Telnet/plain SMTP; 126 tests)
+- bpekit: `length_hist` token byte-length distribution + byte-fallback share (2 tests, 72 total)
 
 
 ## Next

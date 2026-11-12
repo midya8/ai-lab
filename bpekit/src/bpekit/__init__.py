@@ -18,3 +18,5 @@ from .verify import verify, fuzz_strings
 __all__ += ["verify", "fuzz_strings"]
 from .undertrained import undertrained
 __all__ += ["undertrained"]
+from .lengths import length_hist
+__all__ += ["length_hist"]
