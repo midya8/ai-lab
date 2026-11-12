@@ -397,3 +397,10 @@ def test_urlopen_no_timeout():
     assert rules("a.py", src) == [(2, "py-urlopen-no-timeout")]
     assert rules("a.py", "import urllib.request\nurllib.request.urlopen(u, timeout=5)\n") == []
     assert rules("a.py", "import urllib.request\nurllib.request.urlopen(u, None, 5)\n") == []
+
+
+def test_numpy_allow_pickle():
+    bad = "import numpy as np\nw = np.load(p, allow_pickle=True)\n"
+    ok = "import numpy as np\nw = np.load(p)\nv = np.load(p, allow_pickle=False)\nm = model.load(p, allow_pickle=True)\n"
+    assert rules("a.py", bad) == [(2, "py-numpy-allow-pickle")]
+    assert rules("a.py", ok) == []

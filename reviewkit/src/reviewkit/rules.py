@@ -510,6 +510,13 @@ def ast_findings(ctx: FileContext, source: str, complexity_threshold: int = 10) 
                     add(node.lineno, "py-open-no-encoding", "low",
                         "`open()` in text mode without `encoding` depends on the platform locale (cp1252 on Windows).",
                         "Pass `encoding=\"utf-8\"` explicitly, or open in binary mode.")
+            if (isinstance(f, ast.Attribute) and f.attr in ("load", "loadtxt", "genfromtxt")
+                    and isinstance(f.value, ast.Name) and f.value.id in ("np", "numpy")
+                    and any(k.arg == "allow_pickle" and isinstance(k.value, ast.Constant) and k.value.value is True
+                            for k in node.keywords)):
+                add(node.lineno, "py-numpy-allow-pickle", "high",
+                    "`allow_pickle=True` makes `np.load` unpickle object arrays, which executes code from the file.",
+                    "Store plain numeric arrays (the default `allow_pickle=False`), or only load files you produced.")
             if (isinstance(f, ast.Attribute) and f.attr == "urlopen" and len(node.args) < 3
                     and not any(k.arg in ("timeout", None) for k in node.keywords)):
                 add(node.lineno, "py-urlopen-no-timeout", "medium",
@@ -648,6 +655,7 @@ RULE_TABLE.update({
     "py-float-equality": ("low", "`==` / `!=` against a non-integer float literal."),
     "py-open-no-encoding": ("low", "Text-mode `open()` without `encoding=`."),
     "py-urlopen-no-timeout": ("medium", "`urllib.request.urlopen` without a timeout."),
+    "py-numpy-allow-pickle": ("high", "`np.load(..., allow_pickle=True)` unpickles untrusted data."),
     "py-naive-now": ("low", "`datetime.now()` / `today()` with no timezone."),
     "py-utcnow": ("low", "`datetime.utcnow()` / `utcfromtimestamp` (naive, deprecated)."),
     "py-return-in-finally": ("medium", "`return` inside `finally` swallows exceptions."),
