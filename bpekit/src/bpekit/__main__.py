@@ -33,7 +33,7 @@ def main(argv=None) -> int:
             print(f"  {n:3d}  {w}")
     elif a.cmd == "truncate":
         from .budget import truncate
-        print(truncate(BPETokenizer.load(a.tok), a.text, a.max_tokens, a.keep))
+        print(truncate(BPETokenizer.load(a.tok), a.text, a.max_tokens, a.keep)[0])
     else:
         text = open(a.file, encoding="utf-8").read(); cut = int(len(text) * 0.8)
         tok = train(text[:cut], a.vocab); held = text[cut:]
