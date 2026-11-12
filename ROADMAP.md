@@ -234,6 +234,7 @@
 - bpekit: `StreamDecoder` / `stream_decode` UTF-8-safe incremental decoding (5 tests)
 - bpekit: `extend` adds domain merges while keeping old ids stable (48 tests)
 - reviewkit: AST rule py-utcnow (naive/deprecated `datetime.utcnow`; 121 tests)
+- reviewkit: AST rule py-float-equality (`==`/`!=` vs non-integer float literal; 122 tests)
 
 
 ## Next

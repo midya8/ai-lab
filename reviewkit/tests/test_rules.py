@@ -361,3 +361,10 @@ def test_utcnow():
     assert rules("a.py", "from datetime import datetime\nx = datetime.utcnow()\n") == [(2, "py-utcnow")]
     assert rules("a.py", "from datetime import datetime\nx = datetime.utcfromtimestamp(0)\n") == [(2, "py-utcnow")]
     assert rules("a.py", "from datetime import datetime, timezone\nx = datetime.now(timezone.utc)\n") == []
+
+
+def test_float_equality():
+    assert rules("a.py", "def f(x):\n    return x == 0.1\n") == [(2, "py-float-equality")]
+    assert rules("a.py", "def f(x):\n    return 0.5 != x\n") == [(2, "py-float-equality")]
+    assert rules("a.py", "def f(x):\n    return x == 1.0\n") == []
+    assert rules("a.py", "def f(x):\n    return x < 0.1\n") == []

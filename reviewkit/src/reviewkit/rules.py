@@ -509,6 +509,12 @@ def ast_findings(ctx: FileContext, source: str, complexity_threshold: int = 10) 
             add(node.lineno, "py-utcnow", "low",
                 f"`datetime.{node.attr}` returns a naive datetime and is deprecated since Python 3.12.",
                 "Use `datetime.now(timezone.utc)` / `datetime.fromtimestamp(ts, timezone.utc)`.")
+        elif isinstance(node, ast.Compare) and any(isinstance(o, (ast.Eq, ast.NotEq)) for o in node.ops) and any(
+                isinstance(x, ast.Constant) and isinstance(x.value, float) and not float(x.value).is_integer()
+                for x in [node.left, *node.comparators]):
+            add(node.lineno, "py-float-equality", "low",
+                "Exact `==` / `!=` against a non-integer float literal is fragile because of rounding error.",
+                "Use `math.isclose(a, b, rel_tol=...)` or compare within a tolerance.")
         elif isinstance(node, ast.Assert):
             if isinstance(node.test, ast.Tuple) and node.test.elts:
                 add(node.lineno, "py-assert-tuple", "high",
@@ -611,6 +617,7 @@ RULE_TABLE.update({
     "py-is-literal": ("medium", "`is` / `is not` against a str/int/float/bytes literal."),
     "py-raise-notimplemented": ("high", "`raise NotImplemented` instead of `NotImplementedError`."),
     "py-assert-tuple": ("high", "`assert` on a non-empty tuple is always true."),
+    "py-float-equality": ("low", "`==` / `!=` against a non-integer float literal."),
     "py-utcnow": ("low", "`datetime.utcnow()` / `utcfromtimestamp` (naive, deprecated)."),
     "py-return-in-finally": ("medium", "`return` inside `finally` swallows exceptions."),
     "py-compare-none": ("low", "`== None` / `!= None` instead of `is None`."),
