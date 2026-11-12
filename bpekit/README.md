@@ -98,3 +98,7 @@ Chunks cut only at word boundaries, never exceed `max_tokens` (except a single w
 ## Sequence packing
 
 `pack(tok, docs, seq_len)` joins documents with the EOS special and slices the stream into exact `seq_len` rows, returning the rows plus each document's start offset inside its row (useful for attention masks). `drop_last=False` keeps the short final row.
+
+## Round-trip verification
+
+`verify(tok, texts, n_fuzz=200)` checks `decode(encode(x)) == x` on your texts plus seeded fuzz strings (unicode, emoji, control chars, special-token lookalikes), both plain and with BPE-dropout, and returns every failure. Run it after `prune`, `extend`, or an import to catch silent lossiness (3 tests).

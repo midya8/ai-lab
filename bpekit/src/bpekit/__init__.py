@@ -14,3 +14,5 @@ from .budget import truncate
 __all__ += ["truncate"]
 from .pack import pack
 __all__ += ["pack"]
+from .verify import verify, fuzz_strings
+__all__ += ["verify", "fuzz_strings"]
