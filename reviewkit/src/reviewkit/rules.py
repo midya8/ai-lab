@@ -507,6 +507,12 @@ def ast_findings(ctx: FileContext, source: str, complexity_threshold: int = 10) 
                 add(node.lineno, "py-assert-tuple", "high",
                     "`assert (cond, msg)` asserts a non-empty tuple, which is always true; the check never fails.",
                     "Write `assert cond, msg` without the parentheses around both.")
+        elif isinstance(node, ast.Raise):
+            exc = node.exc.func if isinstance(node.exc, ast.Call) else node.exc
+            if isinstance(exc, ast.Name) and exc.id == "NotImplemented":
+                add(node.lineno, "py-raise-notimplemented", "high",
+                    "`NotImplemented` is a comparison sentinel, not an exception; raising it is a TypeError at runtime.",
+                    "Raise `NotImplementedError` instead.")
         elif isinstance(node, ast.JoinedStr):
             if id(node) not in nested_fstr:
                 for v in node.values:
@@ -596,6 +602,7 @@ RULE_TABLE.update({
     "py-swallowed-exception": ("medium", "Exception caught and discarded with `pass`."),
     "py-requests-no-timeout": ("medium", "`requests.*` call without `timeout`."),
     "py-is-literal": ("medium", "`is` / `is not` against a str/int/float/bytes literal."),
+    "py-raise-notimplemented": ("high", "`raise NotImplemented` instead of `NotImplementedError`."),
     "py-assert-tuple": ("high", "`assert` on a non-empty tuple is always true."),
     "py-return-in-finally": ("medium", "`return` inside `finally` swallows exceptions."),
     "py-compare-none": ("low", "`== None` / `!= None` instead of `is None`."),

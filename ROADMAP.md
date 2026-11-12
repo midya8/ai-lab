@@ -225,6 +225,7 @@
 - bpekit: cross-domain transfer matrix (prose/python/json; 29 tests)
 - voicekit: `WakeGate` wake-word session gating (armed window, weak-wake rejection; 90 tests)
 - reviewkit: AST rule py-catch-baseexception (`except BaseException` without re-raise; 120 tests)
+- reviewkit: AST rule py-raise-notimplemented (`raise NotImplemented`; tests pass)
 
 
 ## Next

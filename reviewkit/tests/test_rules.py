@@ -348,3 +348,9 @@ def test_catch_baseexception():
     ok = "try:\n    f()\nexcept BaseException:\n    cleanup()\n    raise\n"
     assert rules("a.py", ok) == []
     assert rules("a.py", "try:\n    f()\nexcept Exception:\n    log()\n") == []
+
+
+def test_raise_notimplemented():
+    assert rules("a.py", "def f():\n    raise NotImplemented\n") == [(2, "py-raise-notimplemented")]
+    assert rules("a.py", "def f():\n    raise NotImplemented('x')\n") == [(2, "py-raise-notimplemented")]
+    assert rules("a.py", "def f():\n    raise NotImplementedError\n") == []
