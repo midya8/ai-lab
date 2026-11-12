@@ -132,3 +132,7 @@ it lowers the log loss of the conjunction label (tested). **Honest result:** on 
 with 5% injected flips over 3 seeds, F1 moved 0.731->0.738, 0.834->0.834, 0.726->0.717 (base->stack),
 i.e. noise. Neighbour columns carry the same noise, which cancels the gain. Treat it as a
 better-calibrated probability, not a better detector, on this data.
+
+### Relabel suggestions
+
+`suggest_relabels(P, y, mask, min_confidence=0.8, min_margin=0.3)` proposes a new label for flagged rows only when the model is clearly sure; the rest stay flagged for human review. The thresholds are defaults, not tuned on a benchmark.

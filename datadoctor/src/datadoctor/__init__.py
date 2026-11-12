@@ -9,6 +9,7 @@ from .confident import (  # noqa: F401
     estimate_noise_matrix,
     find_label_issues,
     per_class_summary,
+    suggest_relabels,
     rank_label_issues,
 )
 from .cv import cross_val_probs, stratified_kfold  # noqa: F401

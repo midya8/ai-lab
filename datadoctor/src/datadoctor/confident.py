@@ -201,3 +201,29 @@ def per_class_summary(P: np.ndarray, y: np.ndarray, mask: np.ndarray | None = No
         for (a, b), c in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
     ]
     return {"classes": classes, "confusions": conf}
+
+
+def suggest_relabels(P: np.ndarray, y: np.ndarray, mask: np.ndarray | None = None, min_confidence: float = 0.8, min_margin: float = 0.3) -> list[dict]:
+    """Propose new labels for flagged rows, only where the model is clearly sure.
+
+    For each flagged row the suggestion is the model's top class among the *other* classes.
+    A row is kept only if that class has probability >= ``min_confidence`` and beats the
+    given label's probability by >= ``min_margin``. Rows that fail stay flagged but are
+    left for a human. Returns dicts sorted by descending confidence:
+    ``{"index", "given", "suggested", "confidence", "margin"}``.
+    """
+    P = np.asarray(P, dtype=float)
+    y = np.asarray(y, dtype=int)
+    if mask is None:
+        mask = find_label_issues(P, y)
+    other = P.copy()
+    other[np.arange(len(y)), y] = -np.inf
+    sugg = other.argmax(axis=1)
+    out = []
+    for i in np.flatnonzero(np.asarray(mask, dtype=bool)):
+        conf = float(P[i, sugg[i]])
+        margin = conf - float(P[i, y[i]])
+        if conf >= min_confidence and margin >= min_margin:
+            out.append({"index": int(i), "given": int(y[i]), "suggested": int(sugg[i]), "confidence": conf, "margin": margin})
+    out.sort(key=lambda r: -r["confidence"])
+    return out
