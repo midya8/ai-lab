@@ -37,3 +37,8 @@ PYTHONPATH=src python -m bpekit eval corpus.txt -v 400   # held-out bytes/token
 ## BPE-dropout
 
 `tok.encode(text, dropout=0.1, rng=random.Random(0))` skips each applicable merge with probability p (Provilkov et al., 2020), giving varied segmentations of the same text for training-time regularisation; decoding stays lossless and specials are untouched. Default `dropout=0` is the unchanged deterministic path. Only the mechanics are tested here (round-trip, variation, longer sequences as p rises, seeded reproducibility); no downstream model-quality claim is made (5 tests, 20 total).
+
+
+## Vocab-size sweep
+
+`bpekit.sweep.sweep(text, [sizes])` trains `train_fast` per size on the first 80% and reports train vs held-out bytes/token; `experiments/sweep.py FILE` prints the table. Measured on 775 KB of concatenated stdlib `email` source (single split, one run): vocab 300 → 1.505 held-out, 400 → 1.987, 600 → 2.481, 800 → 2.796, 1200 → 3.249, 1600 → 3.542 bytes/token. Returns diminish steadily; the train/held-out gap peaks near 800 (+0.069) then narrows, and stays small because source code repeats identifiers across the split. Not a claim about natural-language text (3 tests, 23 total).

@@ -218,6 +218,7 @@
 - bpekit: train_fast incremental trainer, identical merges, ~15x faster on 4.4 MB (11 tests)
 - bpekit: GPT-2-style vocab.json/merges.txt export + validated import (round-trip identical encodings; 15 tests)
 - bpekit: BPE-dropout stochastic encoding (lossless, seeded; 20 tests)
+- bpekit: vocab-size sweep (held-out bytes/token vs vocab; 23 tests)
 
 
 ## Next
