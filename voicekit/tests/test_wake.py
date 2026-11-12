@@ -78,3 +78,17 @@ def test_margin_filter_drops_ambiguous_keeps_probless():
     assert abs(margin(clear) - .85) < 1e-9 and margin(bare) is None
     assert margin_filter([clear, vague, bare], 0.2) == [clear, bare]
     assert margin_filter([vague], 0.0) == [vague]
+
+
+def test_max_session_caps_continuous_speech():
+    evs = [ev("timer", 0, .5)] + [ev("on", 1 + i, 1.4 + i) for i in range(10)]
+    uncapped = WakeGate("timer", listen_s=2).filter(evs)
+    capped = WakeGate("timer", listen_s=2, max_session_s=4).filter(evs)
+    assert len(uncapped) == 10
+    assert [e.start_s for e in capped] == [1, 2, 3, 4]
+
+
+def test_new_wake_after_cap_starts_fresh_session():
+    g = WakeGate("timer", listen_s=2, max_session_s=3)
+    out = g.filter([ev("timer", 0, .5), ev("on", 1, 1.4), ev("on", 5, 5.4), ev("timer", 6, 6.5), ev("off", 7, 7.4)])
+    assert [e.start_s for e in out] == [1, 7]

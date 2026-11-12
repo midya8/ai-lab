@@ -8,6 +8,8 @@ event timestamps, not wall-clock time, so it behaves identically on live and rep
 * ARMED: events starting within ``listen_s`` of the last activity (wake end, or the end of the
   last accepted command word) are passed through. Each accepted word extends the session, so a
   multi-word command such as "lights on" stays in one session. A longer silence returns to IDLE.
+* ``max_session_s`` (optional) caps a session at that many seconds after its wake word, so
+  continuous speech (e.g. a TV) cannot keep the gate armed forever.
 * A repeated wake word while armed just refreshes the session and is not forwarded.
 """
 from __future__ import annotations
@@ -22,6 +24,8 @@ class WakeGate:
     wake_word: str = "timer"
     listen_s: float = 3.0
     wake_confidence: float = 0.8
+    max_session_s: float | None = None  # hard cap on a session's length from its wake word
+    session_start: float = field(default=-1.0, init=False)
     armed_until: float = field(default=-1.0, init=False)
     dropped: list = field(default_factory=list, init=False, repr=False)
 
@@ -32,15 +36,23 @@ class WakeGate:
         """Feed one event; return it if it should reach the intent parser, else None."""
         if ev.word == self.wake_word:
             if ev.confidence >= self.wake_confidence or self.armed_at(ev.start_s):
-                self.armed_until = ev.end_s + self.listen_s
+                if not self.armed_at(ev.start_s):
+                    self.session_start = ev.start_s
+                self._extend(ev.end_s)
             else:
                 self.dropped.append((ev, "weak_wake"))
             return None
         if not self.armed_at(ev.start_s):
             self.dropped.append((ev, "not_armed"))
             return None
-        self.armed_until = ev.end_s + self.listen_s
+        self._extend(ev.end_s)
         return ev
+
+    def _extend(self, end_s: float) -> None:
+        until = end_s + self.listen_s
+        if self.max_session_s is not None:
+            until = min(until, self.session_start + self.max_session_s)
+        self.armed_until = until
 
     def filter(self, events: list[Event]) -> list[Event]:
         out = []
