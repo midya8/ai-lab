@@ -255,6 +255,12 @@ def test_tar_extractall():
     assert rules("a.py", "import tarfile\nt = tarfile.open(p)\nt.extractall(d, filter='data')\n") == []
 
 
+def test_cleartext_protocol():
+    assert rules("a.py", "import ftplib\nf = ftplib.FTP(h)\n") == [(2, "py-cleartext-protocol")]
+    assert rules("a.py", "import ftplib\nf = ftplib.FTP_TLS(h)\n") == []
+    assert rules("a.py", "import smtplib\ns = smtplib.SMTP_SSL(h)\n") == []
+
+
 def test_chmod_world_writable():
     assert rules("a.py", "import os\nos.chmod(p, 0o777)\n") == [(2, "py-chmod-world-writable")]
     assert rules("a.py", "import os\nos.chmod(p, 0o600)\n") == []
