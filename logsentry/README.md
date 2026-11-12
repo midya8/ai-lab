@@ -32,3 +32,6 @@ Per-template rate detectors, streaming mode, Prometheus exporter.
 
 ## Grafana dashboard (v0.6)
 `python src/logsentry/grafana.py dashboard.json` writes an importable Grafana dashboard (events/sec by level, anomalies by kind, window and anomaly stats) over the v0.4 metrics; a test checks every query only references exported metrics.
+
+## Seasonality-aware volume detection (v0.7)
+`seasonal.py` / `detect_seasonal(events, window=60, period=24)` compares each window only to windows at the same phase of the cycle (e.g. same time on previous days) using median/MAD with a Poisson noise floor (scale >= sqrt(median)), so regular daily peaks are not flagged. Tests on a synthetic sinusoidal workload: the plain rolling detector raises volume false alarms on the clean cycle, the seasonal one raises none, and an injected 3x surge at the cycle peak (or a near-total drop) is found. The first `min_cycles` cycles are warm-up. Synthetic data only; the Poisson floor was added after a first version false-alarmed on the clean series.
