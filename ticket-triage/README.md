@@ -28,3 +28,5 @@ Measured on synthetic tickets (500 tickets, uniform label flips, mean of 3 seeds
 | 5% | 0.88 | 0.84 |
 | 10% | 0.78 | 0.87 |
 | 20% | 0.73 | 0.88 |
+
+Duplicate detection (`triage.dedupe`): TF-IDF cosine pairs via `find_duplicates(texts, threshold)` and union-find `cluster()` that groups transitive near-duplicates (O(n^2), fine for thousands of tickets; not tuned on real data).
