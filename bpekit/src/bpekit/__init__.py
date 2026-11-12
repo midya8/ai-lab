@@ -4,3 +4,5 @@ from .spans import encode_with_offsets, chunk_by_tokens
 __all__ += ["encode_with_offsets", "chunk_by_tokens"]
 from .prune import prune
 __all__ += ["prune"]
+from .stream import StreamDecoder, stream_decode
+__all__ += ["StreamDecoder", "stream_decode"]

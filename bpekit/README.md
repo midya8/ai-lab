@@ -73,3 +73,7 @@ chunks = chunk_by_tokens(tok, text, max_tokens=256, overlap=32)
 ```
 
 Chunks cut only at word boundaries, never exceed `max_tokens` (except a single word longer than the budget), and with `overlap=0` concatenate back to the input. A token covering part of a multi-byte character reports the whole character's span.
+
+## Streaming decode
+
+`StreamDecoder(tok).push(id)` returns the text completed by each token (empty while inside a multi-byte UTF-8 character); `stream_decode(tok, ids)` yields pieces whose concatenation equals `tok.decode(ids)`. A truncated stream flushes as U+FFFD.

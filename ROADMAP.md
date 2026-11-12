@@ -231,6 +231,7 @@
 - bpekit: `prune` drops merges a reference corpus never emits (keeping needed components; same token count on reference, 39 tests)
 - voicekit: `merge_duplicates` collapses split same-word detections (93 tests with 3 new)
 - voicekit: `margin_filter` drops ambiguous top-2-margin events (94 tests)
+- bpekit: `StreamDecoder` / `stream_decode` UTF-8-safe incremental decoding (5 tests)
 
 
 ## Next
