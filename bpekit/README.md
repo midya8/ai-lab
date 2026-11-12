@@ -77,3 +77,8 @@ Chunks cut only at word boundaries, never exceed `max_tokens` (except a single w
 ## Streaming decode
 
 `StreamDecoder(tok).push(id)` returns the text completed by each token (empty while inside a multi-byte UTF-8 character); `stream_decode(tok, ids)` yields pieces whose concatenation equals `tok.decode(ids)`. A truncated stream flushes as U+FFFD.
+
+
+## Vocabulary extension (`bpekit.extend`)
+
+`extend(tok, domain_text, n_new)` keeps every existing merge (old token ids unchanged) and continues BPE training on new text, starting from the old tokenizer's segmentation. Special tokens come after the merges, so their ids shift by the number of merges added. Tested: old merges preserved, lossless round-trip, better compression on the domain text without lengthening the original text, deterministic, early stop when no pair repeats (4 tests, 48 total). Model embeddings for the new ids would still need training; no downstream claim is made.

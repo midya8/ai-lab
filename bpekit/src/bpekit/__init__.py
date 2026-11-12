@@ -6,3 +6,5 @@ from .prune import prune
 __all__ += ["prune"]
 from .stream import StreamDecoder, stream_decode
 __all__ += ["StreamDecoder", "stream_decode"]
+from .extend import extend
+__all__ += ["extend"]
