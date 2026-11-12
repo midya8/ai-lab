@@ -17,6 +17,7 @@ from vecdb import Collection
 c = Collection(dim=384, metric="cosine", index="hnsw", M=16, ef_construction=100)
 c.upsert(["a", "b"], vectors, [{"lang": "en", "year": 2024}, {"lang": "fr", "year": 2021}])
 hits = c.query(query_vector, k=5, where={"lang": "en", "year": {"$gte": 2023}}, ef=64)
+diverse = c.query_mmr(query_vector, k=5, fetch_k=50, lambda_mult=0.5)  # MMR: relevance vs. redundancy
 c.save("my_collection"); c = Collection.load("my_collection")
 ```
 

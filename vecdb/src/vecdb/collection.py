@@ -134,6 +134,34 @@ class Collection:
             out.append([Hit(self._ids[r], float(d), dict(self._meta[r])) for r, d in zip(ri, di) if r >= 0])
         return out
 
+    def query_mmr(self, vector, k: int = 10, fetch_k: int = 50, lambda_mult: float = 0.5,
+                  where: dict | None = None, **search_params):
+        """Maximal Marginal Relevance: fetch ``fetch_k`` candidates, then greedily pick ``k`` that balance
+        relevance to the query (``lambda_mult``) against similarity to already-picked hits (cosine).
+        ``lambda_mult=1`` equals plain top-k; ``0`` is maximum diversity. Single query vector only."""
+        if not 0.0 <= lambda_mult <= 1.0:
+            raise ValueError("lambda_mult must be in [0, 1]")
+        q = np.asarray(vector, dtype=np.float32).reshape(-1)
+        cands = self.query(q[None, :], k=max(fetch_k, k), where=where, **search_params)[0]
+        if not cands:
+            return []
+        V = np.stack([self.get(h.id)[0] for h in cands]).astype(np.float64)
+        V /= np.maximum(np.linalg.norm(V, axis=1, keepdims=True), 1e-12)
+        qn = q / max(float(np.linalg.norm(q)), 1e-12)
+        rel = V @ qn
+        chosen: list[int] = []
+        rest = list(range(len(cands)))
+        while rest and len(chosen) < k:
+            if chosen:
+                red = (V[rest] @ V[chosen].T).max(axis=1)
+            else:
+                red = np.zeros(len(rest))
+            score = lambda_mult * rel[rest] - (1 - lambda_mult) * red
+            best = rest[int(np.argmax(score))]
+            chosen.append(best)
+            rest.remove(best)
+        return [cands[i] for i in chosen]
+
     def count(self, where: dict | None = None) -> int:
         if not where:
             return len(self)
