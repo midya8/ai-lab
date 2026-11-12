@@ -226,6 +226,7 @@
 - voicekit: `WakeGate` wake-word session gating (armed window, weak-wake rejection; 90 tests)
 - reviewkit: AST rule py-catch-baseexception (`except BaseException` without re-raise; 120 tests)
 - reviewkit: AST rule py-raise-notimplemented (`raise NotImplemented`; tests pass)
+- voicekit: `Assistant` end-to-end streaming (audio -> wake gate -> intents, quiet-window command grouping; 97 tests)
 
 
 ## Next

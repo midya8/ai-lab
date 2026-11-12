@@ -173,3 +173,16 @@ each accepted word extends the session by `listen_s`, silence longer than that d
 are kept in `gate.dropped` with a reason (`not_armed`, `weak_wake`). It works on event timestamps, so live
 and replayed audio behave identically. Tested on synthetic events plus one synthetic end-to-end stream
 (not a benchmark of wake-word accuracy).
+
+
+## Assistant (audio in, commands out)
+
+`Assistant` chains Recognizer -> WakeGate -> intent grammar over streaming audio. A command is emitted once the
+session has been quiet for `group_gap_s` (default 1.2 s), so it arrives slightly after it is spoken.
+
+```python
+from voicekit import Assistant, Recognizer, train_model
+bot = Assistant(Recognizer(train_model()))
+for cmd in bot.process(samples):      # or bot.feed(chunk) ... bot.flush()
+    print(cmd.intent, cmd.words)      # cmd.intent is None for words that are not a valid command
+```
