@@ -42,3 +42,8 @@ PYTHONPATH=src python -m bpekit eval corpus.txt -v 400   # held-out bytes/token
 ## Vocab-size sweep
 
 `bpekit.sweep.sweep(text, [sizes])` trains `train_fast` per size on the first 80% and reports train vs held-out bytes/token; `experiments/sweep.py FILE` prints the table. Measured on 775 KB of concatenated stdlib `email` source (single split, one run): vocab 300 → 1.505 held-out, 400 → 1.987, 600 → 2.481, 800 → 2.796, 1200 → 3.249, 1600 → 3.542 bytes/token. Returns diminish steadily; the train/held-out gap peaks near 800 (+0.069) then narrows, and stays small because source code repeats identifiers across the split. Not a claim about natural-language text (3 tests, 23 total).
+
+
+## Vocabulary utilisation
+
+`bpekit.usage.usage(tok, text)` reports how many merged tokens a text never emits, the unigram entropy of emitted ids, and the most frequent merged tokens. A high unused fraction on held-out text signals a vocab over-fitted to the training split. Mechanics only are tested (3 tests, 26 total); no corpus-level finding is claimed.
