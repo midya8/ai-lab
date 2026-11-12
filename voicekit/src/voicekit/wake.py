@@ -99,3 +99,34 @@ def margin_filter(events: list[Event], min_margin: float = 0.2) -> list[Event]:
         if m is None or m >= min_margin:
             out.append(ev)
     return out
+
+
+def smooth_events(events: list[Event], window: int = 3, max_gap_s: float = 0.3) -> list[Event]:
+    """Posterior smoothing over neighbouring detections.
+
+    Each event's class probabilities are averaged with up to ``window - 1`` immediately preceding
+    events of the same burst (consecutive gap <= ``max_gap_s``); the word becomes the argmax of
+    the averaged posterior and the confidence its value. Events without ``probs`` pass through.
+    Timestamps are unchanged. Note this blends *different* words in a fast phrase, so it suits
+    resolving repeated/split detections of one word more than continuous multi-word commands;
+    use a small ``window`` or ``max_gap_s`` there.
+    """
+    if window < 1:
+        raise ValueError("window must be >= 1")
+    ordered = sorted(events, key=lambda e: e.start_s)
+    out: list[Event] = []
+    hist: list[Event] = []
+    for ev in ordered:
+        if not ev.probs:
+            out.append(ev)
+            hist = []
+            continue
+        if hist and ev.start_s - hist[-1].end_s > max_gap_s:
+            hist = []
+        hist.append(ev)
+        hist = hist[-window:]
+        keys = set().union(*(h.probs.keys() for h in hist))
+        avg = {k: sum(h.probs.get(k, 0.0) for h in hist) / len(hist) for k in keys}
+        word = max(avg, key=avg.get)
+        out.append(Event(word, float(avg[word]), ev.start_s, ev.end_s, probs=avg))
+    return out

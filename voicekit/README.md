@@ -170,7 +170,7 @@ commands = WakeGate("timer", listen_s=3.0, wake_confidence=0.8).filter(events)
 
 Commands are only forwarded while a session is armed by the wake word (confidence >= `wake_confidence`);
 each accepted word extends the session by `listen_s`, silence longer than that disarms it. Dropped events
-`max_session_s=N` caps a session N seconds after its wake word so continuous speech cannot hold the gate open. Dropped events are kept in `gate.dropped` with a reason (`not_armed`, `weak_wake`). It works on event timestamps, so live
+`max_session_s=N` caps a session N seconds after its wake word so continuous speech cannot hold the gate open. `smooth_events(events, window=3, max_gap_s=0.3)` (in `voicekit.wake`) averages class posteriors over neighbouring detections to stop a word flickering between labels; it blends different words in fast phrases, so keep the window small there (unit-tested, not benchmarked). Dropped events are kept in `gate.dropped` with a reason (`not_armed`, `weak_wake`). It works on event timestamps, so live
 and replayed audio behave identically. Tested on synthetic events plus one synthetic end-to-end stream
 (not a benchmark of wake-word accuracy).
 

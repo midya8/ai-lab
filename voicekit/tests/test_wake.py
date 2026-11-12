@@ -92,3 +92,33 @@ def test_new_wake_after_cap_starts_fresh_session():
     g = WakeGate("timer", listen_s=2, max_session_s=3)
     out = g.filter([ev("timer", 0, .5), ev("on", 1, 1.4), ev("on", 5, 5.4), ev("timer", 6, 6.5), ev("off", 7, 7.4)])
     assert [e.start_s for e in out] == [1, 7]
+
+
+def pev(w, a, b, probs):
+    return Event(w, max(probs.values()), a, b, probs=probs)
+
+
+def test_smooth_events_fixes_a_flickering_word():
+    from voicekit.wake import smooth_events
+    evs = [pev("on", 0, .3, {"on": .9, "off": .1}), pev("off", .35, .6, {"on": .45, "off": .55}),
+           pev("on", .65, .9, {"on": .8, "off": .2})]
+    out = smooth_events(evs, window=3)
+    assert [e.word for e in out] == ["on", "on", "on"]
+    assert abs(out[1].confidence - 0.675) < 1e-9
+
+
+def test_smooth_events_gap_resets_and_passthrough():
+    from voicekit.wake import smooth_events
+    a = pev("on", 0, .3, {"on": .9, "off": .1})
+    b = pev("off", 2, 2.3, {"on": .2, "off": .8})
+    out = smooth_events([a, b], window=3, max_gap_s=.3)
+    assert [e.word for e in out] == ["on", "off"] and out[1].confidence == .8
+    bare = Event("x", .5, 5, 5.2)
+    assert smooth_events([bare]) == [bare]
+
+
+def test_smooth_events_window_validation():
+    import pytest
+    from voicekit.wake import smooth_events
+    with pytest.raises(ValueError):
+        smooth_events([], window=0)
