@@ -1,11 +1,13 @@
 """Calendar export: turn the tracker into a .ics file you can import.
 
 ``autojob calendar`` builds one calendar over the next ``--days`` days
-(default 14) from three things the tracker already knows:
+(default 14) from four things the tracker already knows:
 
 - interview rounds in the window (from ``interview.py``);
 - offer decision deadlines in the window (the latest offer per
   application, from ``offer.py``);
+- posting closing dates in the window (the entry's ``deadline`` field,
+  from ``deadlines.py``);
 - follow-ups due as of today (from ``followup.py``), dated today —
   the action is due now, so the event is today, not the day the
   application went quiet.
@@ -187,6 +189,40 @@ def _offer_deadline_events(entries, today, end):
     return events
 
 
+def _posting_deadline_events(entries, today, end):
+    """Posting closing dates in the window, one per application.
+
+    Uses the entry's ``deadline`` field (see deadlines.py). A closing
+    date already passed is outside the window by construction, so an
+    overdue posting never exports — the list command is where overdue
+    dates are watched. Deadlines on terminal applications are left
+    out, the same rule as interviews and offer deadlines.
+    """
+    events = []
+    for entry in entries:
+        if entry.get("status") in TERMINAL_STATUSES:
+            continue
+        deadline = _parse_date(entry.get("deadline"))
+        if deadline is None or deadline < today or deadline > end:
+            continue
+        summary = (f"Applications close: {entry.get('title')} at "
+                   f"{entry.get('company')}")
+        description = [
+            f"Applications for the {entry.get('title')} role at "
+            f"{entry.get('company')} close on {entry.get('deadline')} "
+            f"(status {entry.get('status')}, applied "
+            f"{entry.get('applied_at')}).",
+            "Recorded with `deadlines --record`; see `deadlines` for "
+            "the full list, including overdue ones.",
+        ]
+        events.append(_event("posting_deadline", entry.get("id"),
+                             entry.get("company"), entry.get("title"),
+                             entry["deadline"], summary,
+                             " ".join(description),
+                             days_until=(deadline - today).days))
+    return events
+
+
 def _followup_events(entries, today):
     """Applications due a follow-up as of today, each dated today."""
     events = []
@@ -225,8 +261,10 @@ def build_calendar(entries, today=None, days=DEFAULT_DAYS, wait_days=None):
     events = []
     events.extend(_interview_events(entries, today, end))
     events.extend(_offer_deadline_events(entries, today, end))
+    events.extend(_posting_deadline_events(entries, today, end))
     events.extend(_followup_events(entries, today))
-    kind_order = {"interview": 0, "offer_deadline": 1, "followup": 2}
+    kind_order = {"interview": 0, "offer_deadline": 1,
+                  "posting_deadline": 2, "followup": 3}
     events.sort(key=lambda e: (e["date"], e["start"] or "",
                                kind_order[e["kind"]],
                                (e["company"] or "").lower(),
@@ -240,6 +278,8 @@ def build_calendar(entries, today=None, days=DEFAULT_DAYS, wait_days=None):
             "interviews": sum(1 for e in events if e["kind"] == "interview"),
             "offer_deadlines": sum(1 for e in events
                                    if e["kind"] == "offer_deadline"),
+            "posting_deadlines": sum(1 for e in events
+                                     if e["kind"] == "posting_deadline"),
             "followups": sum(1 for e in events if e["kind"] == "followup"),
         },
     }

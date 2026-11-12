@@ -33,11 +33,16 @@ Subcommands (all offline, stdlib only):
   contacts  --record --id APP-001 --name NAME --date YYYY-MM-DD
             [--role ROLE] [--channel email|linkedin|phone|in-person|other]
             [--note TEXT] [--today YYYY-MM-DD]
+  timeline  [--log L] [--id APP-001] [--since YYYY-MM-DD]
+            [--until YYYY-MM-DD] [--kind KIND ...] [--oldest] [--json]
+            [--out F] [--today YYYY-MM-DD]
+  deadlines [--log L] [--days N] [--overdue] [--json] [--out F] [--today YYYY-MM-DD]
+  deadlines --record --id APP-001 --date YYYY-MM-DD [--today YYYY-MM-DD]
 
 Exit codes: 0 ok · 1 usage error · 2 profile/posting load error ·
 3 match below --fail-under · 4 draft/apply refused below --min-coverage ·
 5 duplicate application · 6 illegal status transition, follow-up refused,
-offer refused, interview refused, or contact refused.
+offer refused, interview refused, contact refused, or deadline refused.
 
 autojob prepares application packets for a human to review and submit. It
 never submits anything and never invents experience: every fact in a draft
@@ -58,6 +63,8 @@ from .calendar import build_calendar, calendar_json, render_ics
 from .contacts import (ContactError, collect_contacts, contacts_for,
                        contacts_json, render_contacts_markdown,
                        validate_contact)
+from .deadlines import (DeadlineError, collect_deadlines, deadlines_json,
+                        render_deadlines_markdown, validate_deadline)
 from .digest import build_digest, digest_json, render_digest_markdown
 from .followup import due_followups, followup_json, followup_report
 from .interview import (InterviewError, collect_interviews,
@@ -76,9 +83,12 @@ from .report import match_json, match_report
 from .salary import (analyze_salaries, render_salary_markdown, salary_json,
                      target_from_profile)
 from .tailor import build_tailor, render_tailor_markdown, tailor_json
-from .tracker import (TrackerError, add_application, read_log,
-                      record_contact, record_followup, record_interview,
-                      record_offer, set_status, slug)
+from .timeline import (KINDS, collect_timeline, render_timeline_markdown,
+                       timeline_json)
+from .tracker import (TrackerError, add_application, find_application,
+                      read_log, record_contact, record_deadline,
+                      record_followup, record_interview, record_offer,
+                      set_status, slug)
 
 DEFAULT_OUT_DIR = "applications"
 
@@ -192,6 +202,13 @@ def _cmd_apply(args):
         print(f"refusing to apply: score below --min-coverage {args.min_coverage}",
               file=sys.stderr)
         return 4
+    deadline = None
+    if args.deadline is not None:
+        try:
+            deadline = validate_deadline(args.deadline)
+        except DeadlineError as exc:
+            print(f"error: cannot apply: {exc}", file=sys.stderr)
+            return 1
     packet, files = _build_packet(profile, posting, match, args.out_dir)
     log_path = args.log or str(Path(args.out_dir) / "applications.jsonl")
     if args.dry_run:
@@ -221,6 +238,7 @@ def _cmd_apply(args):
             source=args.source,
             match_score=match["score"],
             packet_dir=str(packet),
+            deadline=deadline,
             required_matched=match["required_matched"],
             required_missing=match["required_missing"],
             preferred_matched=match["preferred_matched"],
@@ -682,6 +700,113 @@ def _cmd_contacts(args):
     return 0
 
 
+def _cmd_timeline(args):
+    if args.today is not None:
+        try:
+            today = datetime.date.fromisoformat(args.today)
+        except ValueError:
+            print(f"error: --today must be YYYY-MM-DD, got {args.today!r}",
+                  file=sys.stderr)
+            return 1
+    else:
+        today = datetime.date.today()
+    since = until = None
+    for flag, value in (("--since", args.since), ("--until", args.until)):
+        if value is not None:
+            try:
+                parsed = datetime.date.fromisoformat(value)
+            except ValueError:
+                print(f"error: {flag} must be YYYY-MM-DD, got {value!r}",
+                      file=sys.stderr)
+                return 1
+            if flag == "--since":
+                since = parsed
+            else:
+                until = parsed
+    if since is not None and until is not None and since > until:
+        print(f"error: --since {args.since} is after --until {args.until}",
+              file=sys.stderr)
+        return 1
+    kinds = None
+    if args.kind:
+        bad = [kind for kind in args.kind if kind not in KINDS]
+        if bad:
+            print(f"error: unknown --kind {bad[0]!r}; one of: "
+                  f"{', '.join(KINDS)}", file=sys.stderr)
+            return 1
+        kinds = args.kind
+    try:
+        entries = read_log(args.log)
+    except TrackerError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    if args.id and find_application(entries, args.id) is None:
+        print(f"error: no application with id {args.id!r}", file=sys.stderr)
+        return 1
+    data = collect_timeline(entries, today=today, since=since, until=until,
+                            kinds=kinds, app_id=args.id, oldest=args.oldest)
+    text = timeline_json(data) if args.json else render_timeline_markdown(data)
+    if args.out:
+        Path(args.out).write_text(text, encoding="utf-8")
+        print(f"wrote {args.out}")
+    else:
+        print(text, end="")
+    return 0
+
+
+def _cmd_deadlines(args):
+    if args.today is not None:
+        try:
+            today = datetime.date.fromisoformat(args.today)
+        except ValueError:
+            print(f"error: --today must be YYYY-MM-DD, got {args.today!r}",
+                  file=sys.stderr)
+            return 1
+    else:
+        today = datetime.date.today()
+    if args.record:
+        if not args.id:
+            print("error: --record needs --id APP-001", file=sys.stderr)
+            return 1
+        try:
+            deadline = validate_deadline(args.date)
+        except DeadlineError as exc:
+            print(f"error: cannot record closing date: {exc}",
+                  file=sys.stderr)
+            return 1
+        try:
+            entry = record_deadline(args.log, args.id, deadline,
+                                    today=today.isoformat())
+        except TrackerError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 6
+        print(f"recorded a closing date for {entry['id']}: "
+              f"{entry['company']} — {entry['title']} "
+              f"(closes {deadline})")
+        return 0
+    if args.id or args.date:
+        print("error: --id and --date need --record", file=sys.stderr)
+        return 1
+    if args.days is not None and args.days < 0:
+        print(f"error: --days must be 0 or more, got {args.days}",
+              file=sys.stderr)
+        return 1
+    try:
+        entries = read_log(args.log)
+    except TrackerError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    data = collect_deadlines(entries, today=today, days=args.days,
+                             overdue_only=args.overdue)
+    text = deadlines_json(data) if args.json else render_deadlines_markdown(data)
+    if args.out:
+        Path(args.out).write_text(text, encoding="utf-8")
+        print(f"wrote {args.out}")
+    else:
+        print(text, end="")
+    return 0
+
+
 def _cmd_calendar(args):
     if args.today is not None:
         try:
@@ -781,6 +906,9 @@ def build_parser():
     p.add_argument("--out-dir", default=DEFAULT_OUT_DIR)
     p.add_argument("--log")
     p.add_argument("--source")
+    p.add_argument("--deadline", default=None,
+                   help="the posting's closing date YYYY-MM-DD, recorded "
+                        "on the application")
     p.add_argument("--dry-run", action="store_true")
     p.set_defaults(func=_cmd_apply)
 
@@ -967,7 +1095,8 @@ def build_parser():
 
     p = sub.add_parser("calendar", help="export the next N days as an .ics "
                                          "calendar: interview rounds, offer "
-                                         "decision deadlines, and follow-ups "
+                                         "decision deadlines, posting "
+                                         "closing dates, and follow-ups "
                                          "due today")
     p.add_argument("--log", default=f"{DEFAULT_OUT_DIR}/applications.jsonl")
     p.add_argument("--days", type=int, default=14,
@@ -1015,6 +1144,52 @@ def build_parser():
     p.add_argument("--note", default=None,
                    help="with --record: a short note stored with the contact")
     p.set_defaults(func=_cmd_contacts)
+
+    p = sub.add_parser("timeline", help="one chronological feed of "
+                                          "everything recorded — "
+                                          "applications, status moves, "
+                                          "follow-ups, interviews, contacts, "
+                                          "offers — newest first")
+    p.add_argument("--log", default=f"{DEFAULT_OUT_DIR}/applications.jsonl")
+    p.add_argument("--json", action="store_true")
+    p.add_argument("--out", default=None,
+                   help="write the timeline to this file instead of stdout")
+    p.add_argument("--today", default=None,
+                   help="reference date YYYY-MM-DD (default: today)")
+    p.add_argument("--id", default=None,
+                   help="show only this application's events")
+    p.add_argument("--since", default=None,
+                   help="first event date to include, YYYY-MM-DD (inclusive)")
+    p.add_argument("--until", default=None,
+                   help="last event date to include, YYYY-MM-DD (inclusive)")
+    p.add_argument("--kind", action="append", default=None,
+                   help="only events of this kind; repeatable "
+                        f"({', '.join(KINDS)})")
+    p.add_argument("--oldest", action="store_true",
+                   help="chronological order instead of newest first")
+    p.set_defaults(func=_cmd_timeline)
+
+    p = sub.add_parser("deadlines", help="list posting closing dates, "
+                                          "soonest first, or record one "
+                                          "with --record")
+    p.add_argument("--log", default=f"{DEFAULT_OUT_DIR}/applications.jsonl")
+    p.add_argument("--json", action="store_true")
+    p.add_argument("--out", default=None,
+                   help="write the list to this file instead of stdout")
+    p.add_argument("--today", default=None,
+                   help="reference date YYYY-MM-DD (default: today)")
+    p.add_argument("--days", type=int, default=None,
+                   help="only deadlines this many days out or sooner "
+                        "(overdue ones are always shown)")
+    p.add_argument("--overdue", action="store_true",
+                   help="only deadlines that already passed")
+    p.add_argument("--record", action="store_true",
+                   help="record a closing date instead of listing")
+    p.add_argument("--id", default=None,
+                   help="with --record: the application to record for")
+    p.add_argument("--date", default=None,
+                   help="with --record: the closing date YYYY-MM-DD")
+    p.set_defaults(func=_cmd_deadlines)
 
     p = sub.add_parser("report", help="funnel analytics over logged applications")
     p.add_argument("--log", default=f"{DEFAULT_OUT_DIR}/applications.jsonl")

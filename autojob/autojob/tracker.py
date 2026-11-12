@@ -66,7 +66,7 @@ def next_id(entries):
 
 
 def add_application(log_path, company, title, source=None, match_score=None,
-                    packet_dir=None, today=None,
+                    packet_dir=None, today=None, deadline=None,
                     required_matched=None, required_missing=None,
                     preferred_matched=None, preferred_missing=None):
     """Append an application. Refuses duplicates on (company, title).
@@ -74,7 +74,10 @@ def add_application(log_path, company, title, source=None, match_score=None,
     The four skill lists (v0.6) record what the posting asked for and
     which of those the profile matched, so the digest can count gaps
     across applications. They are stored only when supplied — entries
-    logged by older callers simply carry no skill data.
+    logged by older callers simply carry no skill data. ``deadline``
+    (v0.15) is the posting's closing date as supplied by the caller;
+    it is stored as a field on the entry, like ``match_score`` — a
+    property of the posting, not an event.
     """
     entries = read_log(log_path)
     for entry in entries:
@@ -96,6 +99,8 @@ def add_application(log_path, company, title, source=None, match_score=None,
         "match_score": match_score,
         "packet_dir": packet_dir,
     }
+    if deadline is not None:
+        entry["deadline"] = deadline
     if required_matched is not None:
         entry["required_matched"] = list(required_matched)
     if required_missing is not None:
@@ -275,6 +280,37 @@ def record_contact(log_path, app_id, contact, today=None):
                 "at": contact["date"],
                 "name": contact.get("name"),
             })
+            _write_log(log_path, entries)
+            return entry
+    raise TrackerError(f"no application with id {app_id!r}")
+
+
+def record_deadline(log_path, app_id, deadline, today=None):
+    """Set (or move) the posting closing date on an application.
+
+    Stores the (already validated) date as the entry's ``deadline``
+    field. Re-recording moves the date — a posting's closing date can
+    change — so this is a set, not an append. Deliberately no history
+    event: a closing date is a property of the posting, not something
+    that happened to the application, so recording one must not reset
+    the follow-up or stale clocks (see followup.last_activity, which
+    takes the latest date of any history event) and does not appear in
+    the timeline feed. Refuses terminal applications: there is nothing
+    left to submit for them. ``today`` is accepted for symmetry with
+    the other record functions but the closing date carries its own
+    date, so it is ignored.
+    """
+    if today is None:
+        today = datetime.date.today().isoformat()
+    entries = read_log(log_path)
+    for entry in entries:
+        if entry["id"] == app_id:
+            if entry.get("status") in TERMINAL:
+                raise TrackerError(
+                    f"cannot record a closing date for {app_id}: status is "
+                    f"{entry['status']!r} (terminal)"
+                )
+            entry["deadline"] = deadline
             _write_log(log_path, entries)
             return entry
     raise TrackerError(f"no application with id {app_id!r}")

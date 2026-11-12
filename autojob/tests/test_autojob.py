@@ -21,6 +21,9 @@ from autojob.calendar import (build_calendar, calendar_json, render_ics)
 from autojob.contacts import (ContactError, collect_contacts, contacts_for,
                               contacts_json, render_contacts_markdown,
                               validate_contact)
+from autojob.deadlines import (DeadlineError, collect_deadlines,
+                               deadlines_json, render_deadlines_markdown,
+                               validate_deadline)
 from autojob.digest import (build_digest, digest_json, gap_leaderboard,
                             render_digest_markdown)
 from autojob.followup import (draft_followup, due_followups, followups_sent,
@@ -43,10 +46,12 @@ from autojob.offer import (OfferError, compare_offers, first_year_total,
                            latest_offer, offer_json, render_offer_markdown,
                            total_cash, validate_offer)
 from autojob.tailor import build_tailor, render_tailor_markdown, tailor_json
+from autojob.timeline import (collect_timeline, render_timeline_markdown,
+                              timeline_json)
 from autojob.tracker import (TrackerError, add_application, read_log,
-                             record_contact, record_followup,
-                             record_interview, record_offer, set_status,
-                             slug)
+                             record_contact, record_deadline,
+                             record_followup, record_interview, record_offer,
+                             set_status, slug)
 
 HERE = Path(__file__).resolve().parent
 EXAMPLE_PROFILE = HERE.parent / "examples" / "profile.example.json"
@@ -455,7 +460,7 @@ class TestCLI(unittest.TestCase):
 
     def test_version(self):
         self.assertTrue(__version__.startswith("0."))
-        self.assertEqual(__version__, "0.13.0")
+        self.assertEqual(__version__, "0.15.0")
 
 
 def _fixture_log(tmp):
@@ -3055,6 +3060,7 @@ class TestCalendar(unittest.TestCase):
             data = build_calendar(entries, today=datetime.date(2026, 11, 9))
             self.assertEqual(data["counts"], {"events": 5, "interviews": 3,
                                               "offer_deadlines": 1,
+                                              "posting_deadlines": 0,
                                               "followups": 1})
             self.assertEqual(data["window"],
                              {"from": "2026-11-09", "to": "2026-11-23",
@@ -3702,6 +3708,824 @@ class TestContactsCLI(unittest.TestCase):
             code, _ = self._run(["contacts", "--log", str(log),
                                  "--id", "APP-999", "--today", "2026-11-08"])
             self.assertEqual(code, 1)
+
+
+class TestTimeline(unittest.TestCase):
+    def _entries(self):
+        return [
+            {"id": "APP-001", "company": "Northwind Analytics",
+             "title": "Data Analyst", "status": "screening",
+             "match_score": 0.625,
+             "history": [
+                 {"status": "applied", "at": "2026-11-01"},
+                 {"status": "screening", "at": "2026-11-03"},
+                 {"kind": "followup", "at": "2026-11-05",
+                  "note": "Checking in after the screen."},
+                 {"kind": "offer", "at": "2026-11-08"},
+             ],
+             "offers": [
+                 {"base": 130000, "currency": "CAD", "period": "annual",
+                  "bonus": 10000, "equity": 20000, "vesting_years": 4},
+             ]},
+            {"id": "APP-002", "company": "Harbour Analytics",
+             "title": "Business Intelligence Analyst", "status": "interview",
+             "history": [
+                 {"status": "applied", "at": "2026-11-01"},
+                 {"status": "screening", "at": "2026-11-02"},
+                 {"status": "interview", "at": "2026-11-06"},
+                 {"kind": "contact", "at": "2026-11-01",
+                  "name": "Alex Rivera"},
+                 {"kind": "interview", "at": "2026-11-07",
+                  "round": "Recruiter screen"},
+                 {"kind": "interview", "at": "2026-11-10",
+                  "round": "Hiring manager"},
+             ],
+             "contacts": [
+                 {"name": "Alex Rivera", "role": "Hiring manager",
+                  "channel": "email", "date": "2026-11-01",
+                  "note": "Replied within the hour."},
+             ],
+             "interviews": [
+                 {"date": "2026-11-07", "round": "Recruiter screen",
+                  "interviewer": None, "mode": "phone",
+                  "duration_minutes": 30, "time": None, "notes": None},
+                 {"date": "2026-11-10", "round": "Hiring manager",
+                  "interviewer": "Priya Nair", "mode": "video",
+                  "duration_minutes": 45, "time": "14:30",
+                  "notes": "Bring the dashboard story."},
+             ]},
+        ]
+
+    def test_collect_newest_first_counts_and_range(self):
+        data = collect_timeline(self._entries())
+        self.assertEqual(data["order"], "newest first")
+        dates = [event["date"] for event in data["events"]]
+        self.assertEqual(dates, sorted(dates, reverse=True))
+        self.assertEqual(data["counts"]["total"], 10)
+        self.assertEqual(data["counts"]["by_kind"], {
+            "applied": 2, "status": 3, "followup": 1, "offer": 1,
+            "contact": 1, "interview": 2})
+        self.assertEqual(data["range"],
+                         {"from": "2026-11-01", "to": "2026-11-10"})
+        self.assertEqual(data["events"][0]["kind"], "interview")
+        self.assertEqual(data["events"][0]["date"], "2026-11-10")
+
+    def test_applied_line_carries_match_score(self):
+        data = collect_timeline(self._entries(), kinds=["applied"])
+        self.assertEqual(len(data["events"]), 2)
+        northwind = [e for e in data["events"]
+                     if e["id"] == "APP-001"][0]
+        self.assertEqual(northwind["summary"],
+                         "Applied to Data Analyst at Northwind Analytics "
+                         "(match 0.625)")
+        harbour = [e for e in data["events"] if e["id"] == "APP-002"][0]
+        self.assertEqual(harbour["summary"],
+                         "Applied to Business Intelligence Analyst at "
+                         "Harbour Analytics")
+
+    def test_status_followup_offer_lines(self):
+        data = collect_timeline(self._entries(), app_id="APP-001")
+        by_kind = {e["kind"]: e for e in data["events"]}
+        self.assertEqual(by_kind["status"]["summary"],
+                         "Moved to screening")
+        self.assertEqual(by_kind["followup"]["summary"],
+                         "Follow-up sent — Checking in after the screen.")
+        self.assertEqual(by_kind["followup"]["note"],
+                         "Checking in after the screen.")
+        self.assertEqual(by_kind["offer"]["summary"],
+                         "Offer recorded: 130,000 CAD base + 10,000 bonus "
+                         "+ 20,000 equity over 4y")
+
+    def test_interview_lines_resolve_details(self):
+        data = collect_timeline(self._entries(), kinds=["interview"])
+        self.assertEqual(len(data["events"]), 2)
+        screen = [e for e in data["events"]
+                  if e["summary"].startswith("Interview: Recruiter")][0]
+        self.assertEqual(screen["summary"],
+                         "Interview: Recruiter screen (phone, 30 min)")
+        hiring = [e for e in data["events"]
+                  if e["summary"].startswith("Interview: Hiring")][0]
+        self.assertEqual(hiring["summary"],
+                         "Interview: Hiring manager with Priya Nair "
+                         "(video, 45 min, 14:30)")
+        self.assertEqual(hiring["note"], "Bring the dashboard story.")
+
+    def test_contact_line_resolves_details(self):
+        data = collect_timeline(self._entries(), kinds=["contact"])
+        self.assertEqual(len(data["events"]), 1)
+        event = data["events"][0]
+        self.assertEqual(event["summary"],
+                         "Spoke to Alex Rivera (Hiring manager) via email")
+        self.assertEqual(event["note"], "Replied within the hour.")
+
+    def test_interview_contact_offer_fall_back_without_records(self):
+        entries = [
+            {"id": "APP-001", "company": "Northwind Analytics",
+             "title": "Data Analyst", "status": "screening",
+             "history": [
+                 {"status": "applied", "at": "2026-11-01"},
+                 {"kind": "interview", "at": "2026-11-04",
+                  "round": "Recruiter screen"},
+                 {"kind": "contact", "at": "2026-11-05", "name": "Sam Chen"},
+                 {"kind": "offer", "at": "2026-11-06"},
+             ]},
+        ]
+        data = collect_timeline(entries)
+        summaries = {e["kind"]: e["summary"] for e in data["events"]}
+        self.assertEqual(summaries["interview"],
+                         "Interview: Recruiter screen")
+        self.assertEqual(summaries["contact"], "Spoke to Sam Chen")
+        self.assertEqual(summaries["offer"], "Offer recorded")
+
+    def test_same_day_events_pair_in_log_order(self):
+        entries = [
+            {"id": "APP-001", "company": "Northwind Analytics",
+             "title": "Data Analyst", "status": "screening",
+             "history": [
+                 {"status": "applied", "at": "2026-11-01"},
+                 {"kind": "contact", "at": "2026-11-03",
+                  "name": "Sam Chen"},
+                 {"kind": "contact", "at": "2026-11-03",
+                  "name": "Sam Chen"},
+             ],
+             "contacts": [
+                 {"name": "Sam Chen", "role": "Recruiter",
+                  "channel": "linkedin", "date": "2026-11-03"},
+                 {"name": "Sam Chen", "role": "Hiring manager",
+                  "channel": "email", "date": "2026-11-03"},
+             ]},
+        ]
+        data = collect_timeline(entries, kinds=["contact"])
+        self.assertEqual(len(data["events"]), 2)
+        # Newest first: the second touch (hiring manager) comes first.
+        self.assertIn("Hiring manager", data["events"][0]["summary"])
+        self.assertIn("Recruiter", data["events"][1]["summary"])
+        data = collect_timeline(entries, kinds=["contact"], oldest=True)
+        self.assertIn("Recruiter", data["events"][0]["summary"])
+        self.assertIn("Hiring manager", data["events"][1]["summary"])
+
+    def test_second_offer_pairs_with_second_offer(self):
+        entries = [
+            {"id": "APP-001", "company": "Northwind Analytics",
+             "title": "Data Analyst", "status": "offer",
+             "history": [
+                 {"status": "applied", "at": "2026-11-01"},
+                 {"kind": "offer", "at": "2026-11-05"},
+                 {"kind": "offer", "at": "2026-11-08"},
+             ],
+             "offers": [
+                 {"base": 120000, "currency": "CAD", "period": "annual"},
+                 {"base": 65, "currency": "USD", "period": "hourly",
+                  "bonus": 5000},
+             ]},
+        ]
+        data = collect_timeline(entries, kinds=["offer"])
+        self.assertEqual(len(data["events"]), 2)
+        self.assertEqual(data["events"][0]["summary"],
+                         "Offer recorded: 65 USD hourly base + 5,000 bonus")
+        self.assertEqual(data["events"][1]["summary"],
+                         "Offer recorded: 120,000 CAD base")
+
+    def test_unknown_kind_and_bad_date_skipped_never_fatal(self):
+        entries = [
+            {"id": "APP-001", "company": "Northwind Analytics",
+             "title": "Data Analyst", "status": "screening",
+             "history": [
+                 {"status": "applied", "at": "2026-11-01"},
+                 {"kind": "mystery", "at": "2026-11-02"},
+                 {"status": "screening", "at": "not-a-date"},
+                 "not even a dict",
+                 {"status": "screening", "at": "2026-11-03"},
+             ]},
+            {"id": "APP-002", "company": "Harbour Analytics",
+             "title": "Analyst", "status": "applied",
+             "history": "not a list"},
+        ]
+        data = collect_timeline(entries)
+        self.assertEqual(data["counts"]["total"], 2)
+        self.assertEqual([e["date"] for e in data["events"]],
+                         ["2026-11-03", "2026-11-01"])
+
+    def test_since_until_inclusive(self):
+        data = collect_timeline(
+            self._entries(),
+            since=datetime.date(2026, 11, 3),
+            until=datetime.date(2026, 11, 5))
+        dates = sorted({e["date"] for e in data["events"]})
+        self.assertEqual(dates, ["2026-11-03", "2026-11-05"])
+        self.assertEqual(data["counts"]["total"], 2)
+
+    def test_kind_filter_and_app_id_filter(self):
+        data = collect_timeline(self._entries(),
+                                kinds=["interview", "offer"])
+        self.assertEqual(data["counts"]["total"], 3)
+        self.assertEqual(set(data["counts"]["by_kind"]),
+                         {"interview", "offer"})
+        data = collect_timeline(self._entries(), app_id="APP-002")
+        self.assertEqual(data["counts"]["total"], 6)
+        self.assertTrue(all(e["id"] == "APP-002"
+                            for e in data["events"]))
+
+    def test_oldest_order_and_same_day_reversal(self):
+        data = collect_timeline(self._entries(), oldest=True)
+        self.assertEqual(data["order"], "oldest first")
+        dates = [event["date"] for event in data["events"]]
+        self.assertEqual(dates, sorted(dates))
+        # 2026-11-01 holds two events (applied + contact, in that log
+        # order); oldest first keeps them in log order, newest first
+        # reverses them.
+        oldest_first_day = [e for e in data["events"]
+                            if e["date"] == "2026-11-01"]
+        self.assertEqual(oldest_first_day[0]["kind"], "applied")
+        newest = collect_timeline(self._entries())
+        newest_first_day = [e for e in newest["events"]
+                            if e["date"] == "2026-11-01"]
+        self.assertEqual(newest_first_day[0]["kind"], "contact")
+
+    def test_empty_log_and_empty_after_filter(self):
+        data = collect_timeline([])
+        self.assertEqual(data["events"], [])
+        self.assertEqual(data["counts"],
+                         {"total": 0, "by_kind": {}})
+        self.assertIsNone(data["range"])
+        data = collect_timeline(self._entries(), kinds=["offer"],
+                                app_id="APP-002")
+        self.assertEqual(data["counts"]["total"], 0)
+        self.assertIsNone(data["range"])
+
+    def test_render_groups_by_day_and_shows_notes(self):
+        data = collect_timeline(self._entries())
+        text = render_timeline_markdown(data)
+        self.assertIn("Timeline — 10 events, 2026-11-01 to 2026-11-10 "
+                      "(newest first)", text)
+        self.assertIn("  2 applied, 1 contact, 1 followup, 2 interview, "
+                      "1 offer, 3 status", text)
+        self.assertIn("\n2026-11-10\n", text)
+        self.assertIn("[interview] Harbour Analytics — Business "
+                      "Intelligence Analyst (APP-002): Interview: Hiring "
+                      "manager with Priya Nair (video, 45 min, 14:30)",
+                      text)
+        self.assertIn("      note: Bring the dashboard story.", text)
+        # The newest day comes before an older day in the text.
+        self.assertLess(text.index("\n2026-11-10\n"),
+                        text.index("\n2026-11-01\n"))
+
+    def test_render_empty_state(self):
+        text = render_timeline_markdown(collect_timeline([]))
+        self.assertIn("Timeline — 0 events (newest first)", text)
+        self.assertIn("No events in this range", text)
+
+    def test_timeline_json_round_trips(self):
+        data = collect_timeline(self._entries())
+        restored = json.loads(timeline_json(data))
+        self.assertEqual(restored["counts"]["total"], 10)
+        self.assertEqual(restored["events"][0]["kind"], "interview")
+
+
+class TestTimelineCLI(unittest.TestCase):
+    def _run(self, argv):
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            code = main(argv)
+        return code, buf.getvalue()
+
+    def _logged(self, tmp):
+        log = Path(tmp) / "log.jsonl"
+        add_application(log, "Northwind Analytics", "Data Analyst",
+                        match_score=0.625, today="2026-11-01")
+        add_application(log, "Harbour Analytics",
+                        "Business Intelligence Analyst", today="2026-11-01")
+        set_status(log, "APP-001", "screening", today="2026-11-03")
+        set_status(log, "APP-002", "screening", today="2026-11-02")
+        set_status(log, "APP-002", "interview", today="2026-11-06")
+        record_followup(log, "APP-001", today="2026-11-05",
+                        note="Checking in after the screen.")
+        interview = validate_interview(
+            {"date": "2026-11-07", "round": "Recruiter screen",
+             "mode": "phone", "duration_minutes": 30},
+            today="2026-11-08")
+        record_interview(log, "APP-002", interview, today="2026-11-08")
+        interview = validate_interview(
+            {"date": "2026-11-10", "round": "Hiring manager",
+             "interviewer": "Priya Nair", "mode": "video",
+             "duration_minutes": 45, "time": "14:30",
+             "notes": "Bring the dashboard story."},
+            today="2026-11-08")
+        record_interview(log, "APP-002", interview, today="2026-11-08")
+        contact = validate_contact(
+            {"name": "Alex Rivera", "role": "Hiring manager",
+             "channel": "email", "date": "2026-11-01",
+             "note": "Replied within the hour."},
+            today="2026-11-08")
+        record_contact(log, "APP-002", contact, today="2026-11-08")
+        offer = validate_offer(
+            {"base": 130000, "currency": "CAD", "bonus": 10000,
+             "equity": 20000, "vesting_years": 4},
+            today="2026-11-08")
+        record_offer(log, "APP-001", offer, today="2026-11-08")
+        return log
+
+    def test_timeline_cli_lists_newest_first(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            code, out = self._run(["timeline", "--log", str(log)])
+            self.assertEqual(code, 0)
+            self.assertIn("Timeline — 10 events", out)
+            self.assertIn("(newest first)", out)
+            self.assertLess(out.index("\n2026-11-10\n"),
+                            out.index("\n2026-11-01\n"))
+            self.assertIn("Offer recorded: 130,000 CAD base + 10,000 bonus "
+                          "+ 20,000 equity over 4y", out)
+            self.assertIn("Interview: Hiring manager with Priya Nair "
+                          "(video, 45 min, 14:30)", out)
+
+    def test_timeline_cli_oldest(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            code, out = self._run(["timeline", "--log", str(log),
+                                   "--oldest"])
+            self.assertEqual(code, 0)
+            self.assertIn("(oldest first)", out)
+            self.assertLess(out.index("\n2026-11-01\n"),
+                            out.index("\n2026-11-10\n"))
+
+    def test_timeline_cli_since_until_kind_and_id(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            code, out = self._run(["timeline", "--log", str(log),
+                                   "--since", "2026-11-06",
+                                   "--until", "2026-11-08"])
+            self.assertEqual(code, 0)
+            self.assertIn("Timeline — 3 events", out)
+            code, out = self._run(["timeline", "--log", str(log),
+                                   "--kind", "interview",
+                                   "--kind", "offer"])
+            self.assertEqual(code, 0)
+            self.assertIn("Timeline — 3 events", out)
+            self.assertNotIn("Applied to", out)
+            code, out = self._run(["timeline", "--log", str(log),
+                                   "--id", "APP-002"])
+            self.assertEqual(code, 0)
+            self.assertIn("Timeline — 6 events", out)
+            self.assertNotIn("Northwind", out)
+
+    def test_timeline_cli_json_and_out(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            out_path = Path(tmp) / "timeline.md"
+            code, out = self._run(["timeline", "--log", str(log),
+                                   "--json", "--out", str(out_path)])
+            self.assertEqual(code, 0)
+            self.assertIn(f"wrote {out_path}", out)
+            restored = json.loads(out_path.read_text(encoding="utf-8"))
+            self.assertEqual(restored["counts"]["total"], 10)
+            self.assertEqual(restored["order"], "newest first")
+
+    def test_timeline_cli_empty_state(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = Path(tmp) / "empty.jsonl"
+            code, out = self._run(["timeline", "--log", str(log)])
+            self.assertEqual(code, 0)
+            self.assertIn("Timeline — 0 events", out)
+            self.assertIn("No events in this range", out)
+
+    def test_timeline_cli_bad_dates_and_kind_exit_1(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            for argv in (["timeline", "--log", str(log),
+                          "--today", "2026-13-40"],
+                         ["timeline", "--log", str(log),
+                          "--since", "yesterday"],
+                         ["timeline", "--log", str(log),
+                          "--until", "2026-02-30"],
+                         ["timeline", "--log", str(log),
+                          "--since", "2026-11-08",
+                          "--until", "2026-11-01"],
+                         ["timeline", "--log", str(log),
+                          "--kind", "mystery"]):
+                code, _ = self._run(argv)
+                self.assertEqual(code, 1, argv)
+
+    def test_timeline_cli_unknown_id_exit_1(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            code, _ = self._run(["timeline", "--log", str(log),
+                                 "--id", "APP-999"])
+            self.assertEqual(code, 1)
+
+    def test_timeline_cli_corrupt_log_exit_2(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = Path(tmp) / "apps.jsonl"
+            log.write_text("{not json}\n", encoding="utf-8")
+            code, _ = self._run(["timeline", "--log", str(log)])
+            self.assertEqual(code, 2)
+
+
+class TestDeadlines(unittest.TestCase):
+    def _entries(self):
+        return [
+            {"id": "APP-001", "company": "Northwind Analytics",
+             "title": "Data Analyst", "status": "applied",
+             "applied_at": "2026-11-01", "deadline": "2026-11-20"},
+            {"id": "APP-002", "company": "Harbour Analytics",
+             "title": "Business Intelligence Analyst",
+             "status": "screening", "applied_at": "2026-11-01",
+             "deadline": "2026-11-15"},
+            {"id": "APP-003", "company": "Vector Labs",
+             "title": "Machine Learning Engineer", "status": "interview",
+             "applied_at": "2026-11-01", "deadline": "2026-11-08"},
+            {"id": "APP-004", "company": "Acme", "title": "Analyst",
+             "status": "applied", "applied_at": "2026-11-01",
+             "deadline": "2026-11-05"},
+            {"id": "APP-005", "company": "Beta", "title": "Analyst",
+             "status": "applied", "applied_at": "2026-11-01",
+             "deadline": "2026-11-16"},
+        ]
+
+    def test_validate_deadline_valid(self):
+        self.assertEqual(validate_deadline("2026-11-20"), "2026-11-20")
+
+    def test_validate_deadline_missing_and_bad(self):
+        for bad in (None, "", "Nov 30", "2026-02-30", "2026/11/20", 20261120):
+            with self.assertRaises(DeadlineError, msg=repr(bad)):
+                validate_deadline(bad)
+
+    def test_validate_deadline_allows_past_date(self):
+        # A posting can already be closed when you record it; the list
+        # flags it overdue instead of refusing a fact.
+        self.assertEqual(validate_deadline("2026-10-01"), "2026-10-01")
+
+    def test_collect_sorts_soonest_first_and_states(self):
+        data = collect_deadlines(self._entries(), today=TODAY)
+        rows = data["deadlines"]
+        self.assertEqual([row["id"] for row in rows],
+                         ["APP-004", "APP-003", "APP-002", "APP-005",
+                          "APP-001"])
+        self.assertEqual([(row["days_left"], row["state"]) for row in rows],
+                         [(-3, "overdue"), (0, "today"), (7, "soon"),
+                          (8, "later"), (12, "later")])
+        self.assertEqual(data["counts"],
+                         {"total": 5, "overdue": 1, "today": 1, "soon": 1,
+                          "later": 2, "without_deadline": 0})
+
+    def test_collect_overdue_only(self):
+        data = collect_deadlines(self._entries(), today=TODAY,
+                                 overdue_only=True)
+        self.assertEqual([row["id"] for row in data["deadlines"]],
+                         ["APP-004"])
+        self.assertEqual(data["counts"]["total"], 1)
+
+    def test_collect_days_window_keeps_overdue(self):
+        data = collect_deadlines(self._entries(), today=TODAY, days=3)
+        self.assertEqual([row["id"] for row in data["deadlines"]],
+                         ["APP-004", "APP-003"])
+        data = collect_deadlines(self._entries(), today=TODAY, days=0)
+        self.assertEqual([row["id"] for row in data["deadlines"]],
+                         ["APP-004", "APP-003"])
+
+    def test_collect_negative_days_refused(self):
+        with self.assertRaises(ValueError):
+            collect_deadlines(self._entries(), today=TODAY, days=-1)
+
+    def test_collect_excludes_terminal_applications(self):
+        entries = self._entries()
+        entries[0]["status"] = "rejected"
+        entries[1]["status"] = "hired"
+        data = collect_deadlines(entries, today=TODAY)
+        self.assertEqual([row["id"] for row in data["deadlines"]],
+                         ["APP-004", "APP-003", "APP-005"])
+
+    def test_collect_counts_without_deadline(self):
+        entries = self._entries()
+        del entries[0]["deadline"]
+        entries[1]["deadline"] = "not a date"
+        data = collect_deadlines(entries, today=TODAY)
+        self.assertEqual([row["id"] for row in data["deadlines"]],
+                         ["APP-004", "APP-003", "APP-005"])
+        self.assertEqual(data["counts"]["without_deadline"], 2)
+
+    def test_collect_skips_unparseable_deadline_never_fatal(self):
+        entries = self._entries()
+        entries[0]["deadline"] = 20261120
+        data = collect_deadlines(entries, today=TODAY)
+        self.assertEqual(data["counts"]["total"], 4)
+        self.assertEqual(data["counts"]["without_deadline"], 1)
+
+    def test_collect_empty_log(self):
+        data = collect_deadlines([], today=TODAY)
+        self.assertEqual(data, {"deadlines": [],
+                                "counts": {"total": 0, "overdue": 0,
+                                           "today": 0, "soon": 0,
+                                           "later": 0,
+                                           "without_deadline": 0}})
+
+    def test_render_marks_states_and_empty(self):
+        data = collect_deadlines(self._entries(), today=TODAY)
+        out = render_deadlines_markdown(data)
+        self.assertIn("5 applications with a date recorded", out)
+        self.assertIn("1 overdue", out)
+        self.assertIn("1 closing today", out)
+        self.assertIn("closed 3d ago", out)
+        self.assertIn("[overdue]", out)
+        self.assertIn("closes today", out)
+        self.assertIn("closes in 7d", out)
+        self.assertIn("closes in 12d", out)
+        empty = render_deadlines_markdown(collect_deadlines([], today=TODAY))
+        self.assertIn("No closing dates recorded yet", empty)
+        self.assertIn("apply --deadline YYYY-MM-DD", empty)
+
+    def test_deadlines_json_round_trips(self):
+        data = collect_deadlines(self._entries(), today=TODAY)
+        restored = json.loads(deadlines_json(data))
+        self.assertEqual(restored["counts"]["total"], 5)
+        self.assertEqual(restored["deadlines"][0]["id"], "APP-004")
+
+    def test_add_application_stores_deadline(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = Path(tmp) / "apps.jsonl"
+            entry = add_application(log, "Acme", "Analyst",
+                                    today="2026-11-01",
+                                    deadline="2026-11-20")
+            self.assertEqual(entry["deadline"], "2026-11-20")
+            entry = add_application(log, "Beta", "Analyst",
+                                    today="2026-11-01")
+            self.assertNotIn("deadline", entry)
+
+    def test_record_deadline_sets_and_moves_without_history(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = Path(tmp) / "apps.jsonl"
+            add_application(log, "Acme", "Analyst", today="2026-11-01")
+            entry = record_deadline(log, "APP-001", "2026-11-20",
+                                    today="2026-11-08")
+            self.assertEqual(entry["deadline"], "2026-11-20")
+            # One history event only: recording a closing date is
+            # bookkeeping, not contact, so it must not reset the
+            # follow-up clock — eight days on, the application is
+            # still due one.
+            self.assertEqual(entry["history"],
+                             [{"status": "applied", "at": "2026-11-01"}])
+            self.assertEqual(
+                len(due_followups(read_log(log),
+                                  datetime.date(2026, 11, 9))), 1)
+            entry = record_deadline(log, "APP-001", "2026-11-25",
+                                    today="2026-11-08")
+            self.assertEqual(entry["deadline"], "2026-11-25")
+            self.assertEqual(len(entry["history"]), 1)
+
+    def test_record_deadline_refuses_terminal_and_unknown(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = Path(tmp) / "apps.jsonl"
+            add_application(log, "Acme", "Analyst", today="2026-11-01")
+            set_status(log, "APP-001", "rejected", today="2026-11-02")
+            with self.assertRaises(TrackerError):
+                record_deadline(log, "APP-001", "2026-11-20")
+            with self.assertRaises(TrackerError):
+                record_deadline(log, "APP-999", "2026-11-20")
+
+
+class TestDeadlinesCLI(unittest.TestCase):
+    def _run(self, argv):
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            code = main(argv)
+        return code, buf.getvalue()
+
+    def _logged(self, tmp):
+        log = Path(tmp) / "log.jsonl"
+        add_application(log, "Northwind Analytics", "Data Analyst",
+                        today="2026-11-01", deadline="2026-11-10")
+        add_application(log, "Harbour Analytics",
+                        "Business Intelligence Analyst", today="2026-11-01",
+                        deadline="2026-11-30")
+        return log
+
+    def test_deadlines_cli_record_then_list(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = Path(tmp) / "log.jsonl"
+            add_application(log, "Acme", "Analyst", today="2026-11-01")
+            code, out = self._run(["deadlines", "--record", "--id",
+                                   "APP-001", "--log", str(log),
+                                   "--date", "2026-11-20",
+                                   "--today", "2026-11-08"])
+            self.assertEqual(code, 0)
+            self.assertIn("recorded a closing date for APP-001", out)
+            self.assertIn("closes 2026-11-20", out)
+            code, out = self._run(["deadlines", "--log", str(log),
+                                   "--today", "2026-11-08"])
+            self.assertEqual(code, 0)
+            self.assertIn("Acme — Analyst", out)
+            self.assertIn("closes in 12d", out)
+
+    def test_deadlines_cli_apply_with_deadline(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out_dir = Path(tmp) / "applications"
+            log = out_dir / "applications.jsonl"
+            code, _ = self._run(["apply", "--profile", str(EXAMPLE_PROFILE),
+                                 "--posting", str(EXAMPLE_JOB),
+                                 "--out-dir", str(out_dir),
+                                 "--deadline", "2026-11-20"])
+            self.assertEqual(code, 0)
+            code, out = self._run(["deadlines", "--log", str(log),
+                                   "--today", "2026-11-08"])
+            self.assertEqual(code, 0)
+            self.assertIn("Northwind Analytics", out)
+            self.assertIn("closes in 12d", out)
+
+    def test_deadlines_cli_apply_bad_deadline_exit_1_no_packet(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out_dir = Path(tmp) / "applications"
+            code, _ = self._run(["apply", "--profile", str(EXAMPLE_PROFILE),
+                                 "--posting", str(EXAMPLE_JOB),
+                                 "--out-dir", str(out_dir),
+                                 "--deadline", "next Friday"])
+            self.assertEqual(code, 1)
+            self.assertFalse(out_dir.exists())
+
+    def test_deadlines_cli_days_window(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            code, out = self._run(["deadlines", "--log", str(log),
+                                   "--today", "2026-11-08", "--days", "3"])
+            self.assertEqual(code, 0)
+            self.assertIn("Northwind Analytics", out)
+            self.assertNotIn("Harbour Analytics", out)
+            self.assertIn("1 application with a date recorded", out)
+
+    def test_deadlines_cli_overdue_only(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            code, out = self._run(["deadlines", "--log", str(log),
+                                   "--today", "2026-11-08", "--overdue"])
+            self.assertEqual(code, 0)
+            self.assertIn("0 applications with a date recorded", out)
+            code, out = self._run(["deadlines", "--log", str(log),
+                                   "--today", "2026-11-15", "--overdue"])
+            self.assertEqual(code, 0)
+            self.assertIn("Northwind Analytics", out)
+            self.assertNotIn("Harbour Analytics", out)
+            self.assertIn("[overdue]", out)
+
+    def test_deadlines_cli_json_and_out(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            out_path = Path(tmp) / "deadlines.md"
+            code, out = self._run(["deadlines", "--log", str(log),
+                                   "--today", "2026-11-08", "--json",
+                                   "--out", str(out_path)])
+            self.assertEqual(code, 0)
+            self.assertIn(f"wrote {out_path}", out)
+            restored = json.loads(out_path.read_text(encoding="utf-8"))
+            self.assertEqual(restored["counts"]["total"], 2)
+            self.assertEqual(restored["deadlines"][0]["id"], "APP-001")
+            self.assertEqual(restored["deadlines"][0]["days_left"], 2)
+
+    def test_deadlines_cli_empty_state(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = Path(tmp) / "empty.jsonl"
+            code, out = self._run(["deadlines", "--log", str(log),
+                                   "--today", "2026-11-08"])
+            self.assertEqual(code, 0)
+            self.assertIn("0 applications with a date recorded", out)
+            self.assertIn("No closing dates recorded yet", out)
+
+    def test_deadlines_cli_record_missing_id_or_date_exit_1(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            for argv in (["deadlines", "--record", "--log", str(log),
+                          "--date", "2026-11-20"],
+                         ["deadlines", "--record", "--id", "APP-001",
+                          "--log", str(log)]):
+                code, _ = self._run(argv)
+                self.assertEqual(code, 1, argv)
+
+    def test_deadlines_cli_record_bad_date_exit_1(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            code, _ = self._run(["deadlines", "--record", "--id", "APP-001",
+                                 "--log", str(log), "--date", "2026-02-30"])
+            self.assertEqual(code, 1)
+
+    def test_deadlines_cli_record_flags_without_record_exit_1(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            for argv in (["deadlines", "--log", str(log), "--id", "APP-001"],
+                         ["deadlines", "--log", str(log),
+                          "--date", "2026-11-20"]):
+                code, _ = self._run(argv)
+                self.assertEqual(code, 1, argv)
+
+    def test_deadlines_cli_record_unknown_id_exit_6(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            code, _ = self._run(["deadlines", "--record", "--id", "APP-999",
+                                 "--log", str(log), "--date", "2026-11-20"])
+            self.assertEqual(code, 6)
+
+    def test_deadlines_cli_record_terminal_exit_6(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            set_status(log, "APP-001", "rejected", today="2026-11-02")
+            code, _ = self._run(["deadlines", "--record", "--id", "APP-001",
+                                 "--log", str(log), "--date", "2026-11-20"])
+            self.assertEqual(code, 6)
+
+    def test_deadlines_cli_bad_today_and_days_exit_1(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            for argv in (["deadlines", "--log", str(log),
+                          "--today", "2026-13-40"],
+                         ["deadlines", "--log", str(log), "--days", "-1"]):
+                code, _ = self._run(argv)
+                self.assertEqual(code, 1, argv)
+
+    def test_deadlines_cli_corrupt_log_exit_2(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = Path(tmp) / "apps.jsonl"
+            log.write_text("{not json}\n", encoding="utf-8")
+            code, _ = self._run(["deadlines", "--log", str(log)])
+            self.assertEqual(code, 2)
+
+
+class TestCalendarPostingDeadlines(unittest.TestCase):
+    def _log_with_deadlines(self, tmp):
+        log = Path(tmp) / "apps.jsonl"
+        add_application(log, "Northwind Analytics", "Data Analyst",
+                        match_score=0.625, today="2026-11-01",
+                        deadline="2026-11-12")
+        add_application(log, "Harbour Analytics",
+                        "Business Intelligence Analyst", today="2026-11-01",
+                        deadline="2026-11-30")
+        add_application(log, "Vector Labs", "Machine Learning Engineer",
+                        today="2026-11-01", deadline="2026-11-05")
+        add_application(log, "Acme", "Analyst", today="2026-11-01",
+                        deadline="2026-11-12")
+        set_status(log, "APP-004", "rejected", today="2026-11-09")
+        return log
+
+    def test_posting_deadline_exports_as_all_day_event(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            entries = read_log(self._log_with_deadlines(tmp))
+            data = build_calendar(entries, today=datetime.date(2026, 11, 2))
+            self.assertEqual(data["counts"],
+                             {"events": 2, "interviews": 0,
+                              "offer_deadlines": 0, "posting_deadlines": 2,
+                              "followups": 0})
+            event = [e for e in data["events"]
+                     if e["id"] == "APP-001"][0]
+            self.assertEqual(event["kind"], "posting_deadline")
+            self.assertEqual(event["date"], "2026-11-12")
+            self.assertEqual(event["days_until"], 10)
+            self.assertTrue(event["all_day"])
+            self.assertEqual(event["summary"],
+                             "Applications close: Data Analyst at "
+                             "Northwind Analytics")
+            self.assertIn("close on 2026-11-12", event["description"])
+
+    def test_posting_deadline_overdue_and_terminal_left_out(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            entries = read_log(self._log_with_deadlines(tmp))
+            data = build_calendar(entries, today=datetime.date(2026, 11, 9))
+            kinds = [e["kind"] for e in data["events"]
+                     if e["kind"] == "posting_deadline"]
+            self.assertEqual(kinds, ["posting_deadline"])
+            ids = [e["id"] for e in data["events"]
+                   if e["kind"] == "posting_deadline"]
+            self.assertEqual(ids, ["APP-001"])
+            self.assertEqual(data["counts"]["posting_deadlines"], 1)
+
+    def test_posting_deadline_sorts_with_same_day_events(self):
+        # One day, three kinds: the sort is by date, then start time
+        # (all-day events first — they have no start), then kind.
+        with tempfile.TemporaryDirectory() as tmp:
+            log = Path(tmp) / "apps.jsonl"
+            add_application(log, "Northwind Analytics", "Data Analyst",
+                            today="2026-11-01", deadline="2026-11-12")
+            set_status(log, "APP-001", "screening", today="2026-11-03")
+            set_status(log, "APP-001", "interview", today="2026-11-05")
+            set_status(log, "APP-001", "offer", today="2026-11-08")
+            record_interview(log, "APP-001", validate_interview({
+                "date": "2026-11-12", "round": "Hiring manager",
+                "mode": "video", "time": "14:30",
+                "duration_minutes": 45}, today="2026-11-09"))
+            record_offer(log, "APP-001", validate_offer({
+                "base": 130000, "currency": "CAD",
+                "deadline": "2026-11-12"}, today="2026-11-09"))
+            entries = read_log(log)
+            data = build_calendar(entries, today=datetime.date(2026, 11, 9))
+            kinds = [e["kind"] for e in data["events"]]
+            self.assertEqual(kinds, ["offer_deadline", "posting_deadline",
+                                     "interview"])
+
+    def test_posting_deadline_ics_is_all_day(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            entries = read_log(self._log_with_deadlines(tmp))
+            data = build_calendar(entries, today=datetime.date(2026, 11, 2))
+            ics = render_ics(data)
+            self.assertEqual(ics.count("BEGIN:VEVENT"), 2)
+            self.assertIn("Applications close: Data Analyst at "
+                          "Northwind Analytics", ics)
+            self.assertIn("DTSTART;VALUE=DATE:20261112", ics)
+            self.assertIn("DTEND;VALUE=DATE:20261113", ics)
 
 
 if __name__ == "__main__":

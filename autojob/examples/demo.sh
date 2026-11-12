@@ -14,9 +14,11 @@ python3 -m autojob match --profile examples/profile.example.json \
 python3 -m autojob draft --profile examples/profile.example.json \
     --posting examples/job.example.md --dry-run | head -20
 python3 -m autojob apply --profile examples/profile.example.json \
-    --posting examples/job.example.md --out-dir "$WORK/applications"
+    --posting examples/job.example.md --out-dir "$WORK/applications" \
+    --deadline "$(date -d '+10 days' +%F)"
 python3 -m autojob apply --profile examples/profile.example.json \
-    --posting examples/job2.example.md --out-dir "$WORK/applications"
+    --posting examples/job2.example.md --out-dir "$WORK/applications" \
+    --deadline "$(date -d '+30 days' +%F)"
 python3 -m autojob list --log "$WORK/applications/applications.jsonl"
 python3 -m autojob status --log "$WORK/applications/applications.jsonl" \
     --id APP-001 --to screening
@@ -95,9 +97,12 @@ python3 -m autojob interview --log "$WORK/applications/applications.jsonl" \
 python3 -m autojob interview --log "$WORK/applications/applications.jsonl" \
     --today "$FUTURE"
 # Calendar: export the next 14 days as .ics — the hiring-manager round
-# (timed, 14:30 for 45 minutes) and both offer deadlines (14 days out,
-# inside the window). No follow-up is due: both applications had activity
-# recorded today (the follow-up and the offers), so the file holds 3 events.
+# (timed, 14:30 for 45 minutes), the Northwind posting closing date
+# (10 days out, inside the window), and both offer deadlines (14 days
+# out, inside the window). The Harbour closing date is 30 days out, so
+# it stays out of the file. No follow-up is due: both applications had
+# activity recorded today (the follow-up and the offers), so the file
+# holds 4 events.
 python3 -m autojob calendar --log "$WORK/applications/applications.jsonl" \
     --today "$FUTURE" --out "$WORK/search.ics"
 grep -c "BEGIN:VEVENT" "$WORK/search.ics"
@@ -115,4 +120,25 @@ python3 -m autojob contacts --log "$WORK/applications/applications.jsonl" \
     --today "$FUTURE"
 python3 -m autojob contacts --log "$WORK/applications/applications.jsonl" \
     --today "$FUTURE" --quiet-days 7
+# Deadlines: both postings were applied to with a closing date — Northwind
+# 10 days out, Harbour 30 days out. Eight days on, Northwind closes in
+# 2 days and Harbour in 22; nothing is overdue yet. The Harbour listing
+# is then updated to close 25 days out, and the list shows 17 days left.
+python3 -m autojob deadlines --log "$WORK/applications/applications.jsonl" \
+    --today "$FUTURE"
+python3 -m autojob deadlines --log "$WORK/applications/applications.jsonl" \
+    --today "$FUTURE" --overdue
+python3 -m autojob deadlines --log "$WORK/applications/applications.jsonl" \
+    --record --id APP-002 --date "$(date -d '+25 days' +%F)" \
+    --today "$FUTURE"
+python3 -m autojob deadlines --log "$WORK/applications/applications.jsonl" \
+    --today "$FUTURE"
+# Timeline: everything recorded so far in one feed, newest first — both
+# applications, the status moves, the follow-up, the offers, the
+# interviews, and the contacts. Eight days on, the feed runs from today
+# to the hiring-manager round two days out.
+python3 -m autojob timeline --log "$WORK/applications/applications.jsonl" \
+    --today "$FUTURE"
+python3 -m autojob timeline --log "$WORK/applications/applications.jsonl" \
+    --today "$FUTURE" --kind interview --kind offer --oldest
 echo "demo OK: packets in $WORK/applications (removed on exit)"

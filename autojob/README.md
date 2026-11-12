@@ -2,7 +2,7 @@
 
 A job-application assistant that prepares applications from your own
 profile — and refuses to invent anything about you. Pure standard-library
-Python, 316 tests, no API keys, fully offline.
+Python, 374 tests, no API keys, fully offline.
 
 Built in November 2026 as a portfolio project. It is not client work, it is
 not affiliated with any employer, and the example profile and posting in
@@ -224,7 +224,8 @@ it builds is a draft for a human to review and send.
 16. **Calendar** (`autojob/calendar.py`, v0.12) — `autojob calendar
     --out search.ics` exports the next 14 days as an .ics file any
     calendar app can import: interview rounds in the window, offer
-    decision deadlines in the window, and follow-ups due as of today
+    decision deadlines in the window, posting closing dates in the
+    window (v0.15), and follow-ups due as of today
     (dated today, because the action is due now — the description says
     so). A round with a start time exports as a timed event, 45 minutes
     from 14:30 ending at 15:15; a round with a time but no recorded
@@ -262,6 +263,50 @@ it builds is a draft for a human to review and send.
     check, and it never splits a stage stay in the analytics. `--id
     APP-001` shows one application's contacts only, `--json` prints the
     list as JSON, `--out` writes it, `--today` pins the reference date.
+18. **Timeline** (`autojob/timeline.py`, v0.14) — `timeline` lays out
+    everything the other commands already recorded as one feed across
+    all applications, newest first: applications (with the match score),
+    status moves, follow-ups, interviews, contacts, and offers, grouped
+    by day. An interview line names the round, the interviewer, the
+    mode, the duration, and the start time exactly as recorded; an
+    offer line states the base, bonus, and equity exactly as recorded.
+    The details are paired to their records, not assumed: an interview
+    event carries its date and round label, a contact event its date
+    and name, and the n-th offer event on an application is the n-th
+    offer in its list — the two are appended in the same order. When a
+    record is missing, the line falls back to the bare fact ("Offer
+    recorded") instead of guessing figures, and an event with a bad
+    date or an unknown kind is skipped, never fatal, so one hand-edited
+    log line cannot hide the rest of the feed. `--since` / `--until`
+    bound the feed by date (inclusive on both ends), `--kind` filters
+    to one kind of event and repeats, `--id` shows one application,
+    `--oldest` flips the feed to chronological, `--json` prints it as
+    JSON, `--out` writes it, `--today` pins the reference date.
+19. **Closing dates** (`autojob/deadlines.py`, v0.15) — `deadlines` lists
+    the closing date of every live application, soonest first, so the
+    posting that stops taking applications tomorrow is the one you
+    finish tonight. A closing date is recorded when you apply (`apply
+    --deadline YYYY-MM-DD`) or later (`deadlines --record --id APP-001
+    --date YYYY-MM-DD`); re-recording moves it, because a posting's
+    closing date can change. Each row shows the days left and its
+    state — overdue (the date passed while the application is still
+    live, so the posting may have closed under you), today, closing
+    soon (1–7 days out; exactly 7 is soon, not later), or later. A
+    past date is allowed when you record it — a posting can already
+    be closed, and the list flags it overdue instead of refusing a
+    fact. `--days N` narrows the list to deadlines N days out or
+    sooner (overdue ones are always shown), `--overdue` keeps only
+    the overdue rows, and the header counts the live applications
+    with no closing date recorded instead of inventing one. A closing
+    date is a fact about the posting, not something that happened to
+    the application, so it is stored as a field on the tracker entry,
+    not a history event: recording one does not reset the follow-up
+    or stale clocks, and it does not appear in the timeline feed.
+    Recording a closing date is refused on a terminal application
+    (hired, rejected, withdrawn) and on an unknown id. Posting
+    closing dates in the calendar window also export as all-day
+    events from `calendar`. `--json` prints the list as JSON, `--out`
+    writes it, `--today` pins the reference date.
 
 ## Quick start
 
@@ -333,6 +378,13 @@ python -m autojob interview --record --id APP-001 --date 2026-11-12 \
     --duration-minutes 45
 python -m autojob interview
 python -m autojob interview --id APP-001 --json
+
+# list posting closing dates, soonest first — or record one
+python -m autojob deadlines
+python -m autojob deadlines --overdue
+python -m autojob deadlines --record --id APP-001 --date 2026-11-20
+python -m autojob apply --profile my-profile.json --posting job.md \
+    --deadline 2026-11-20
 ```
 
 ## Demo numbers
@@ -391,17 +443,28 @@ to decide on their 14-day deadlines. The demo closes with an interview
 schedule for the Harbour application, 8 days on: a recruiter screen
 the day before (phone, 30 minutes) and a hiring-manager round two days
 ahead (video, 45 minutes, with Priya Nair) — 1 upcoming, 1 past.
-The demo closes with a calendar export 8 days on: 3 events in the next
-14 days — the hiring-manager round at 14:30 for 45 minutes and both
-offer deadlines 6 days out; no follow-up is due, because both
-applications had activity recorded that day.
+The demo closes with a calendar export 8 days on: 4 events in the next
+14 days — the hiring-manager round at 14:30 for 45 minutes, the Northwind
+posting closing date 2 days out, and both offer deadlines 6 days out;
+no follow-up is due, because both applications had activity recorded that
+day. The demo closes with two contacts 8 days on: Sam Chen, the Northwind recruiter (LinkedIn, spoke
+today), and Alex Rivera, the Harbour hiring manager (email, 8 days
+since last spoke — quiet at `--quiet-days 7`, not at the default 14).
+The demo closes with two closing dates 8 days on: the Northwind posting
+closes in 2 days and the Harbour posting in 22 days, nothing overdue;
+the Harbour listing is then updated to close in 17 days.
+The demo closes with a timeline 8 days on: 12 events, newest first,
+from the day both applications were filed to the hiring-manager round
+two days out — 2 applied, 3 status moves, 1 follow-up, 2 offers,
+2 interviews, 2 contacts; the filtered `--kind interview --kind offer
+--oldest` view shows just those 4 events, chronologically.
 
 ## Exit codes
 
 0 ok · 1 usage error · 2 profile/posting load error · 3 match below
 `--fail-under` · 4 draft/apply refused below `--min-coverage` ·
 5 duplicate application · 6 illegal status transition, follow-up refused,
-offer refused, or interview refused.
+offer refused, interview refused, contact refused, or deadline refused.
 
 ## What it will not do
 
