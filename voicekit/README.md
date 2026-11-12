@@ -147,3 +147,10 @@ What the table says, including what did not work:
 
 CNN on the time-frequency map (microgrid), a real-speech benchmark (needs a download-free corpus), keyword-spotting
 with per-word thresholds from validation data, and a streaming wake-word mode with a rolling posterior smoother.
+
+## Per-word thresholds (calibrate_thresholds)
+
+`calibrate_thresholds(model, X_val, y_val, target_precision=0.95)` picks, per word, the lowest confidence
+threshold whose validation precision meets the target (falls back to 0.99 if unreachable). Pass the
+resulting dict as `Recognizer(model, threshold=thr)`. Validation data must be disjoint from training data.
+No benchmark claim is made yet for how much this improves stream F1 over a single global threshold.

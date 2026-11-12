@@ -81,9 +81,11 @@ def train_model(n_per_class: int = 120, seed: int = 0, **mlp_kwargs) -> MLP:
 class Recognizer:
     """Streaming word spotter: audio chunks in, accepted word events out."""
 
-    def __init__(self, model: MLP, threshold: float = 0.6, spectral_sub: bool = True,
+    def __init__(self, model: MLP, threshold: "float | dict[str, float]" = 0.6, spectral_sub: bool = True,
                  cfg: SegmenterConfig | None = None):
         self.model, self.threshold, self.spectral_sub = model, threshold, spectral_sub
+        # a dict maps word -> threshold; words missing from it fall back to 0.6
+        self._thr = (lambda w: threshold.get(w, 0.6)) if isinstance(threshold, dict) else (lambda w: threshold)
         self._seg = StreamSegmenter(cfg)
         self.rejected: list[tuple[Segment, str]] = []
 
@@ -97,7 +99,7 @@ class Recognizer:
             k = int(p.argmax())
             if k == UNKNOWN:
                 self.rejected.append((s, "unknown")); continue
-            if p[k] < self.threshold:
+            if p[k] < self._thr(CLASSES[k]):
                 self.rejected.append((s, "low_confidence")); continue
             events.append(Event(CLASSES[k], float(p[k]), s.start_s, s.end_s, dict(zip(CLASSES, map(float, p)))))
         return events
@@ -113,6 +115,30 @@ class Recognizer:
         for s in range(0, len(x), chunk):
             out += self.feed(x[s:s + chunk])
         return out + self.flush()
+
+
+def calibrate_thresholds(model: MLP, X: np.ndarray, y: np.ndarray, target_precision: float = 0.95,
+                         min_threshold: float = 0.3, grid: int = 40) -> dict[str, float]:
+    """Per-word confidence thresholds from held-out validation vectors ``X`` / labels ``y``.
+
+    For each word, pick the lowest threshold on a grid in [min_threshold, 0.99] at which the
+    precision of "predicted this word with p >= t" is >= ``target_precision`` (lowest keeps recall
+    highest). If no threshold reaches the target (or the word is never predicted) fall back to 0.99.
+    Validation data must be disjoint from training data or the thresholds will be optimistic."""
+    P = model.predict_proba(np.asarray(X, float))
+    pred, conf = P.argmax(1), P.max(1)
+    y = np.asarray(y)
+    out = {}
+    for k, w in enumerate(CLASSES):
+        if k == UNKNOWN:
+            continue
+        out[w] = 0.99
+        for t in np.linspace(min_threshold, 0.99, grid):
+            sel = (pred == k) & (conf >= t)
+            if sel.sum() >= 3 and (y[sel] == k).mean() >= target_precision:
+                out[w] = float(t)
+                break
+    return out
 
 
 def render_stream(words: list[str], rng: np.random.Generator, snr_db: float, *, gap=(0.6, 1.4),

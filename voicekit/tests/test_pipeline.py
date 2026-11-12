@@ -98,3 +98,30 @@ def test_score_events_needs_half_overlap_and_no_double_use():
     assert score_events([Event("on", 1, 1.8, 2.5)], truth)["tp"] == 0
     s = score_events([Event("on", 1, 1.0, 1.6), Event("on", 1, 1.5, 2.0)], truth)
     assert s["tp"] == 1 and s["fp"] == 1
+
+
+def test_calibrate_thresholds_reaches_target_on_validation(model):
+    from voicekit import calibrate_thresholds
+    X, y, _, _ = build_dataset(20, 77)
+    thr = calibrate_thresholds(model, X, y, target_precision=0.9)
+    assert set(thr) == set(WORDS) and all(0.3 <= v <= 0.99 for v in thr.values())
+    P = model.predict_proba(X)
+    pred, conf = P.argmax(1), P.max(1)
+    for k, w in enumerate(WORDS):
+        sel = (pred == k) & (conf >= thr[w])
+        if thr[w] < 0.99 and sel.sum() >= 3:
+            assert (y[sel] == k).mean() >= 0.9
+
+
+def test_calibrate_unreachable_target_falls_back_to_max(model):
+    from voicekit import calibrate_thresholds
+    X, y, _, _ = build_dataset(5, 78)
+    thr = calibrate_thresholds(model, X, np.full_like(y, UNKNOWN), target_precision=0.99)
+    assert all(v == 0.99 for v in thr.values())
+
+
+def test_recognizer_accepts_per_word_threshold_dict(model):
+    x = render_example(0, np.random.default_rng(5), 25)
+    assert len(Recognizer(model, threshold={w: 0.0 for w in WORDS}).process(x)) == 1
+    r = Recognizer(model, threshold={w: 1.01 for w in WORDS})
+    assert r.process(x) == [] and any(why == "low_confidence" for _, why in r.rejected)
