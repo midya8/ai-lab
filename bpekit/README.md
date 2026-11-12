@@ -63,3 +63,13 @@ Mean off-domain loss vs the best tokenizer per column: prose 16.6%, python 14.4%
 Caveat: the diagonal is not always the column maximum here (the prose tokenizer scores as well on
 Python as on prose) because held-out tails are small, unrepresentative slices of heterogeneous
 files; this is a single run on one corpus split, so read it as indicative, not a benchmark.
+
+## Offsets and chunking
+
+```python
+from bpekit import train, encode_with_offsets, chunk_by_tokens
+ids, spans = encode_with_offsets(tok, text)      # spans[i] = (start, end) char offsets
+chunks = chunk_by_tokens(tok, text, max_tokens=256, overlap=32)
+```
+
+Chunks cut only at word boundaries, never exceed `max_tokens` (except a single word longer than the budget), and with `overlap=0` concatenate back to the input. A token covering part of a multi-byte character reports the whole character's span.

@@ -1,2 +1,4 @@
 from .bpe import BPETokenizer, train, train_fast, export_gpt2, import_gpt2, bytes_to_unicode
 __all__ = ["BPETokenizer", "train", "train_fast", "export_gpt2", "import_gpt2", "bytes_to_unicode"]
+from .spans import encode_with_offsets, chunk_by_tokens
+__all__ += ["encode_with_offsets", "chunk_by_tokens"]

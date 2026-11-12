@@ -223,6 +223,7 @@
 - bpekit: vocab-size sweep (held-out bytes/token vs vocab; 23 tests)
 - datadoctor: `per_class_summary` (per-class flagged rates + top given->suggested confusions; 2 tests, 78 total)
 - bpekit: cross-domain transfer matrix (prose/python/json; 29 tests)
+- bpekit: `encode_with_offsets` (token -> char spans) and `chunk_by_tokens` (word-boundary, token-budgeted chunks with overlap; 35 tests)
 - voicekit: `WakeGate` wake-word session gating (armed window, weak-wake rejection; 90 tests)
 - reviewkit: AST rule py-catch-baseexception (`except BaseException` without re-raise; 120 tests)
 - reviewkit: AST rule py-raise-notimplemented (`raise NotImplemented`; tests pass)
