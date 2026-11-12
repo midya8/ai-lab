@@ -22,3 +22,5 @@ from .lengths import length_hist
 __all__ += ["length_hist"]
 from .entropy import token_entropy
 __all__ += ["token_entropy"]
+from .variants import boundary_variants
+__all__ += ["boundary_variants"]

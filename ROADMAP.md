@@ -251,6 +251,7 @@
 - reviewkit: AST-free rule py-cleartext-protocol (FTP/Telnet/plain SMTP; 126 tests)
 - bpekit: `length_hist` token byte-length distribution + byte-fallback share (2 tests, 72 total)
 - bpekit: `token_entropy` unigram entropy / bits-per-byte / efficiency (3 tests, 75 total)
+- bpekit: `boundary_variants` leading-space tokenization cost per word (2 tests)
 
 
 ## Next

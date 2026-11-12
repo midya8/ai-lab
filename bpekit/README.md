@@ -112,3 +112,5 @@ Chunks cut only at word boundaries, never exceed `max_tokens` (except a single w
 `length_hist(tok, text)` reports the byte-length distribution of emitted tokens, the share that are single raw bytes (a sign the vocabulary does not cover the text's script) and mean/max length (2 tests).
 
 `token_entropy(tok, text)` gives the unigram entropy of the emitted tokens, bits per UTF-8 byte and an evenness score (in-sample, so optimistic on short text; 3 tests).
+
+`boundary_variants(tok, text, min_count=1, limit=None)` compares each word's tokenization with and without a leading space and ranks words by how many extra tokens the space costs (2 tests).
