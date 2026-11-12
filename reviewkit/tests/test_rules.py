@@ -340,3 +340,11 @@ def test_django_debug_true():
     assert rules("settings.py", "DEBUG = os.environ.get('DEBUG') == '1'\n") == []
     assert rules("settings.py", "# DEBUG = True\n") == []
     assert rules("a.py", "log_DEBUG = True\n") == []
+
+
+def test_catch_baseexception():
+    bad = "try:\n    f()\nexcept BaseException:\n    log()\n"
+    assert rules("a.py", bad) == [(3, "py-catch-baseexception")]
+    ok = "try:\n    f()\nexcept BaseException:\n    cleanup()\n    raise\n"
+    assert rules("a.py", ok) == []
+    assert rules("a.py", "try:\n    f()\nexcept Exception:\n    log()\n") == []

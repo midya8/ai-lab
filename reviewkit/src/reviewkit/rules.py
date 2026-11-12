@@ -474,6 +474,11 @@ def ast_findings(ctx: FileContext, source: str, complexity_threshold: int = 10) 
                 add(node.lineno, "py-bare-except", "medium",
                     "Bare `except:` also catches `KeyboardInterrupt`/`SystemExit` and hides bugs.",
                     "Catch the specific exceptions you expect.")
+            elif isinstance(node.type, ast.Name) and node.type.id == "BaseException" \
+                    and not any(isinstance(n, ast.Raise) for st in node.body for n in ast.walk(st)):
+                add(node.lineno, "py-catch-baseexception", "medium",
+                    "`except BaseException` without re-raising swallows `KeyboardInterrupt`/`SystemExit`.",
+                    "Catch `Exception` (or specific types), or re-raise after cleanup.")
             body_trivial = all(isinstance(s, ast.Pass) or (isinstance(s, ast.Expr) and isinstance(s.value, ast.Constant) and s.value.value is Ellipsis)
                                for s in node.body)
             if body_trivial:
@@ -587,6 +592,7 @@ RULE_TABLE.update({
     "py-mutable-default": ("medium", "Mutable default argument."),
     "py-complexity": ("low", "Function over the cyclomatic-complexity threshold."),
     "py-bare-except": ("medium", "Bare `except:`."),
+    "py-catch-baseexception": ("medium", "`except BaseException` that never re-raises."),
     "py-swallowed-exception": ("medium", "Exception caught and discarded with `pass`."),
     "py-requests-no-timeout": ("medium", "`requests.*` call without `timeout`."),
     "py-is-literal": ("medium", "`is` / `is not` against a str/int/float/bytes literal."),
