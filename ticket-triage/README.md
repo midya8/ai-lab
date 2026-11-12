@@ -30,3 +30,7 @@ Measured on synthetic tickets (500 tickets, uniform label flips, mean of 3 seeds
 | 20% | 0.73 | 0.88 |
 
 Duplicate detection (`triage.dedupe`): TF-IDF cosine pairs via `find_duplicates(texts, threshold)` and union-find `cluster()` that groups transitive near-duplicates (O(n^2), fine for thousands of tickets; not tuned on real data).
+
+## Drift monitor
+
+`triage.drift.drift_report(clf, reference_texts, new_texts)` compares an incoming batch with a reference batch without labels: PSI of the predicted-category mix (<0.1 stable, 0.1-0.25 moderate, >0.25 major), out-of-vocabulary rate, and mean-confidence drop, plus an `alert` flag. Tested on synthetic data only: same-distribution batches stay quiet, an unseen-vocabulary batch and a billing-only batch both alert. The alert thresholds are conventional defaults, not tuned.
