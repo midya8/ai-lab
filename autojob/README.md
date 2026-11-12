@@ -2,7 +2,7 @@
 
 A job-application assistant that prepares applications from your own
 profile — and refuses to invent anything about you. Pure standard-library
-Python, 374 tests, no API keys, fully offline.
+Python, 405 tests, no API keys, fully offline.
 
 Built in November 2026 as a portfolio project. It is not client work, it is
 not affiliated with any employer, and the example profile and posting in
@@ -307,6 +307,28 @@ it builds is a draft for a human to review and send.
     closing dates in the calendar window also export as all-day
     events from `calendar`. `--json` prints the list as JSON, `--out`
     writes it, `--today` pins the reference date.
+20. **Weekly goals** (`autojob/goals.py`, v0.16) — `goals --set-weekly 2`
+    sets a target of two applications a week, kept in a small
+    `goals.json` beside the log; the log itself is never touched, so
+    setting a target is a setting, not an event, and it shows up in
+    no history and resets no clock. `goals` on its own shows this
+    week against the target (a week is Monday to Sunday, and an
+    application counts in the week of its `applied_at` date), the
+    current streak of weeks that met the target, the best streak,
+    and a table of the last 8 weeks (`--weeks N` changes how far
+    back it runs). Exactly the target counts as met. The streak
+    walks back from the current week when it already met the target,
+    otherwise from the last completed week — the current week is
+    never judged a miss while it is still in progress, and weeks
+    before your first logged application carry no verdict at all
+    instead of being scored as misses for a goal that did not exist
+    yet. With no target set there is nothing to meet and no streak
+    to count, so the command shows the weekly counts only and says
+    so; `--set-weekly 0` clears the target. An entry whose
+    `applied_at` will not parse is skipped and counted, never fatal.
+    `--json` prints the view as JSON, `--out` writes it, `--today`
+    pins the reference date, `--goals` points at a different goals
+    file.
 
 ## Quick start
 
@@ -385,6 +407,11 @@ python -m autojob deadlines --overdue
 python -m autojob deadlines --record --id APP-001 --date 2026-11-20
 python -m autojob apply --profile my-profile.json --posting job.md \
     --deadline 2026-11-20
+
+# weekly application target and streak
+python -m autojob goals --set-weekly 2
+python -m autojob goals
+python -m autojob goals --weeks 4 --json
 ```
 
 ## Demo numbers
@@ -458,6 +485,11 @@ from the day both applications were filed to the hiring-manager round
 two days out — 2 applied, 3 status moves, 1 follow-up, 2 offers,
 2 interviews, 2 contacts; the filtered `--kind interview --kind offer
 --oldest` view shows just those 4 events, chronologically.
+The demo closes with a weekly goal of 2 applications: both were filed
+this week, so the target is met and the streak is 1 week; 8 days on,
+the new week shows 0 of 2 with 2 to go, and the streak still stands
+at 1, because last week met the target — the weeks before the first
+application carry no verdict at all.
 
 ## Exit codes
 

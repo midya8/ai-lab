@@ -28,6 +28,9 @@ from autojob.digest import (build_digest, digest_json, gap_leaderboard,
                             render_digest_markdown)
 from autojob.followup import (draft_followup, due_followups, followups_sent,
                                last_activity)
+from autojob.goals import (GoalsError, collect_goals, default_goals_path,
+                           goals_json, load_goals, render_goals_markdown,
+                           set_weekly_target, week_start)
 from autojob.interview import (InterviewError, collect_interviews,
                                interview_json, interviews_for,
                                render_interview_markdown,
@@ -460,7 +463,7 @@ class TestCLI(unittest.TestCase):
 
     def test_version(self):
         self.assertTrue(__version__.startswith("0."))
-        self.assertEqual(__version__, "0.15.0")
+        self.assertEqual(__version__, "0.16.0")
 
 
 def _fixture_log(tmp):
@@ -4526,6 +4529,367 @@ class TestCalendarPostingDeadlines(unittest.TestCase):
                           "Northwind Analytics", ics)
             self.assertIn("DTSTART;VALUE=DATE:20261112", ics)
             self.assertIn("DTEND;VALUE=DATE:20261113", ics)
+
+
+class TestGoals(unittest.TestCase):
+    # TODAY is Sunday 2026-11-08, so the current week is Mon 2026-11-02
+    # to Sun 2026-11-08; the week before is Mon 2026-10-26 to Sun
+    # 2026-11-01, and the one before that starts Mon 2026-10-19.
+    def _entries(self):
+        def entry(app_id, applied_at):
+            return {"id": app_id, "company": "Co", "title": "Analyst",
+                    "status": "applied", "applied_at": applied_at}
+        return [
+            entry("APP-001", "2026-10-19"),
+            entry("APP-002", "2026-10-20"),
+            entry("APP-003", "2026-10-21"),
+            entry("APP-004", "2026-10-26"),
+            entry("APP-005", "2026-10-27"),
+            entry("APP-006", "2026-10-28"),
+            entry("APP-007", "2026-11-02"),
+            entry("APP-008", "2026-11-03"),
+        ]
+
+    def test_week_start_is_monday(self):
+        self.assertEqual(week_start(datetime.date(2026, 11, 8)),
+                         datetime.date(2026, 11, 2))
+        self.assertEqual(week_start(datetime.date(2026, 11, 2)),
+                         datetime.date(2026, 11, 2))
+        self.assertEqual(week_start(datetime.date(2026, 11, 4)),
+                         datetime.date(2026, 11, 2))
+
+    def test_collect_counts_by_week_newest_first(self):
+        data = collect_goals(self._entries(), today=TODAY, weekly_target=2)
+        rows = data["weeks"]
+        self.assertEqual(
+            [(row["week_start"], row["week_end"], row["applications"],
+              row["met"], row["current"]) for row in rows[:3]],
+            [("2026-11-02", "2026-11-08", 2, True, True),
+             ("2026-10-26", "2026-11-01", 3, True, False),
+             ("2026-10-19", "2026-10-25", 3, True, False)])
+        self.assertEqual(data["counts"], {"total": 8, "skipped": 0})
+
+    def test_collect_this_week_met_and_remaining(self):
+        data = collect_goals(self._entries(), today=TODAY, weekly_target=2)
+        self.assertEqual(data["this_week"],
+                         {"week_start": "2026-11-02",
+                          "week_end": "2026-11-08",
+                          "applications": 2, "target": 2, "met": True,
+                          "remaining": 0})
+        data = collect_goals(self._entries(), today=TODAY, weekly_target=3)
+        self.assertEqual((data["this_week"]["met"],
+                          data["this_week"]["remaining"]), (False, 1))
+
+    def test_collect_no_target_means_no_verdict_or_streak(self):
+        data = collect_goals(self._entries(), today=TODAY)
+        self.assertIsNone(data["weekly_target"])
+        self.assertIsNone(data["this_week"]["met"])
+        self.assertIsNone(data["this_week"]["remaining"])
+        self.assertIsNone(data["current_streak"])
+        self.assertIsNone(data["best_streak"])
+        self.assertTrue(all(row["met"] is None for row in data["weeks"]))
+
+    def test_streak_counts_back_from_met_current_week(self):
+        # All three weeks in the fixture met the target (3, 3, 2 of 2),
+        # so the streak runs the full three weeks.
+        data = collect_goals(self._entries(), today=TODAY, weekly_target=2)
+        self.assertEqual(data["current_streak"], 3)
+        self.assertEqual(data["best_streak"], 3)
+
+    def test_streak_starts_from_last_completed_week_when_current_unmet(self):
+        entries = self._entries()[:7]  # current week has 1 of 2
+        data = collect_goals(entries, today=TODAY, weekly_target=2)
+        self.assertFalse(data["this_week"]["met"])
+        # The two completed weeks both met, so the streak is 2 even
+        # though the current week has not met the target yet.
+        self.assertEqual(data["current_streak"], 2)
+        self.assertEqual(data["best_streak"], 2)
+
+    def test_streak_is_zero_when_last_completed_week_missed(self):
+        entries = self._entries()
+        entries = [e for e in entries
+                   if e["applied_at"] not in ("2026-10-26", "2026-10-27")]
+        # Previous week now has 1 of 2 (missed); current week met.
+        data = collect_goals(entries, today=TODAY, weekly_target=2)
+        self.assertEqual(data["current_streak"], 1)
+        self.assertEqual(data["best_streak"], 1)
+
+    def test_best_streak_finds_run_in_history(self):
+        # Weeks: Oct 19 met (3), Oct 26 missed (1), Nov 2 met (2).
+        entries = [e for e in self._entries()
+                   if e["applied_at"] not in ("2026-10-27", "2026-10-28")]
+        data = collect_goals(entries, today=TODAY, weekly_target=2)
+        self.assertEqual(data["current_streak"], 1)
+        self.assertEqual(data["best_streak"], 1)
+        # With a target of 1, all three weeks met: best streak is 3.
+        data = collect_goals(entries, today=TODAY, weekly_target=1)
+        self.assertEqual(data["current_streak"], 3)
+        self.assertEqual(data["best_streak"], 3)
+
+    def test_weeks_before_first_application_carry_no_verdict(self):
+        entries = self._entries()[6:]  # only the current week
+        data = collect_goals(entries, today=TODAY, weekly_target=2)
+        rows = data["weeks"]
+        self.assertTrue(rows[0]["met"])
+        self.assertTrue(all(row["met"] is None for row in rows[1:]))
+        self.assertEqual(data["current_streak"], 1)
+        self.assertEqual(data["best_streak"], 1)
+
+    def test_collect_skips_unparseable_applied_at_never_fatal(self):
+        entries = self._entries()
+        entries.append({"id": "APP-009", "company": "Co", "title": "Analyst",
+                        "status": "applied", "applied_at": "soon"})
+        entries.append({"id": "APP-010", "company": "Co", "title": "Analyst",
+                        "status": "applied", "applied_at": 20261108})
+        data = collect_goals(entries, today=TODAY, weekly_target=2)
+        self.assertEqual(data["counts"], {"total": 8, "skipped": 2})
+        self.assertEqual(data["this_week"]["applications"], 2)
+
+    def test_collect_weeks_window_and_bad_weeks(self):
+        data = collect_goals(self._entries(), today=TODAY, weekly_target=2,
+                             weeks=2)
+        self.assertEqual(len(data["weeks"]), 2)
+        with self.assertRaises(ValueError):
+            collect_goals(self._entries(), today=TODAY, weeks=0)
+
+    def test_render_shows_this_week_streaks_and_table(self):
+        data = collect_goals(self._entries(), today=TODAY, weekly_target=2)
+        out = render_goals_markdown(data)
+        self.assertIn("Weekly goals — target 2 applications a week", out)
+        self.assertIn("This week (2026-11-02 to 2026-11-08): 2 of 2 "
+                      "— target met", out)
+        self.assertIn("Current streak: 3 weeks meeting the target", out)
+        self.assertIn("Best streak: 3 weeks", out)
+        self.assertIn("2026-11-02 to 2026-11-08:  2 applications  [met]  "
+                      "[this week]", out)
+        self.assertIn("2026-10-26 to 2026-11-01:  3 applications  [met]",
+                      out)
+
+    def test_render_missed_week_and_remaining(self):
+        data = collect_goals(self._entries(), today=TODAY, weekly_target=5)
+        out = render_goals_markdown(data)
+        self.assertIn("This week (2026-11-02 to 2026-11-08): 2 of 5 "
+                      "— 3 to go", out)
+        self.assertIn("Current streak: 0 weeks — the last completed week "
+                      "missed the target", out)
+        # Completed weeks that missed carry the shortfall; the current
+        # week is still in progress, so its row is not judged a miss.
+        self.assertIn("2026-10-26 to 2026-11-01:  3 applications  "
+                      "[missed — 2 short]", out)
+        self.assertIn("2026-11-02 to 2026-11-08:  2 applications  "
+                      "[this week]", out)
+        self.assertNotIn("[missed — 3 short]", out)
+
+    def test_render_weeks_before_first_application_have_no_verdict(self):
+        # The log starts this week; the earlier rows are weeks before
+        # the first application, not misses for a goal that did not
+        # exist yet.
+        entries = self._entries()[6:]
+        data = collect_goals(entries, today=TODAY, weekly_target=2)
+        out = render_goals_markdown(data)
+        self.assertIn("2026-11-02 to 2026-11-08:  2 applications  [met]  "
+                      "[this week]", out)
+        self.assertIn("2026-10-26 to 2026-11-01:  0 applications\n", out)
+        self.assertNotIn("[missed", out)
+
+    def test_render_no_target_and_empty_log(self):
+        data = collect_goals(self._entries(), today=TODAY)
+        out = render_goals_markdown(data)
+        self.assertIn("no target set yet", out)
+        self.assertIn("2 applications so far", out)
+        self.assertNotIn("Current streak", out)
+        empty = render_goals_markdown(collect_goals([], today=TODAY))
+        self.assertIn("No applications logged yet", empty)
+        self.assertIn("goals --set-weekly N", empty)
+
+    def test_goals_json_round_trips(self):
+        data = collect_goals(self._entries(), today=TODAY, weekly_target=2)
+        restored = json.loads(goals_json(data))
+        self.assertEqual(restored["current_streak"], 3)
+        self.assertEqual(restored["weeks"][0]["week_start"], "2026-11-02")
+
+    def test_default_goals_path_beside_log(self):
+        self.assertEqual(default_goals_path("/tmp/work/applications.jsonl"),
+                         "/tmp/work/goals.json")
+
+    def test_set_weekly_target_stores_and_clears(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "goals.json"
+            data = set_weekly_target(path, 3)
+            self.assertEqual(data, {"weekly_target": 3})
+            self.assertEqual(json.loads(path.read_text(encoding="utf-8")),
+                             {"weekly_target": 3})
+            self.assertEqual(load_goals(path), {"weekly_target": 3})
+            data = set_weekly_target(path, 0)
+            self.assertEqual(data, {"weekly_target": None})
+            self.assertEqual(load_goals(path), {"weekly_target": None})
+
+    def test_set_weekly_target_refuses_bad_values(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "goals.json"
+            for bad in (-1, "3", 2.5, True):
+                with self.assertRaises(GoalsError, msg=repr(bad)):
+                    set_weekly_target(path, bad)
+
+    def test_load_goals_missing_file_means_no_target(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(load_goals(Path(tmp) / "goals.json"),
+                             {"weekly_target": None})
+
+    def test_load_goals_corrupt_file_raises(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "goals.json"
+            path.write_text("{not json", encoding="utf-8")
+            with self.assertRaises(GoalsError):
+                load_goals(path)
+            path.write_text("[1, 2]", encoding="utf-8")
+            with self.assertRaises(GoalsError):
+                load_goals(path)
+            for bad in (0, -2, "3", 2.5):
+                path.write_text(json.dumps({"weekly_target": bad}),
+                                encoding="utf-8")
+                with self.assertRaises(GoalsError, msg=repr(bad)):
+                    load_goals(path)
+
+
+class TestGoalsCLI(unittest.TestCase):
+    def _run(self, argv):
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            code = main(argv)
+        return code, buf.getvalue()
+
+    def _logged(self, tmp):
+        log = Path(tmp) / "log.jsonl"
+        add_application(log, "Northwind Analytics", "Data Analyst",
+                        today="2026-11-02")
+        add_application(log, "Harbour Analytics",
+                        "Business Intelligence Analyst", today="2026-11-03")
+        add_application(log, "Vector Labs", "Machine Learning Engineer",
+                        today="2026-10-27")
+        return log
+
+    def test_goals_cli_set_then_list(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            goals_path = Path(tmp) / "goals.json"
+            code, out = self._run(["goals", "--log", str(log),
+                                   "--set-weekly", "2",
+                                   "--today", "2026-11-08"])
+            self.assertEqual(code, 0)
+            self.assertIn("weekly target set to 2 applications a week", out)
+            self.assertTrue(goals_path.exists())
+            self.assertEqual(json.loads(goals_path.read_text(
+                encoding="utf-8")), {"weekly_target": 2})
+            code, out = self._run(["goals", "--log", str(log),
+                                   "--today", "2026-11-08"])
+            self.assertEqual(code, 0)
+            self.assertIn("Weekly goals — target 2 applications a week", out)
+            self.assertIn("This week (2026-11-02 to 2026-11-08): 2 of 2 "
+                          "— target met", out)
+            self.assertIn("Current streak: 1 week meeting the target", out)
+            self.assertIn("Best streak: 1 week", out)
+            self.assertIn("2026-10-26 to 2026-11-01:  1 application  "
+                          "[missed — 1 short]", out)
+
+    def test_goals_cli_clear_target(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            self._run(["goals", "--log", str(log), "--set-weekly", "2"])
+            code, out = self._run(["goals", "--log", str(log),
+                                   "--set-weekly", "0"])
+            self.assertEqual(code, 0)
+            self.assertIn("weekly target cleared", out)
+            code, out = self._run(["goals", "--log", str(log),
+                                   "--today", "2026-11-08"])
+            self.assertEqual(code, 0)
+            self.assertIn("no target set yet", out)
+
+    def test_goals_cli_set_negative_exit_1(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            code, _ = self._run(["goals", "--log", str(log),
+                                 "--set-weekly", "-1"])
+            self.assertEqual(code, 1)
+            self.assertFalse((Path(tmp) / "goals.json").exists())
+
+    def test_goals_cli_weeks_zero_and_bad_today_exit_1(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            code, _ = self._run(["goals", "--log", str(log), "--weeks", "0"])
+            self.assertEqual(code, 1)
+            code, _ = self._run(["goals", "--log", str(log),
+                                 "--today", "Nov 8"])
+            self.assertEqual(code, 1)
+
+    def test_goals_cli_json_and_out(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            out_path = Path(tmp) / "goals.md"
+            code, out = self._run(["goals", "--log", str(log),
+                                   "--set-weekly", "2",
+                                   "--today", "2026-11-08"])
+            self.assertEqual(code, 0)
+            code, out = self._run(["goals", "--log", str(log), "--json",
+                                   "--today", "2026-11-08"])
+            self.assertEqual(code, 0)
+            data = json.loads(out)
+            self.assertEqual(data["current_streak"], 1)
+            self.assertEqual(len(data["weeks"]), 8)
+            code, out = self._run(["goals", "--log", str(log),
+                                   "--out", str(out_path),
+                                   "--today", "2026-11-08"])
+            self.assertEqual(code, 0)
+            self.assertIn("wrote", out)
+            self.assertIn("Weekly goals", out_path.read_text(
+                encoding="utf-8"))
+
+    def test_goals_cli_custom_goals_path(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            custom = Path(tmp) / "elsewhere" / "targets.json"
+            code, out = self._run(["goals", "--log", str(log),
+                                   "--goals", str(custom),
+                                   "--set-weekly", "3"])
+            self.assertEqual(code, 0)
+            self.assertTrue(custom.exists())
+            self.assertFalse((Path(tmp) / "goals.json").exists())
+
+    def test_goals_cli_empty_state(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = Path(tmp) / "log.jsonl"
+            code, out = self._run(["goals", "--log", str(log),
+                                   "--today", "2026-11-08"])
+            self.assertEqual(code, 0)
+            self.assertIn("No applications logged yet", out)
+
+    def test_goals_cli_corrupt_log_exit_2(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = Path(tmp) / "log.jsonl"
+            log.write_text("{bad json\n", encoding="utf-8")
+            code, _ = self._run(["goals", "--log", str(log)])
+            self.assertEqual(code, 2)
+
+    def test_goals_cli_corrupt_goals_file_exit_2(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            goals_path = Path(tmp) / "goals.json"
+            goals_path.write_text("{bad json", encoding="utf-8")
+            code, _ = self._run(["goals", "--log", str(log)])
+            self.assertEqual(code, 2)
+
+    def test_goals_does_not_touch_the_log(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            before = log.read_bytes()
+            code, _ = self._run(["goals", "--log", str(log),
+                                 "--set-weekly", "2",
+                                 "--today", "2026-11-08"])
+            self.assertEqual(code, 0)
+            code, _ = self._run(["goals", "--log", str(log),
+                                 "--today", "2026-11-08"])
+            self.assertEqual(code, 0)
+            self.assertEqual(log.read_bytes(), before)
 
 
 if __name__ == "__main__":

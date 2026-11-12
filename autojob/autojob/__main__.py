@@ -38,6 +38,8 @@ Subcommands (all offline, stdlib only):
             [--out F] [--today YYYY-MM-DD]
   deadlines [--log L] [--days N] [--overdue] [--json] [--out F] [--today YYYY-MM-DD]
   deadlines --record --id APP-001 --date YYYY-MM-DD [--today YYYY-MM-DD]
+  goals     [--log L] [--goals G] [--set-weekly N] [--weeks N] [--json] [--out F]
+            [--today YYYY-MM-DD]
 
 Exit codes: 0 ok · 1 usage error · 2 profile/posting load error ·
 3 match below --fail-under · 4 draft/apply refused below --min-coverage ·
@@ -67,6 +69,9 @@ from .deadlines import (DeadlineError, collect_deadlines, deadlines_json,
                         render_deadlines_markdown, validate_deadline)
 from .digest import build_digest, digest_json, render_digest_markdown
 from .followup import due_followups, followup_json, followup_report
+from .goals import (GoalsError, collect_goals, default_goals_path,
+                    goals_json, load_goals, render_goals_markdown,
+                    set_weekly_target)
 from .interview import (InterviewError, collect_interviews,
                         interview_json, interviews_for,
                         render_interview_markdown, validate_interview)
@@ -807,6 +812,57 @@ def _cmd_deadlines(args):
     return 0
 
 
+def _cmd_goals(args):
+    if args.today is not None:
+        try:
+            today = datetime.date.fromisoformat(args.today)
+        except ValueError:
+            print(f"error: --today must be YYYY-MM-DD, got {args.today!r}",
+                  file=sys.stderr)
+            return 1
+    else:
+        today = datetime.date.today()
+    goals_path = args.goals or default_goals_path(args.log)
+    if args.set_weekly is not None:
+        try:
+            data = set_weekly_target(goals_path, args.set_weekly)
+        except GoalsError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 1
+        if data["weekly_target"] is None:
+            print(f"weekly target cleared (was stored in {goals_path})")
+        else:
+            print(f"weekly target set to {data['weekly_target']} "
+                  f"application"
+                  + ("s" if data["weekly_target"] != 1 else "")
+                  + f" a week (stored in {goals_path})")
+        return 0
+    if args.weeks is not None and args.weeks < 1:
+        print(f"error: --weeks must be 1 or more, got {args.weeks}",
+              file=sys.stderr)
+        return 1
+    try:
+        goals = load_goals(goals_path)
+    except GoalsError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    try:
+        entries = read_log(args.log)
+    except TrackerError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    data = collect_goals(entries, today=today,
+                         weeks=args.weeks if args.weeks is not None else 8,
+                         weekly_target=goals["weekly_target"])
+    text = goals_json(data) if args.json else render_goals_markdown(data)
+    if args.out:
+        Path(args.out).write_text(text, encoding="utf-8")
+        print(f"wrote {args.out}")
+    else:
+        print(text, end="")
+    return 0
+
+
 def _cmd_calendar(args):
     if args.today is not None:
         try:
@@ -1190,6 +1246,22 @@ def build_parser():
     p.add_argument("--date", default=None,
                    help="with --record: the closing date YYYY-MM-DD")
     p.set_defaults(func=_cmd_deadlines)
+
+    p = sub.add_parser("goals", help="weekly application target and "
+                                       "streak: set one with --set-weekly")
+    p.add_argument("--log", default=f"{DEFAULT_OUT_DIR}/applications.jsonl")
+    p.add_argument("--goals", default=None,
+                   help="goals file (default: goals.json beside the log)")
+    p.add_argument("--json", action="store_true")
+    p.add_argument("--out", default=None,
+                   help="write the goals view to this file instead of stdout")
+    p.add_argument("--today", default=None,
+                   help="reference date YYYY-MM-DD (default: today)")
+    p.add_argument("--set-weekly", type=int, default=None,
+                   help="set the weekly application target (0 clears it)")
+    p.add_argument("--weeks", type=int, default=None,
+                   help="how many weeks back the table runs (default 8)")
+    p.set_defaults(func=_cmd_goals)
 
     p = sub.add_parser("report", help="funnel analytics over logged applications")
     p.add_argument("--log", default=f"{DEFAULT_OUT_DIR}/applications.jsonl")

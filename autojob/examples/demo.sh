@@ -141,4 +141,13 @@ python3 -m autojob timeline --log "$WORK/applications/applications.jsonl" \
     --today "$FUTURE"
 python3 -m autojob timeline --log "$WORK/applications/applications.jsonl" \
     --today "$FUTURE" --kind interview --kind offer --oldest
+# Goals: set a weekly target of 2 applications. Both were filed this
+# week, so the target is met and the streak is 1. Eight days on, the
+# new week has none yet, so the week shows 0 of 2 with 2 to go — but
+# the streak still stands at 1, because last week met the target.
+python3 -m autojob goals --log "$WORK/applications/applications.jsonl" \
+    --set-weekly 2
+python3 -m autojob goals --log "$WORK/applications/applications.jsonl"
+python3 -m autojob goals --log "$WORK/applications/applications.jsonl" \
+    --today "$FUTURE"
 echo "demo OK: packets in $WORK/applications (removed on exit)"
