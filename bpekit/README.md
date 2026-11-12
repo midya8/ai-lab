@@ -94,3 +94,7 @@ Chunks cut only at word boundaries, never exceed `max_tokens` (except a single w
 ## CLI additions
 
 `python -m bpekit fertility tok.json corpus.txt` prints fertility stats; `python -m bpekit truncate tok.json "text" -n 20 --keep middle` fits text into a token budget (1 test, 58 total).
+
+## Sequence packing
+
+`pack(tok, docs, seq_len)` joins documents with the EOS special and slices the stream into exact `seq_len` rows, returning the rows plus each document's start offset inside its row (useful for attention masks). `drop_last=False` keeps the short final row.

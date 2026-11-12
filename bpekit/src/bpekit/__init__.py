@@ -12,3 +12,5 @@ from .fertility import fertility
 __all__ += ["fertility"]
 from .budget import truncate
 __all__ += ["truncate"]
+from .pack import pack
+__all__ += ["pack"]
