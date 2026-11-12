@@ -32,3 +32,8 @@ PYTHONPATH=src python -m bpekit eval corpus.txt -v 400   # held-out bytes/token
 ## GPT-2 / HuggingFace-style export
 
 `export_gpt2(tok, "vocab.json", "merges.txt")` writes the merge table in the GPT-2 byte-to-unicode alphabet; `import_gpt2(...)` rebuilds the tokenizer and rejects files whose ids disagree with merge order (4 tests, 15 total). Only the merge table is portable: this package's pre-split regex is simpler than GPT-2's, so other libraries can tokenise contractions/punctuation differently. Not verified against an external library here.
+
+
+## BPE-dropout
+
+`tok.encode(text, dropout=0.1, rng=random.Random(0))` skips each applicable merge with probability p (Provilkov et al., 2020), giving varied segmentations of the same text for training-time regularisation; decoding stays lossless and specials are untouched. Default `dropout=0` is the unchanged deterministic path. Only the mechanics are tested here (round-trip, variation, longer sequences as p rises, seeded reproducibility); no downstream model-quality claim is made (5 tests, 20 total).

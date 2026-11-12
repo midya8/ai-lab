@@ -104,7 +104,24 @@ class BPETokenizer:
         self._cache[w] = ids
         return ids
 
-    def encode(self, text: str):
+    def _encode_word_dropout(self, w, p, rng):
+        """BPE-dropout (Provilkov et al. 2020): each candidate merge is skipped with prob p."""
+        ids = list(w.encode("utf-8"))
+        while len(ids) > 1:
+            cands = [(self.rank[q], q) for q in set(zip(ids, ids[1:])) if q in self.rank and rng.random() >= p]
+            if not cands:
+                break
+            _, pair = min(cands)
+            ids = _merge(ids, pair, 256 + self.rank[pair])
+        return ids
+
+    def encode(self, text: str, dropout: float = 0.0, rng=None):
+        """dropout>0 gives stochastic segmentations (training-time regularisation); decode is still lossless."""
+        if not 0.0 <= dropout < 1.0:
+            raise ValueError("dropout must be in [0, 1)")
+        if dropout > 0:
+            import random
+            rng = rng or random.Random()
         if not self.specials:
             parts = [text]
         else:
@@ -116,7 +133,7 @@ class BPETokenizer:
                 out.append(self.specials[part])
             else:
                 for w in _SPLIT.findall(part):
-                    out.extend(self._encode_word(w))
+                    out.extend(self._encode_word_dropout(w, dropout, rng) if dropout > 0 else self._encode_word(w))
         return out
 
     def decode(self, ids) -> str:
