@@ -159,3 +159,17 @@ threshold (0.8, picked on validation streams), 0.955 with per-word calibration**
 288 (3 vs 0 vs 3 false positives), i.e. **a null result**: per-word thresholds do not measurably beat a global one here,
 because the MLP is already confident and the validation F1 curve is flat from 0.3 to 0.9. Calibration may matter more
 with a weaker model or real speech; this benchmark cannot show it.
+
+## Wake-word gating (`WakeGate`)
+
+```python
+from voicekit import Recognizer, WakeGate, parse_events
+events = Recognizer(model).process(audio)
+commands = WakeGate("timer", listen_s=3.0, wake_confidence=0.8).filter(events)
+```
+
+Commands are only forwarded while a session is armed by the wake word (confidence >= `wake_confidence`);
+each accepted word extends the session by `listen_s`, silence longer than that disarms it. Dropped events
+are kept in `gate.dropped` with a reason (`not_armed`, `weak_wake`). It works on event timestamps, so live
+and replayed audio behave identically. Tested on synthetic events plus one synthetic end-to-end stream
+(not a benchmark of wake-word accuracy).
