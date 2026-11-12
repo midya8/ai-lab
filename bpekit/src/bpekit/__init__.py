@@ -24,3 +24,5 @@ from .entropy import token_entropy
 __all__ += ["token_entropy"]
 from .variants import boundary_variants
 __all__ += ["boundary_variants"]
+from .zipf import zipf_fit
+__all__ += ["zipf_fit"]

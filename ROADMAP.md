@@ -253,6 +253,7 @@
 - bpekit: `token_entropy` unigram entropy / bits-per-byte / efficiency (3 tests, 75 total)
 - bpekit: `boundary_variants` leading-space tokenization cost per word (2 tests)
 - specdec: `alpha_profile` per-context acceptance spread vs speedup-from-mean-alpha (analytic; 3 tests, 46 total)
+- bpekit: `zipf_fit` log-rank/log-frequency power-law fit of emitted tokens (3 tests)
 
 
 ## Next
