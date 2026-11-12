@@ -228,6 +228,7 @@
 - reviewkit: AST rule py-catch-baseexception (`except BaseException` without re-raise; 120 tests)
 - reviewkit: AST rule py-raise-notimplemented (`raise NotImplemented`; tests pass)
 - voicekit: `Assistant` end-to-end streaming (audio -> wake gate -> intents, quiet-window command grouping; 97 tests)
+- bpekit: `prune` drops merges a reference corpus never emits (keeping needed components; same token count on reference, 39 tests)
 
 
 ## Next
