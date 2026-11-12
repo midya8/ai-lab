@@ -236,6 +236,7 @@
 - reviewkit: AST rule py-utcnow (naive/deprecated `datetime.utcnow`; 121 tests)
 - reviewkit: AST rule py-float-equality (`==`/`!=` vs non-integer float literal; 122 tests)
 - bpekit: fertility metric (tokens/word, p95, single-token share, worst words; 3 tests, 51 total)
+- bpekit: `truncate` token-budget truncation (head/tail/middle, UTF-8 safe; 57 tests)
 
 
 ## Next

@@ -86,3 +86,7 @@ Chunks cut only at word boundaries, never exceed `max_tokens` (except a single w
 ## Fertility (`bpekit.fertility`)
 
 `fertility(tok, text)` encodes each `\w+` word separately and reports mean tokens per word, the 95th-percentile cost, the share of words that are a single token, and the distinct words that cost the most. It is a quick check of how well a vocabulary fits a domain (a code vocabulary on prose, say). It measures segmentation only, not downstream model quality (3 tests).
+
+## Token budgets (`bpekit.truncate`)
+
+`truncate(tok, text, max_tokens, keep='head'|'tail'|'middle')` fits text into a token budget without splitting a UTF-8 character; `middle` keeps head and tail joined by a marker whose token cost is counted. The re-encoded result is guaranteed not to exceed the budget (4 tests, 57 total).
