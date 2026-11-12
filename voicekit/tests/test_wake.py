@@ -68,3 +68,13 @@ def test_merge_duplicates_unsorted_and_overlap():
     from voicekit.wake import merge_duplicates
     out = merge_duplicates([ev("on", 1.1, 1.4), ev("on", 1.0, 1.3)])
     assert len(out) == 1 and out[0].end_s == 1.4
+
+
+def test_margin_filter_drops_ambiguous_keeps_probless():
+    from voicekit.wake import margin, margin_filter
+    clear = Event("on", .9, 0, .4, {"on": .9, "off": .05, "x": .05})
+    vague = Event("off", .45, .5, .9, {"off": .45, "on": .40, "x": .15})
+    bare = Event("up", .6, 1, 1.4)
+    assert abs(margin(clear) - .85) < 1e-9 and margin(bare) is None
+    assert margin_filter([clear, vague, bare], 0.2) == [clear, bare]
+    assert margin_filter([vague], 0.0) == [vague]

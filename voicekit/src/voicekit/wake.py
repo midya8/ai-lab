@@ -66,3 +66,24 @@ def merge_duplicates(events: list[Event], gap_s: float = 0.15) -> list[Event]:
         else:
             out.append(ev)
     return out
+
+
+def margin(ev: Event) -> float | None:
+    """Gap between the top two class probabilities (None when the event carries no ``probs``)."""
+    vals = sorted(ev.probs.values(), reverse=True) if ev.probs else []
+    if len(vals) < 2:
+        return None
+    return float(vals[0] - vals[1])
+
+
+def margin_filter(events: list[Event], min_margin: float = 0.2) -> list[Event]:
+    """Drop events whose top-2 probability margin is below ``min_margin`` (ambiguous words).
+
+    Events without ``probs`` are kept, since there is nothing to judge them by.
+    """
+    out = []
+    for ev in events:
+        m = margin(ev)
+        if m is None or m >= min_margin:
+            out.append(ev)
+    return out
