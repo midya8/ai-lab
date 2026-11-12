@@ -354,3 +354,10 @@ def test_raise_notimplemented():
     assert rules("a.py", "def f():\n    raise NotImplemented\n") == [(2, "py-raise-notimplemented")]
     assert rules("a.py", "def f():\n    raise NotImplemented('x')\n") == [(2, "py-raise-notimplemented")]
     assert rules("a.py", "def f():\n    raise NotImplementedError\n") == []
+
+
+def test_utcnow():
+    assert rules("a.py", "import datetime\nx = datetime.datetime.utcnow()\n") == [(2, "py-utcnow")]
+    assert rules("a.py", "from datetime import datetime\nx = datetime.utcnow()\n") == [(2, "py-utcnow")]
+    assert rules("a.py", "from datetime import datetime\nx = datetime.utcfromtimestamp(0)\n") == [(2, "py-utcnow")]
+    assert rules("a.py", "from datetime import datetime, timezone\nx = datetime.now(timezone.utc)\n") == []

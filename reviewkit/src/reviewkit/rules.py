@@ -502,6 +502,13 @@ def ast_findings(ctx: FileContext, source: str, complexity_threshold: int = 10) 
                     add(node.lineno, "py-requests-no-timeout", "medium",
                         "`requests` has no default timeout; a stalled server hangs this call forever.",
                         "Pass `timeout=(connect, read)`, e.g. `timeout=10`.")
+        elif isinstance(node, ast.Attribute) and node.attr in ("utcnow", "utcfromtimestamp") and isinstance(
+                node.value, (ast.Name, ast.Attribute)) and (
+                (isinstance(node.value, ast.Name) and node.value.id in ("datetime", "dt"))
+                or (isinstance(node.value, ast.Attribute) and node.value.attr == "datetime")):
+            add(node.lineno, "py-utcnow", "low",
+                f"`datetime.{node.attr}` returns a naive datetime and is deprecated since Python 3.12.",
+                "Use `datetime.now(timezone.utc)` / `datetime.fromtimestamp(ts, timezone.utc)`.")
         elif isinstance(node, ast.Assert):
             if isinstance(node.test, ast.Tuple) and node.test.elts:
                 add(node.lineno, "py-assert-tuple", "high",
@@ -604,6 +611,7 @@ RULE_TABLE.update({
     "py-is-literal": ("medium", "`is` / `is not` against a str/int/float/bytes literal."),
     "py-raise-notimplemented": ("high", "`raise NotImplemented` instead of `NotImplementedError`."),
     "py-assert-tuple": ("high", "`assert` on a non-empty tuple is always true."),
+    "py-utcnow": ("low", "`datetime.utcnow()` / `utcfromtimestamp` (naive, deprecated)."),
     "py-return-in-finally": ("medium", "`return` inside `finally` swallows exceptions."),
     "py-compare-none": ("low", "`== None` / `!= None` instead of `is None`."),
     "py-raise-notimplemented": ("medium", "`raise NotImplemented` (should be NotImplementedError)."),
