@@ -102,3 +102,7 @@ Chunks cut only at word boundaries, never exceed `max_tokens` (except a single w
 ## Round-trip verification
 
 `verify(tok, texts, n_fuzz=200)` checks `decode(encode(x)) == x` on your texts plus seeded fuzz strings (unicode, emoji, control chars, special-token lookalikes), both plain and with BPE-dropout, and returns every failure. Run it after `prune`, `extend`, or an import to catch silent lossiness (3 tests).
+
+## Under-trained tokens
+
+`undertrained(tok, text, max_count=0, limit=None)` lists merged tokens that `text` emits at most `max_count` times, rarest first, as `(id, bytes, count)`. Run it on the corpus a model will train on: these ids will get few gradient updates, the usual source of glitch-token behaviour. It reports counts only; it does not measure any model (3 tests).

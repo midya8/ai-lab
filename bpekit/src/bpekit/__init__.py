@@ -16,3 +16,5 @@ from .pack import pack
 __all__ += ["pack"]
 from .verify import verify, fuzz_strings
 __all__ += ["verify", "fuzz_strings"]
+from .undertrained import undertrained
+__all__ += ["undertrained"]

@@ -246,6 +246,7 @@
 - datadoctor: class_balance + label_shift (TV distance, chi-square vs train; 5 tests, 86 total)
 - reviewkit: AST rule py-urlopen-no-timeout (125 tests)
 - bpekit: `pack` sequence packing into fixed-length rows with doc-start offsets (3 tests, 64 total)
+- bpekit: `undertrained` lists rarely/never-emitted merged tokens (glitch-token candidates; 3 tests)
 - reviewkit: AST-free rule py-cleartext-protocol (FTP/Telnet/plain SMTP; 126 tests)
 
 
