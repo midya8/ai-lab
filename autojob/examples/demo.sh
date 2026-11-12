@@ -91,7 +91,28 @@ python3 -m autojob interview --log "$WORK/applications/applications.jsonl" \
 python3 -m autojob interview --log "$WORK/applications/applications.jsonl" \
     --record --id APP-002 --date "$INTERVIEW_DAY" --round "Hiring manager" \
     --interviewer "Priya Nair" --mode video --duration-minutes 45 \
-    --note "Bring the dashboard story." --today "$FUTURE"
+    --time 14:30 --note "Bring the dashboard story." --today "$FUTURE"
 python3 -m autojob interview --log "$WORK/applications/applications.jsonl" \
     --today "$FUTURE"
+# Calendar: export the next 14 days as .ics — the hiring-manager round
+# (timed, 14:30 for 45 minutes) and both offer deadlines (14 days out,
+# inside the window). No follow-up is due: both applications had activity
+# recorded today (the follow-up and the offers), so the file holds 3 events.
+python3 -m autojob calendar --log "$WORK/applications/applications.jsonl" \
+    --today "$FUTURE" --out "$WORK/search.ics"
+grep -c "BEGIN:VEVENT" "$WORK/search.ics"
+# Contacts: the people behind the applications — a recruiter at Northwind
+# you spoke to today (in demo time, 8 days after applying), and a hiring
+# manager at Harbour you emailed the day you applied. Eight days on, the
+# Harbour contact has gone quiet by a 7-day bar; Northwind has not.
+python3 -m autojob contacts --log "$WORK/applications/applications.jsonl" \
+    --record --id APP-001 --name "Sam Chen" --role Recruiter \
+    --channel linkedin --date "$FUTURE" --today "$FUTURE"
+python3 -m autojob contacts --log "$WORK/applications/applications.jsonl" \
+    --record --id APP-002 --name "Alex Rivera" --role "Hiring manager" \
+    --channel email --date "$(date +%F)" --today "$FUTURE"
+python3 -m autojob contacts --log "$WORK/applications/applications.jsonl" \
+    --today "$FUTURE"
+python3 -m autojob contacts --log "$WORK/applications/applications.jsonl" \
+    --today "$FUTURE" --quiet-days 7
 echo "demo OK: packets in $WORK/applications (removed on exit)"

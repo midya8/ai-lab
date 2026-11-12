@@ -239,6 +239,47 @@ def record_interview(log_path, app_id, interview, today=None):
     raise TrackerError(f"no application with id {app_id!r}")
 
 
+def record_contact(log_path, app_id, contact, today=None):
+    """Record a contact (a person) on an application.
+
+    Appends the (already validated) contact dict to the entry's
+    ``contacts`` list and a ``{"kind": "contact", "at": date,
+    "name": name}`` event to its history. Recording the same person
+    again is a new touch, not a duplicate — the list groups by name
+    and takes the latest touch, so a re-recorded contact moves that
+    person's last-spoke date forward. Refuses terminal applications:
+    there is nobody left to talk to once an application is hired,
+    rejected, or withdrawn. Recording a contact does not move the
+    application's status — that stays explicit through ``set_status``,
+    the same rule as offers and interviews. ``today`` defaults to the
+    real current date; pass an explicit date in tests.
+    """
+    if today is None:
+        today = datetime.date.today().isoformat()
+    entries = read_log(log_path)
+    for entry in entries:
+        if entry["id"] == app_id:
+            if entry.get("status") in TERMINAL:
+                raise TrackerError(
+                    f"cannot record a contact for {app_id}: status is "
+                    f"{entry['status']!r} (terminal)"
+                )
+            _ensure_history(entry)
+            contacts = entry.get("contacts")
+            if not isinstance(contacts, list):
+                contacts = []
+                entry["contacts"] = contacts
+            contacts.append(contact)
+            entry["history"].append({
+                "kind": "contact",
+                "at": contact["date"],
+                "name": contact.get("name"),
+            })
+            _write_log(log_path, entries)
+            return entry
+    raise TrackerError(f"no application with id {app_id!r}")
+
+
 def find_application(entries, app_id):
     for entry in entries:
         if entry["id"] == app_id:

@@ -17,6 +17,10 @@ from autojob.analytics import (analytics_json, analytics_report, by_company,
                                 compute_analytics, days_in_stage, funnel,
                                 history_of, reached_stages, score_stats,
                                 stale_applications)
+from autojob.calendar import (build_calendar, calendar_json, render_ics)
+from autojob.contacts import (ContactError, collect_contacts, contacts_for,
+                              contacts_json, render_contacts_markdown,
+                              validate_contact)
 from autojob.digest import (build_digest, digest_json, gap_leaderboard,
                             render_digest_markdown)
 from autojob.followup import (draft_followup, due_followups, followups_sent,
@@ -40,8 +44,9 @@ from autojob.offer import (OfferError, compare_offers, first_year_total,
                            total_cash, validate_offer)
 from autojob.tailor import build_tailor, render_tailor_markdown, tailor_json
 from autojob.tracker import (TrackerError, add_application, read_log,
-                             record_followup, record_interview, record_offer,
-                             set_status, slug)
+                             record_contact, record_followup,
+                             record_interview, record_offer, set_status,
+                             slug)
 
 HERE = Path(__file__).resolve().parent
 EXAMPLE_PROFILE = HERE.parent / "examples" / "profile.example.json"
@@ -450,7 +455,7 @@ class TestCLI(unittest.TestCase):
 
     def test_version(self):
         self.assertTrue(__version__.startswith("0."))
-        self.assertEqual(__version__, "0.11.0")
+        self.assertEqual(__version__, "0.13.0")
 
 
 def _fixture_log(tmp):
@@ -474,6 +479,66 @@ def _fixture_log(tmp):
     add_application(log, "Acme", "Engineer", match_score=0.40, today="2026-11-03")
     set_status(log, "APP-003", "rejected", today="2026-11-04")
     add_application(log, "Delta", "Analyst", match_score=0.60, today="2026-11-10")
+    return log
+
+
+def _log_for_calendar(tmp):
+    """A log built for calendar tests, read at 2026-11-09.
+
+    APP-001 Northwind, interview stage: a timed hiring-manager round
+    2026-11-10 14:30 (45 min, notes with punctuation to escape), a past
+    recruiter screen, an untimed panel 2026-11-12, and a final round
+    2026-11-30 outside the 14-day window.
+    APP-002 Harbour, offer stage: a timed round 2026-11-11 09:30 with no
+    duration recorded, and an offer with a 2026-11-14 deadline.
+    APP-003 Vector Labs, applied 2026-11-01 and quiet since — due a
+    follow-up at 2026-11-09 (8 days past the 7-day wait).
+    APP-004 Acme, rejected 2026-11-09 with an interview and an offer
+    deadline in the window — both must be left out.
+    """
+    log = Path(tmp) / "apps.jsonl"
+    add_application(log, "Northwind Analytics", "Data Analyst",
+                    match_score=0.625, today="2026-11-01")
+    set_status(log, "APP-001", "screening", today="2026-11-03")
+    set_status(log, "APP-001", "interview", today="2026-11-05")
+    record_interview(log, "APP-001", validate_interview({
+        "date": "2026-11-10", "round": "Hiring manager",
+        "interviewer": "Priya Nair", "mode": "video",
+        "duration_minutes": 45, "time": "14:30",
+        "notes": "Bring the dashboard story.\nSecond line, with; "
+                 "punctuation \\ done"}, today="2026-11-09"))
+    record_interview(log, "APP-001", validate_interview({
+        "date": "2026-11-06", "round": "Recruiter screen",
+        "mode": "phone", "duration_minutes": 30}, today="2026-11-09"))
+    record_interview(log, "APP-001", validate_interview({
+        "date": "2026-11-12", "round": "Panel",
+        "interviewer": "Sam Ortiz", "mode": "onsite",
+        "duration_minutes": 60}, today="2026-11-09"))
+    record_interview(log, "APP-001", validate_interview({
+        "date": "2026-11-30", "round": "Final"}, today="2026-11-09"))
+    add_application(log, "Harbour Analytics",
+                    "Business Intelligence Analyst",
+                    match_score=0.562, today="2026-11-01")
+    set_status(log, "APP-002", "screening", today="2026-11-04")
+    set_status(log, "APP-002", "interview", today="2026-11-07")
+    set_status(log, "APP-002", "offer", today="2026-11-08")
+    record_interview(log, "APP-002", validate_interview({
+        "date": "2026-11-11", "round": "Hiring manager",
+        "mode": "video", "time": "9:30"}, today="2026-11-09"))
+    record_offer(log, "APP-002", validate_offer({
+        "base": 105000, "currency": "CAD", "bonus": 5000,
+        "mode": "hybrid", "deadline": "2026-11-14"}, today="2026-11-09"))
+    add_application(log, "Vector Labs", "Machine Learning Engineer",
+                    match_score=0.150, today="2026-11-01")
+    add_application(log, "Acme", "Analyst", match_score=0.80,
+                    today="2026-11-01")
+    record_interview(log, "APP-004", validate_interview({
+        "date": "2026-11-10", "round": "Hiring manager",
+        "time": "10:00", "duration_minutes": 30}, today="2026-11-09"))
+    record_offer(log, "APP-004", validate_offer({
+        "base": 90000, "currency": "CAD",
+        "deadline": "2026-11-13"}, today="2026-11-09"))
+    set_status(log, "APP-004", "rejected", today="2026-11-09")
     return log
 
 
@@ -2609,6 +2674,41 @@ class TestInterview(unittest.TestCase):
         self.assertEqual(interview["round"], "Panel")
         self.assertIsNone(interview["interviewer"])
 
+    def test_validate_interview_time_normalized(self):
+        interview = validate_interview(
+            {"date": "2026-11-10", "round": "Panel", "time": "9:30"},
+            today="2026-11-08")
+        self.assertEqual(interview["time"], "09:30")
+        interview = validate_interview(
+            {"date": "2026-11-10", "round": "Panel", "time": "14:30"},
+            today="2026-11-08")
+        self.assertEqual(interview["time"], "14:30")
+        interview = validate_interview(
+            {"date": "2026-11-10", "round": "Panel"}, today="2026-11-08")
+        self.assertIsNone(interview["time"])
+
+    def test_validate_interview_bad_time(self):
+        for bad in ("24:00", "14:60", "2pm", "14:30:00", 1430):
+            with self.subTest(bad=bad):
+                with self.assertRaises(InterviewError):
+                    validate_interview(self._round(time=bad))
+
+    def test_collect_carries_time(self):
+        entries = self._entries()
+        entries[0]["interviews"][0]["time"] = "14:30"
+        data = collect_interviews(entries, today=TODAY)
+        timed = [r for r in data["upcoming"] if r["round"] == "Hiring manager"]
+        self.assertEqual(timed[0]["time"], "14:30")
+        untimed = [r for r in data["upcoming"] if r["round"] == "Panel"]
+        self.assertIsNone(untimed[0]["time"])
+
+    def test_render_shows_time(self):
+        entries = self._entries()
+        entries[0]["interviews"][0]["time"] = "14:30"
+        text = render_interview_markdown(
+            collect_interviews(entries, today=TODAY))
+        self.assertIn("2026-11-10 14:30", text)
+
     def test_validate_interview_reports_every_error_at_once(self):
         with self.assertRaises(InterviewError) as caught:
             validate_interview({"mode": "carrier pigeon",
@@ -2945,6 +3045,662 @@ class TestInterviewCLI(unittest.TestCase):
             log = self._log_with_rounds(tmp)
             code, _ = self._run(["interview", "--log", str(log),
                                  "--today", "2026-13-40"])
+            self.assertEqual(code, 1)
+
+
+class TestCalendar(unittest.TestCase):
+    def test_build_calendar_five_events(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            entries = read_log(_log_for_calendar(tmp))
+            data = build_calendar(entries, today=datetime.date(2026, 11, 9))
+            self.assertEqual(data["counts"], {"events": 5, "interviews": 3,
+                                              "offer_deadlines": 1,
+                                              "followups": 1})
+            self.assertEqual(data["window"],
+                             {"from": "2026-11-09", "to": "2026-11-23",
+                              "days": 14})
+            kinds = [(e["date"], e["kind"]) for e in data["events"]]
+            self.assertEqual(kinds, [("2026-11-09", "followup"),
+                                     ("2026-11-10", "interview"),
+                                     ("2026-11-11", "interview"),
+                                     ("2026-11-12", "interview"),
+                                     ("2026-11-14", "offer_deadline")])
+
+    def test_timed_interview_uses_duration(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            entries = read_log(_log_for_calendar(tmp))
+            data = build_calendar(entries, today=datetime.date(2026, 11, 9))
+            timed = [e for e in data["events"]
+                     if e["date"] == "2026-11-10"][0]
+            self.assertEqual((timed["start"], timed["end"]), ("14:30", "15:15"))
+            self.assertFalse(timed["all_day"])
+            self.assertEqual(timed["days_until"], 1)
+            self.assertIn("Priya Nair", timed["description"])
+            self.assertIn("Bring the dashboard story.",
+                          timed["description"])
+
+    def test_timed_without_duration_defaults_to_one_hour(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            entries = read_log(_log_for_calendar(tmp))
+            data = build_calendar(entries, today=datetime.date(2026, 11, 9))
+            timed = [e for e in data["events"]
+                     if e["date"] == "2026-11-11"][0]
+            self.assertEqual((timed["start"], timed["end"]), ("09:30", "10:30"))
+            self.assertIn("shown as 1 hour", timed["description"])
+
+    def test_untimed_interview_is_all_day(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            entries = read_log(_log_for_calendar(tmp))
+            data = build_calendar(entries, today=datetime.date(2026, 11, 9))
+            panel = [e for e in data["events"]
+                     if e["date"] == "2026-11-12"][0]
+            self.assertTrue(panel["all_day"])
+            self.assertIsNone(panel["start"])
+            self.assertIsNone(panel["end"])
+
+    def test_deadline_event_states_offer_facts(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            entries = read_log(_log_for_calendar(tmp))
+            data = build_calendar(entries, today=datetime.date(2026, 11, 9))
+            deadline = [e for e in data["events"]
+                        if e["kind"] == "offer_deadline"][0]
+            self.assertEqual(deadline["date"], "2026-11-14")
+            self.assertEqual(deadline["days_until"], 5)
+            self.assertIn("CAD 105,000", deadline["description"])
+            self.assertIn("110,000", deadline["description"])
+
+    def test_followup_event_dated_today(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            entries = read_log(_log_for_calendar(tmp))
+            data = build_calendar(entries, today=datetime.date(2026, 11, 9))
+            followup = [e for e in data["events"]
+                        if e["kind"] == "followup"][0]
+            self.assertEqual(followup["date"], "2026-11-09")
+            self.assertEqual(followup["company"], "Vector Labs")
+            self.assertIn("8 days", followup["description"])
+            self.assertIn("due now", followup["description"])
+
+    def test_terminal_applications_left_out(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            entries = read_log(_log_for_calendar(tmp))
+            data = build_calendar(entries, today=datetime.date(2026, 11, 9))
+            self.assertNotIn("APP-004", [e["id"] for e in data["events"]])
+
+    def test_days_zero_is_today_only(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            entries = read_log(_log_for_calendar(tmp))
+            data = build_calendar(entries, today=datetime.date(2026, 11, 9),
+                                  days=0)
+            self.assertEqual(len(data["events"]), 1)
+            self.assertEqual(data["events"][0]["kind"], "followup")
+
+    def test_negative_days_refused(self):
+        with self.assertRaises(ValueError):
+            build_calendar([], today=datetime.date(2026, 11, 9), days=-1)
+
+    def test_empty_log_is_valid_empty_calendar(self):
+        data = build_calendar([], today=datetime.date(2026, 11, 9))
+        self.assertEqual(data["events"], [])
+        ics = render_ics(data)
+        self.assertIn("BEGIN:VCALENDAR", ics)
+        self.assertIn("END:VCALENDAR", ics)
+        self.assertNotIn("VEVENT", ics)
+
+    def test_uids_deterministic_and_distinct(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            entries = read_log(_log_for_calendar(tmp))
+            first = build_calendar(entries, today=datetime.date(2026, 11, 9))
+            second = build_calendar(entries, today=datetime.date(2026, 11, 9))
+            self.assertEqual([e["uid"] for e in first["events"]],
+                             [e["uid"] for e in second["events"]])
+            self.assertEqual(len({e["uid"] for e in first["events"]}), 5)
+            self.assertTrue(all(uid.endswith("@autojob")
+                                for uid in (e["uid"]
+                                            for e in first["events"])))
+
+    def test_ics_timed_and_all_day_dates(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            entries = read_log(_log_for_calendar(tmp))
+            data = build_calendar(entries, today=datetime.date(2026, 11, 9))
+            ics = render_ics(data)
+            self.assertIn("DTSTART:20261110T143000", ics)
+            self.assertIn("DTEND:20261110T151500", ics)
+            self.assertIn("DTSTART:20261111T093000", ics)
+            self.assertIn("DTEND:20261111T103000", ics)
+            self.assertIn("DTSTART;VALUE=DATE:20261112", ics)
+            self.assertIn("DTEND;VALUE=DATE:20261113", ics)
+            self.assertIn("DTSTART;VALUE=DATE:20261114", ics)
+            self.assertIn("DTSTART;VALUE=DATE:20261109", ics)
+            self.assertIn("DTSTAMP:20261109T000000Z", ics)
+            self.assertEqual(ics.count("BEGIN:VEVENT"), 5)
+
+    def test_ics_uses_crlf_only(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            entries = read_log(_log_for_calendar(tmp))
+            ics = render_ics(build_calendar(
+                entries, today=datetime.date(2026, 11, 9)))
+            self.assertIn("\r\n", ics)
+            self.assertNotIn("\n", ics.replace("\r\n", ""))
+
+    def test_ics_escapes_text(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            entries = read_log(_log_for_calendar(tmp))
+            ics = render_ics(build_calendar(
+                entries, today=datetime.date(2026, 11, 9)))
+            unfolded = ics.replace("\r\n ", "")
+            self.assertIn("Bring the dashboard story.\\nSecond line\\, "
+                          "with\\; punctuation \\\\ done", unfolded)
+
+    def test_ics_folds_long_lines_at_75_octets(self):
+        from autojob.calendar import _fold_line
+
+        def unfolded(folded):
+            return folded[0] + "".join(part[1:] for part in folded[1:])
+
+        line = "SUMMARY:" + "x" * 200
+        folded = _fold_line(line)
+        self.assertTrue(all(len(part.encode("utf-8")) <= 75
+                            for part in folded))
+        self.assertEqual(unfolded(folded), line)
+        wide = "SUMMARY:" + "—" * 40  # 3 bytes each, 128 bytes total
+        folded = _fold_line(wide)
+        self.assertTrue(all(len(part.encode("utf-8")) <= 75
+                            for part in folded))
+        self.assertEqual(unfolded(folded), wide)
+
+    def test_calendar_json_round_trip(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            entries = read_log(_log_for_calendar(tmp))
+            data = build_calendar(entries, today=datetime.date(2026, 11, 9))
+            parsed = json.loads(calendar_json(data))
+            self.assertEqual(parsed["counts"]["events"], 5)
+            self.assertEqual(parsed["events"][0]["kind"], "followup")
+
+
+class TestCalendarCLI(unittest.TestCase):
+    def _run(self, argv):
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            code = main(argv)
+        return code, buf.getvalue()
+
+    def test_calendar_cli_prints_ics(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = _log_for_calendar(tmp)
+            code, out = self._run(["calendar", "--log", str(log),
+                                   "--today", "2026-11-09"])
+            self.assertEqual(code, 0)
+            self.assertIn("BEGIN:VCALENDAR", out)
+            self.assertEqual(out.count("BEGIN:VEVENT"), 5)
+
+    def test_calendar_cli_out_writes_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = _log_for_calendar(tmp)
+            out_path = Path(tmp) / "search.ics"
+            code, out = self._run(["calendar", "--log", str(log),
+                                   "--today", "2026-11-09",
+                                   "--out", str(out_path)])
+            self.assertEqual(code, 0)
+            self.assertIn(f"wrote {out_path}", out)
+            self.assertEqual(out_path.read_text(encoding="utf-8")
+                             .count("BEGIN:VEVENT"), 5)
+
+    def test_calendar_cli_json(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = _log_for_calendar(tmp)
+            code, out = self._run(["calendar", "--log", str(log),
+                                   "--today", "2026-11-09", "--json"])
+            self.assertEqual(code, 0)
+            self.assertEqual(json.loads(out)["counts"]["events"], 5)
+
+    def test_calendar_cli_days_zero(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = _log_for_calendar(tmp)
+            code, out = self._run(["calendar", "--log", str(log),
+                                   "--today", "2026-11-09", "--days", "0"])
+            self.assertEqual(code, 0)
+            self.assertEqual(out.count("BEGIN:VEVENT"), 1)
+
+    def test_calendar_cli_bad_today_exit_1(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = _log_for_calendar(tmp)
+            code, _ = self._run(["calendar", "--log", str(log),
+                                 "--today", "2026-13-40"])
+            self.assertEqual(code, 1)
+
+    def test_calendar_cli_negative_days_exit_1(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = _log_for_calendar(tmp)
+            code, _ = self._run(["calendar", "--log", str(log),
+                                 "--today", "2026-11-09", "--days", "-1"])
+            self.assertEqual(code, 1)
+
+    def test_calendar_cli_corrupt_log_exit_2(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = Path(tmp) / "apps.jsonl"
+            log.write_text("{not json}\n", encoding="utf-8")
+            code, _ = self._run(["calendar", "--log", str(log),
+                                 "--today", "2026-11-09"])
+            self.assertEqual(code, 2)
+
+    def test_interview_cli_record_with_time(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = Path(tmp) / "log.jsonl"
+            add_application(log, "Northwind Analytics", "Data Analyst",
+                            today="2026-11-01")
+            code, out = self._run(["interview", "--record", "--id", "APP-001",
+                                   "--log", str(log), "--date", "2026-11-10",
+                                   "--round", "Hiring manager",
+                                   "--time", "14:30",
+                                   "--duration-minutes", "45",
+                                   "--today", "2026-11-08"])
+            self.assertEqual(code, 0)
+            code, out = self._run(["interview", "--log", str(log),
+                                   "--today", "2026-11-08"])
+            self.assertEqual(code, 0)
+            self.assertIn("2026-11-10 14:30", out)
+
+    def test_interview_cli_record_bad_time_exit_1(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = Path(tmp) / "log.jsonl"
+            add_application(log, "Northwind Analytics", "Data Analyst",
+                            today="2026-11-01")
+            code, _ = self._run(["interview", "--record", "--id", "APP-001",
+                                 "--log", str(log), "--date", "2026-11-10",
+                                 "--round", "Hiring manager",
+                                 "--time", "25:00",
+                                 "--today", "2026-11-08"])
+            self.assertEqual(code, 1)
+
+
+class TestContacts(unittest.TestCase):
+    def _contact(self, **overrides):
+        data = {"name": "Sam Chen", "role": "Recruiter",
+                "channel": "linkedin", "date": "2026-11-01",
+                "note": "Met at the hiring event."}
+        data.update(overrides)
+        return data
+
+    def _entries(self):
+        return [
+            {"id": "APP-001", "company": "Northwind Analytics",
+             "title": "Data Analyst", "status": "screening",
+             "contacts": [
+                 self._contact(date="2026-10-20"),
+                 self._contact(name="sam chen", date="2026-11-01",
+                               role=None, channel=None, note=None),
+                 self._contact(name="Dana Kim", role="Hiring manager",
+                               channel="email", date="2026-11-07",
+                               note=None),
+             ]},
+            {"id": "APP-002", "company": "Harbour Analytics",
+             "title": "Business Intelligence Analyst", "status": "interview",
+             "contacts": [
+                 self._contact(name="Alex Rivera", role="Hiring manager",
+                               channel="email", date="2026-10-25",
+                               note=None),
+             ]},
+            {"id": "APP-003", "company": "Vector Labs",
+             "title": "Machine Learning Engineer", "status": "rejected",
+             "contacts": [
+                 self._contact(name="Morgan Lee", date="2026-10-15"),
+             ]},
+            {"id": "APP-004", "company": "Quiet Co",
+             "title": "Analyst", "status": "applied"},
+        ]
+
+    def test_validate_contact_valid_defaults(self):
+        contact = validate_contact(
+            {"name": "  Sam Chen  ", "role": "  Recruiter ",
+             "date": "2026-11-01"},
+            today="2026-11-08")
+        self.assertEqual(contact["name"], "Sam Chen")
+        self.assertEqual(contact["role"], "Recruiter")
+        self.assertIsNone(contact["channel"])
+        self.assertIsNone(contact["note"])
+        self.assertEqual(contact["date"], "2026-11-01")
+        self.assertEqual(contact["recorded_at"], "2026-11-08")
+
+    def test_validate_contact_minimal(self):
+        contact = validate_contact({"name": "Sam Chen",
+                                    "date": "2026-11-01"},
+                                   today="2026-11-08")
+        self.assertEqual(contact["name"], "Sam Chen")
+        self.assertIsNone(contact["role"])
+
+    def test_validate_contact_reports_every_error_at_once(self):
+        with self.assertRaises(ContactError) as caught:
+            validate_contact({"name": "  ", "role": 7,
+                              "channel": "smoke-signal",
+                              "date": "Nov 1", "note": 3})
+        message = str(caught.exception)
+        for fragment in ("name is required", "role must be text",
+                         "channel must be one of", "date must be YYYY-MM-DD",
+                         "note must be text"):
+            self.assertIn(fragment, message)
+
+    def test_validate_contact_missing_date(self):
+        with self.assertRaises(ContactError) as caught:
+            validate_contact({"name": "Sam Chen"})
+        self.assertIn("date is required", str(caught.exception))
+
+    def test_validate_contact_bad_channel(self):
+        for bad in ("text", "SMS", ""):
+            with self.subTest(bad=bad):
+                with self.assertRaises(ContactError):
+                    validate_contact(self._contact(channel=bad))
+
+    def test_collect_groups_same_person_case_insensitively(self):
+        data = collect_contacts(self._entries(), today=TODAY)
+        sams = [r for r in data["contacts"] if r["name"] == "sam chen"]
+        self.assertEqual(len(sams), 1)
+        sam = sams[0]
+        self.assertEqual(sam["touches"], 2)
+        self.assertEqual(sam["first_contact"], "2026-10-20")
+        self.assertEqual(sam["last_contact"], "2026-11-01")
+        # Role/channel/note come from the latest dated record (none set
+        # there), so they fall back to the earlier record that had them.
+        self.assertEqual(sam["role"], "Recruiter")
+        self.assertEqual(sam["channel"], "linkedin")
+        self.assertEqual(sam["note"], "Met at the hiring event.")
+        self.assertEqual(sam["days_since_touch"], 7)
+        self.assertFalse(sam["quiet"])
+
+    def test_collect_quiet_boundary(self):
+        # Exactly 14 days since the last touch is not quiet yet.
+        entries = [{"id": "APP-001", "company": "Northwind Analytics",
+                    "title": "Data Analyst", "status": "applied",
+                    "contacts": [self._contact(date="2026-10-25")]}]
+        data = collect_contacts(entries, today=TODAY)
+        self.assertFalse(data["contacts"][0]["quiet"])
+        entries[0]["contacts"][0]["date"] = "2026-10-24"
+        data = collect_contacts(entries, today=TODAY)
+        self.assertTrue(data["contacts"][0]["quiet"])
+        self.assertEqual(data["counts"], {"total": 1, "quiet": 1})
+
+    def test_collect_quiet_days_override(self):
+        entries = [{"id": "APP-001", "company": "Northwind Analytics",
+                    "title": "Data Analyst", "status": "applied",
+                    "contacts": [self._contact(date="2026-11-01")]}]
+        data = collect_contacts(entries, today=TODAY, quiet_days=7)
+        self.assertEqual(data["counts"]["quiet"], 0)
+        data = collect_contacts(entries, today=TODAY, quiet_days=6)
+        self.assertEqual(data["counts"]["quiet"], 1)
+
+    def test_collect_quietest_first(self):
+        data = collect_contacts(self._entries(), today=TODAY)
+        names = [r["name"] for r in data["contacts"]]
+        # Alex Rivera last spoke 14 days ago, Sam Chen 7, Dana Kim 1.
+        self.assertEqual(names, ["Alex Rivera", "sam chen", "Dana Kim"])
+
+    def test_collect_excludes_terminal_applications(self):
+        data = collect_contacts(self._entries(), today=TODAY)
+        names = [r["name"] for r in data["contacts"]]
+        self.assertNotIn("Morgan Lee", names)
+        self.assertEqual(data["counts"]["total"], 3)
+
+    def test_collect_skips_bad_records_never_fatal(self):
+        entries = [{"id": "APP-001", "company": "Northwind Analytics",
+                    "title": "Data Analyst", "status": "applied",
+                    "contacts": ["not a dict",
+                                 {"name": "  "},
+                                 {"name": "Bad Date", "date": "yesterday"},
+                                 self._contact()]}]
+        data = collect_contacts(entries, today=TODAY)
+        self.assertEqual([r["name"] for r in data["contacts"]],
+                         ["Sam Chen"])
+
+    def test_collect_empty_and_no_contacts(self):
+        self.assertEqual(collect_contacts([], today=TODAY),
+                         {"contacts": [], "counts": {"total": 0, "quiet": 0}})
+        entries = [{"id": "APP-001", "company": "Northwind Analytics",
+                    "title": "Data Analyst", "status": "applied"}]
+        self.assertEqual(collect_contacts(entries, today=TODAY)["counts"],
+                         {"total": 0, "quiet": 0})
+
+    def test_contacts_for_known_unknown_and_empty(self):
+        entries = self._entries()
+        entry, rows = contacts_for(entries, "APP-002", today=TODAY)
+        self.assertEqual(entry["company"], "Harbour Analytics")
+        self.assertEqual([r["name"] for r in rows], ["Alex Rivera"])
+        entry, rows = contacts_for(entries, "APP-004", today=TODAY)
+        self.assertEqual(entry["company"], "Quiet Co")
+        self.assertEqual(rows, [])
+        self.assertEqual(contacts_for(entries, "APP-999", today=TODAY),
+                         (None, []))
+
+    def test_render_marks_quiet_and_touches(self):
+        data = collect_contacts(self._entries(), today=TODAY,
+                                quiet_days=7)
+        text = render_contacts_markdown(data)
+        self.assertIn("Contacts — 3 people, 1 quiet", text)
+        self.assertIn("Alex Rivera", text)
+        self.assertIn("[quiet]", text)
+        self.assertIn("2 touches, first 2026-10-20", text)
+        self.assertIn("note: Met at the hiring event.", text)
+
+    def test_render_empty_state(self):
+        text = render_contacts_markdown(
+            {"contacts": [], "counts": {"total": 0, "quiet": 0}})
+        self.assertIn("No contacts recorded yet", text)
+        self.assertIn("contacts --record", text)
+
+    def test_contacts_json_round_trips(self):
+        data = collect_contacts(self._entries(), today=TODAY)
+        self.assertEqual(json.loads(contacts_json(data)), data)
+
+    def test_record_contact_appends_and_logs_history(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = Path(tmp) / "log.jsonl"
+            add_application(log, "Northwind Analytics", "Data Analyst",
+                            today="2026-11-01")
+            contact = validate_contact(self._contact(), today="2026-11-08")
+            entry = record_contact(log, "APP-001", contact,
+                                   today="2026-11-08")
+            self.assertEqual(len(entry["contacts"]), 1)
+            self.assertEqual(entry["contacts"][0]["name"], "Sam Chen")
+            self.assertEqual(entry["status"], "applied")
+            self.assertIn({"kind": "contact", "at": "2026-11-01",
+                           "name": "Sam Chen"}, entry["history"])
+
+    def test_record_contact_refuses_terminal_and_unknown(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = Path(tmp) / "log.jsonl"
+            add_application(log, "Northwind Analytics", "Data Analyst",
+                            today="2026-11-01")
+            set_status(log, "APP-001", "rejected", today="2026-11-05")
+            contact = validate_contact(self._contact(), today="2026-11-08")
+            with self.assertRaises(TrackerError):
+                record_contact(log, "APP-001", contact, today="2026-11-08")
+            with self.assertRaises(TrackerError):
+                record_contact(log, "APP-999", contact, today="2026-11-08")
+
+    def test_record_contact_does_not_split_stage_stays(self):
+        # A contact recorded mid-stage is activity, not a stage change:
+        # the analytics stay from applied to screening stays whole.
+        with tempfile.TemporaryDirectory() as tmp:
+            log = Path(tmp) / "log.jsonl"
+            add_application(log, "Northwind Analytics", "Data Analyst",
+                            today="2026-11-01")
+            set_status(log, "APP-001", "screening", today="2026-11-04")
+            contact = validate_contact(self._contact(date="2026-11-02"),
+                                       today="2026-11-08")
+            record_contact(log, "APP-001", contact, today="2026-11-08")
+            entries = read_log(log)
+            self.assertEqual(days_in_stage(entries),
+                             {"applied": {"median_days": 3.0, "n": 1}})
+
+    def test_contact_counts_as_activity_for_followups(self):
+        # Applied 10 days ago, so due a follow-up — until a contact
+        # dated today resets the clock.
+        with tempfile.TemporaryDirectory() as tmp:
+            log = Path(tmp) / "log.jsonl"
+            add_application(log, "Northwind Analytics", "Data Analyst",
+                            today="2026-10-29")
+            self.assertEqual(len(due_followups(read_log(log), TODAY)), 1)
+            contact = validate_contact(self._contact(date="2026-11-08"),
+                                       today="2026-11-08")
+            record_contact(log, "APP-001", contact, today="2026-11-08")
+            self.assertEqual(due_followups(read_log(log), TODAY), [])
+
+
+class TestContactsCLI(unittest.TestCase):
+    def _run(self, argv):
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            code = main(argv)
+        return code, buf.getvalue()
+
+    def _logged(self, tmp):
+        log = Path(tmp) / "log.jsonl"
+        add_application(log, "Northwind Analytics", "Data Analyst",
+                        today="2026-11-01")
+        add_application(log, "Harbour Analytics",
+                        "Business Intelligence Analyst", today="2026-11-01")
+        return log
+
+    def test_contacts_cli_record_then_list(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            code, out = self._run(["contacts", "--record", "--id", "APP-001",
+                                   "--log", str(log), "--name", "Sam Chen",
+                                   "--role", "Recruiter",
+                                   "--channel", "linkedin",
+                                   "--date", "2026-11-01",
+                                   "--today", "2026-11-08"])
+            self.assertEqual(code, 0)
+            self.assertIn("recorded a contact for APP-001", out)
+            code, out = self._run(["contacts", "--log", str(log),
+                                   "--today", "2026-11-08"])
+            self.assertEqual(code, 0)
+            self.assertIn("Sam Chen", out)
+            self.assertIn("1 people", out)
+
+    def test_contacts_cli_second_touch_groups(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            for date in ("2026-11-01", "2026-11-06"):
+                code, _ = self._run(["contacts", "--record", "--id",
+                                     "APP-001", "--log", str(log),
+                                     "--name", "Sam Chen",
+                                     "--date", date, "--today", "2026-11-08"])
+                self.assertEqual(code, 0)
+            code, out = self._run(["contacts", "--log", str(log),
+                                   "--today", "2026-11-08"])
+            self.assertEqual(code, 0)
+            self.assertIn("1 people", out)
+            self.assertIn("2 touches", out)
+            self.assertIn("2d since last spoke", out)
+
+    def test_contacts_cli_id_filter(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            self._run(["contacts", "--record", "--id", "APP-001",
+                       "--log", str(log), "--name", "Sam Chen",
+                       "--date", "2026-11-01", "--today", "2026-11-08"])
+            self._run(["contacts", "--record", "--id", "APP-002",
+                       "--log", str(log), "--name", "Alex Rivera",
+                       "--date", "2026-11-01", "--today", "2026-11-08"])
+            code, out = self._run(["contacts", "--log", str(log),
+                                   "--id", "APP-002", "--today", "2026-11-08"])
+            self.assertEqual(code, 0)
+            self.assertIn("Alex Rivera", out)
+            self.assertNotIn("Sam Chen", out)
+
+    def test_contacts_cli_json_and_out(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            self._run(["contacts", "--record", "--id", "APP-001",
+                       "--log", str(log), "--name", "Sam Chen",
+                       "--date", "2026-11-01", "--today", "2026-11-08"])
+            code, out = self._run(["contacts", "--log", str(log),
+                                   "--today", "2026-11-08", "--json"])
+            self.assertEqual(code, 0)
+            self.assertEqual(json.loads(out)["counts"]["total"], 1)
+            out_path = Path(tmp) / "contacts.md"
+            code, out = self._run(["contacts", "--log", str(log),
+                                   "--today", "2026-11-08",
+                                   "--out", str(out_path)])
+            self.assertEqual(code, 0)
+            self.assertIn(f"wrote {out_path}", out)
+            self.assertIn("Sam Chen",
+                          out_path.read_text(encoding="utf-8"))
+
+    def test_contacts_cli_empty_state(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            code, out = self._run(["contacts", "--log", str(log),
+                                   "--today", "2026-11-08"])
+            self.assertEqual(code, 0)
+            self.assertIn("No contacts recorded yet", out)
+
+    def test_contacts_cli_record_missing_name_exit_1(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            code, _ = self._run(["contacts", "--record", "--id", "APP-001",
+                                 "--log", str(log), "--date", "2026-11-01",
+                                 "--today", "2026-11-08"])
+            self.assertEqual(code, 1)
+
+    def test_contacts_cli_record_missing_date_exit_1(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            code, _ = self._run(["contacts", "--record", "--id", "APP-001",
+                                 "--log", str(log), "--name", "Sam Chen",
+                                 "--today", "2026-11-08"])
+            self.assertEqual(code, 1)
+
+    def test_contacts_cli_record_flags_without_record_exit_1(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            code, _ = self._run(["contacts", "--log", str(log),
+                                 "--name", "Sam Chen",
+                                 "--today", "2026-11-08"])
+            self.assertEqual(code, 1)
+
+    def test_contacts_cli_record_unknown_id_exit_6(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            code, _ = self._run(["contacts", "--record", "--id", "APP-999",
+                                 "--log", str(log), "--name", "Sam Chen",
+                                 "--date", "2026-11-01",
+                                 "--today", "2026-11-08"])
+            self.assertEqual(code, 6)
+
+    def test_contacts_cli_record_terminal_exit_6(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            set_status(log, "APP-001", "rejected", today="2026-11-05")
+            code, _ = self._run(["contacts", "--record", "--id", "APP-001",
+                                 "--log", str(log), "--name", "Sam Chen",
+                                 "--date", "2026-11-01",
+                                 "--today", "2026-11-08"])
+            self.assertEqual(code, 6)
+
+    def test_contacts_cli_bad_today_and_quiet_days_exit_1(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            code, _ = self._run(["contacts", "--log", str(log),
+                                 "--today", "2026-13-40"])
+            self.assertEqual(code, 1)
+            code, _ = self._run(["contacts", "--log", str(log),
+                                 "--today", "2026-11-08",
+                                 "--quiet-days", "-1"])
+            self.assertEqual(code, 1)
+
+    def test_contacts_cli_corrupt_log_exit_2(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = Path(tmp) / "apps.jsonl"
+            log.write_text("{not json}\n", encoding="utf-8")
+            code, _ = self._run(["contacts", "--log", str(log),
+                                 "--today", "2026-11-08"])
+            self.assertEqual(code, 2)
+
+    def test_contacts_cli_unknown_id_list_exit_1(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            code, _ = self._run(["contacts", "--log", str(log),
+                                 "--id", "APP-999", "--today", "2026-11-08"])
             self.assertEqual(code, 1)
 
 

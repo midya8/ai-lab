@@ -1,9 +1,11 @@
 """Interview rounds log: keep every scheduled interview in one place.
 
 ``interview --record`` stores a round on a tracker entry (date, round
-label, interviewer, mode, duration, notes). ``interview`` on its own
-lists what is coming up and what already happened, so the week ahead is
-one command instead of a hunt through inboxes.
+label, interviewer, mode, duration, notes, and an optional start time).
+``interview`` on its own lists what is coming up and what already
+happened, so the week ahead is one command instead of a hunt through
+inboxes. The start time exists so ``calendar`` can export a timed
+event; a round without one is an all-day event on its date.
 
 The honest rules, carried over from offer.py and followup.py:
 
@@ -89,6 +91,17 @@ def validate_interview(data, today=None):
     if notes is not None and not isinstance(notes, str):
         errors.append(f"notes must be text, got {notes!r}")
 
+    time = data.get("time")
+    if time is not None:
+        if not isinstance(time, str):
+            errors.append(f"time must be HH:MM, got {time!r}")
+        else:
+            try:
+                parsed = datetime.datetime.strptime(time, "%H:%M").time()
+                time = parsed.strftime("%H:%M")
+            except ValueError:
+                errors.append(f"time must be HH:MM (24-hour), got {time!r}")
+
     if errors:
         raise InterviewError("; ".join(errors))
 
@@ -99,6 +112,7 @@ def validate_interview(data, today=None):
                        and interviewer.strip() else None,
         "mode": mode,
         "duration_minutes": duration,
+        "time": time,
         "notes": notes,
         "recorded_at": today,
     }
@@ -142,17 +156,18 @@ def _rows(entries, today, upcoming):
                 "interviewer": interview.get("interviewer"),
                 "mode": interview.get("mode"),
                 "duration_minutes": interview.get("duration_minutes"),
+                "time": interview.get("time"),
                 "notes": interview.get("notes"),
                 "days_until": delta if upcoming else None,
                 "days_ago": -delta if not upcoming else None,
             })
     if upcoming:
-        rows.sort(key=lambda row: (row["date"],
+        rows.sort(key=lambda row: (row["date"], row.get("time") or "",
                                    (row["company"] or "").lower(),
                                    (row["title"] or "").lower(),
                                    (row["round"] or "").lower()))
     else:
-        rows.sort(key=lambda row: (row["date"],
+        rows.sort(key=lambda row: (row["date"], row.get("time") or "",
                                    (row["company"] or "").lower(),
                                    (row["title"] or "").lower(),
                                    (row["round"] or "").lower()),
@@ -211,11 +226,12 @@ def interviews_for(entries, app_id, today=None):
                     "interviewer": interview.get("interviewer"),
                     "mode": interview.get("mode"),
                     "duration_minutes": interview.get("duration_minutes"),
+                    "time": interview.get("time"),
                     "notes": interview.get("notes"),
                     "days_until": delta if delta >= 0 else None,
                     "days_ago": -delta if delta < 0 else None,
                 })
-            rounds.sort(key=lambda row: (row["date"],
+            rounds.sort(key=lambda row: (row["date"], row.get("time") or "",
                                          (row["round"] or "").lower()))
             return entry, rounds
     return None, []
@@ -226,7 +242,8 @@ def interview_json(data):
 
 
 def _fmt_row(row):
-    parts = [f"{row['date']}  {row['title']} — {row['company']}  "
+    when = row['date'] + (f" {row['time']}" if row.get("time") else "")
+    parts = [f"{when}  {row['title']} — {row['company']}  "
              f"{row['round']}"]
     if row.get("interviewer"):
         parts.append(f"with {row['interviewer']}")

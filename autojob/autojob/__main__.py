@@ -27,12 +27,17 @@ Subcommands (all offline, stdlib only):
   interview [--log L] [--id APP-001] [--json] [--out F] [--today YYYY-MM-DD]
   interview --record --id APP-001 --date YYYY-MM-DD --round LABEL
             [--interviewer NAME] [--mode phone|video|onsite]
-            [--duration-minutes N] [--notes TEXT] [--today YYYY-MM-DD]
+            [--duration-minutes N] [--time HH:MM] [--notes TEXT] [--today YYYY-MM-DD]
+  calendar  [--log L] [--days N] [--wait-days N] [--json] [--out F] [--today YYYY-MM-DD]
+  contacts  [--log L] [--id APP-001] [--json] [--out F] [--quiet-days N] [--today YYYY-MM-DD]
+  contacts  --record --id APP-001 --name NAME --date YYYY-MM-DD
+            [--role ROLE] [--channel email|linkedin|phone|in-person|other]
+            [--note TEXT] [--today YYYY-MM-DD]
 
 Exit codes: 0 ok · 1 usage error · 2 profile/posting load error ·
 3 match below --fail-under · 4 draft/apply refused below --min-coverage ·
 5 duplicate application · 6 illegal status transition, follow-up refused,
-offer refused, or interview refused.
+offer refused, interview refused, or contact refused.
 
 autojob prepares application packets for a human to review and submit. It
 never submits anything and never invents experience: every fact in a draft
@@ -49,6 +54,10 @@ from pathlib import Path
 
 from . import __version__
 from .analytics import analytics_json, analytics_report, compute_analytics
+from .calendar import build_calendar, calendar_json, render_ics
+from .contacts import (ContactError, collect_contacts, contacts_for,
+                       contacts_json, render_contacts_markdown,
+                       validate_contact)
 from .digest import build_digest, digest_json, render_digest_markdown
 from .followup import due_followups, followup_json, followup_report
 from .interview import (InterviewError, collect_interviews,
@@ -68,8 +77,8 @@ from .salary import (analyze_salaries, render_salary_markdown, salary_json,
                      target_from_profile)
 from .tailor import build_tailor, render_tailor_markdown, tailor_json
 from .tracker import (TrackerError, add_application, read_log,
-                      record_followup, record_interview, record_offer,
-                      set_status, slug)
+                      record_contact, record_followup, record_interview,
+                      record_offer, set_status, slug)
 
 DEFAULT_OUT_DIR = "applications"
 
@@ -542,7 +551,7 @@ def _cmd_interview(args):
     else:
         today = datetime.date.today()
     record_only = [args.date, args.round, args.interviewer, args.mode,
-                   args.duration_minutes, args.notes]
+                   args.duration_minutes, args.time, args.notes]
     if args.record:
         if not args.id:
             print("error: --record needs --id APP-001", file=sys.stderr)
@@ -554,6 +563,7 @@ def _cmd_interview(args):
                 "interviewer": args.interviewer,
                 "mode": args.mode,
                 "duration_minutes": args.duration_minutes,
+                "time": args.time,
                 "notes": args.notes,
             }, today=today.isoformat())
         except InterviewError as exc:
@@ -570,7 +580,7 @@ def _cmd_interview(args):
         return 0
     if any(value is not None for value in record_only):
         print("error: --date, --round, --interviewer, --mode, "
-              "--duration-minutes and --notes need --record", file=sys.stderr)
+              "--duration-minutes, --time and --notes need --record", file=sys.stderr)
         return 1
     try:
         entries = read_log(args.log)
@@ -594,6 +604,109 @@ def _cmd_interview(args):
     else:
         data = collect_interviews(entries, today=today)
     text = interview_json(data) if args.json else render_interview_markdown(data)
+    if args.out:
+        Path(args.out).write_text(text, encoding="utf-8")
+        print(f"wrote {args.out}")
+    else:
+        print(text, end="")
+    return 0
+
+
+def _cmd_contacts(args):
+    if args.today is not None:
+        try:
+            today = datetime.date.fromisoformat(args.today)
+        except ValueError:
+            print(f"error: --today must be YYYY-MM-DD, got {args.today!r}",
+                  file=sys.stderr)
+            return 1
+    else:
+        today = datetime.date.today()
+    if args.quiet_days is not None and args.quiet_days < 0:
+        print("error: --quiet-days must be 0 or more", file=sys.stderr)
+        return 1
+    record_only = [args.name, args.role, args.channel, args.date, args.note]
+    if args.record:
+        if not args.id:
+            print("error: --record needs --id APP-001", file=sys.stderr)
+            return 1
+        try:
+            contact = validate_contact({
+                "name": args.name,
+                "role": args.role,
+                "channel": args.channel,
+                "date": args.date,
+                "note": args.note,
+            }, today=today.isoformat())
+        except ContactError as exc:
+            print(f"error: cannot record contact: {exc}", file=sys.stderr)
+            return 1
+        try:
+            entry = record_contact(args.log, args.id, contact,
+                                   today=today.isoformat())
+        except TrackerError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 6
+        print(f"recorded a contact for {entry['id']}: {entry['company']} — "
+              f"{entry['title']} ({contact['name']}"
+              + (f", {contact['role']}" if contact.get("role") else "")
+              + f" on {contact['date']})")
+        return 0
+    if any(value is not None for value in record_only):
+        print("error: --name, --role, --channel, --date and --note need "
+              "--record", file=sys.stderr)
+        return 1
+    try:
+        entries = read_log(args.log)
+    except TrackerError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    if args.id:
+        entry, rows = contacts_for(entries, args.id, today=today,
+                                   quiet_days=args.quiet_days)
+        if entry is None:
+            print(f"error: no application with id {args.id!r}", file=sys.stderr)
+            return 1
+        data = {"contacts": rows,
+                "counts": {"total": len(rows),
+                           "quiet": sum(1 for r in rows if r["quiet"])}}
+    else:
+        data = collect_contacts(entries, today=today,
+                                quiet_days=args.quiet_days)
+    text = contacts_json(data) if args.json else render_contacts_markdown(data)
+    if args.out:
+        Path(args.out).write_text(text, encoding="utf-8")
+        print(f"wrote {args.out}")
+    else:
+        print(text, end="")
+    return 0
+
+
+def _cmd_calendar(args):
+    if args.today is not None:
+        try:
+            today = datetime.date.fromisoformat(args.today)
+        except ValueError:
+            print(f"error: --today must be YYYY-MM-DD, got {args.today!r}",
+                  file=sys.stderr)
+            return 1
+    else:
+        today = datetime.date.today()
+    if args.days < 0:
+        print(f"error: --days must be 0 or more, got {args.days}",
+              file=sys.stderr)
+        return 1
+    if args.wait_days is not None and args.wait_days < 0:
+        print("error: --wait-days must be 0 or more", file=sys.stderr)
+        return 1
+    try:
+        entries = read_log(args.log)
+    except TrackerError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    data = build_calendar(entries, today=today, days=args.days,
+                          wait_days=args.wait_days)
+    text = calendar_json(data) if args.json else render_ics(data)
     if args.out:
         Path(args.out).write_text(text, encoding="utf-8")
         print(f"wrote {args.out}")
@@ -845,9 +958,63 @@ def build_parser():
                    help="with --record: how the interview happens")
     p.add_argument("--duration-minutes", type=int, default=None,
                    help="with --record: scheduled length in minutes")
+    p.add_argument("--time", default=None,
+                   help="with --record: start time HH:MM (24-hour); a round "
+                        "with a time exports as a timed calendar event")
     p.add_argument("--note", dest="notes", default=None,
                    help="with --record: a short note stored with the round")
     p.set_defaults(func=_cmd_interview)
+
+    p = sub.add_parser("calendar", help="export the next N days as an .ics "
+                                         "calendar: interview rounds, offer "
+                                         "decision deadlines, and follow-ups "
+                                         "due today")
+    p.add_argument("--log", default=f"{DEFAULT_OUT_DIR}/applications.jsonl")
+    p.add_argument("--days", type=int, default=14,
+                   help="how many days ahead to include (default 14; "
+                        "0 means today only)")
+    p.add_argument("--wait-days", type=int, default=None,
+                   help="override the per-stage follow-up wait for every stage")
+    p.add_argument("--json", action="store_true",
+                   help="print the events as JSON instead of .ics")
+    p.add_argument("--out", default=None,
+                   help="write the .ics file to this path instead of stdout")
+    p.add_argument("--today", default=None,
+                   help="reference date YYYY-MM-DD (default: today)")
+    p.set_defaults(func=_cmd_calendar)
+
+    p = sub.add_parser("contacts", help="list the people behind each "
+                                         "application, quietest first, or "
+                                         "record one with --record")
+    p.add_argument("--log", default=f"{DEFAULT_OUT_DIR}/applications.jsonl")
+    p.add_argument("--json", action="store_true")
+    p.add_argument("--out", default=None,
+                   help="write the contacts list to this file instead of stdout")
+    p.add_argument("--today", default=None,
+                   help="reference date YYYY-MM-DD (default: today)")
+    p.add_argument("--quiet-days", type=int, default=None,
+                   help="a contact is quiet after this many days without "
+                        "speaking to them (default 14; exactly N days is "
+                        "not quiet yet)")
+    p.add_argument("--record", action="store_true",
+                   help="record a contact instead of listing")
+    p.add_argument("--id", default=None,
+                   help="with --record: the application to record for; "
+                        "without it: show only this application's contacts")
+    p.add_argument("--name", default=None,
+                   help="with --record: the person's name")
+    p.add_argument("--role", default=None,
+                   help="with --record: their role, e.g. 'Recruiter'")
+    p.add_argument("--channel", default=None,
+                   choices=["email", "linkedin", "phone", "in-person",
+                            "other"],
+                   help="with --record: how you reached them")
+    p.add_argument("--date", default=None,
+                   help="with --record: date you first reached them, or "
+                        "last spoke to them (YYYY-MM-DD, required)")
+    p.add_argument("--note", default=None,
+                   help="with --record: a short note stored with the contact")
+    p.set_defaults(func=_cmd_contacts)
 
     p = sub.add_parser("report", help="funnel analytics over logged applications")
     p.add_argument("--log", default=f"{DEFAULT_OUT_DIR}/applications.jsonl")

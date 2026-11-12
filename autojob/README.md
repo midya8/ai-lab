@@ -2,7 +2,7 @@
 
 A job-application assistant that prepares applications from your own
 profile — and refuses to invent anything about you. Pure standard-library
-Python, 254 tests, no API keys, fully offline.
+Python, 316 tests, no API keys, fully offline.
 
 Built in November 2026 as a portfolio project. It is not client work, it is
 not affiliated with any employer, and the example profile and posting in
@@ -203,7 +203,9 @@ it builds is a draft for a human to review and send.
     --id APP-001 --date 2026-11-12 --round "Hiring manager"
     --interviewer "Priya Nair" --mode video --duration-minutes 45`
     stores a round on a tracker entry: date, round label, interviewer,
-    mode (phone / video / onsite), duration, and a note. Validation
+    mode (phone / video / onsite), duration, an optional start time
+    (`--time 14:30`, 24-hour; a round without one is an all-day event
+    when exported to a calendar), and a note. Validation
     reports every problem at once. Recording a round is refused on a
     terminal application (hired, rejected, withdrawn) and on an unknown
     id, and it does not move the application's status — that stays
@@ -219,6 +221,47 @@ it builds is a draft for a human to review and send.
     interviewer, and the notes are the user's own words; this module
     never generates text about an interview, so it cannot invent an
     interviewer, a question, or an outcome.
+16. **Calendar** (`autojob/calendar.py`, v0.12) — `autojob calendar
+    --out search.ics` exports the next 14 days as an .ics file any
+    calendar app can import: interview rounds in the window, offer
+    decision deadlines in the window, and follow-ups due as of today
+    (dated today, because the action is due now — the description says
+    so). A round with a start time exports as a timed event, 45 minutes
+    from 14:30 ending at 15:15; a round with a time but no recorded
+    duration is shown as one hour and the description says so; a round
+    with no time is an all-day event. Times are wall-clock times exactly
+    as recorded, with no timezone stored and none invented, so the file
+    uses floating local times. Deadlines and interviews on terminal
+    applications (hired, rejected, withdrawn) are left out. UIDs are a
+    hash of kind, application, date, and summary, so exporting twice
+    produces the same file and importing twice does not duplicate
+    events. `--days N` sets the window (0 means today only), `--wait-days`
+    overrides the follow-up wait, `--json` prints the events instead of
+    .ics, `--today` pins the reference date.
+17. **Contacts** (`autojob/contacts.py`, v0.13) — `contacts --record
+    --id APP-001 --name "Sam Chen" --role Recruiter --channel linkedin
+    --date 2026-11-01` stores a person on a tracker entry: name, role,
+    channel (email / linkedin / phone / in-person / other), the date you
+    first reached them or last spoke to them, and a note. Validation
+    reports every problem at once, and the date is required — it is
+    never defaulted to today, because writing down a name you met last
+    week should not silently claim you spoke to them today. There is
+    deliberately no email or phone field: a name plus a channel is
+    enough to know who someone is and how you reached them. Recording
+    the same person again is a new touch, not a duplicate, so the list
+    shows one row per person with the latest touch, how many touches
+    there have been, and when you first reached them. `contacts` on its
+    own lists everyone on a live application, quietest first: a contact
+    is quiet when you have not spoken to *them* for longer than
+    `--quiet-days` (default 14; exactly N days is not quiet yet), and an
+    interview with someone else or an offer arriving does not count as
+    speaking to this person. Recording a contact is refused on a
+    terminal application and does not move the application's status, the
+    same rule as offers and interviews; it is stored as a history event
+    too, so a contact counts as activity for follow-ups and the stale
+    check, and it never splits a stage stay in the analytics. `--id
+    APP-001` shows one application's contacts only, `--json` prints the
+    list as JSON, `--out` writes it, `--today` pins the reference date.
 
 ## Quick start
 
@@ -348,6 +391,10 @@ to decide on their 14-day deadlines. The demo closes with an interview
 schedule for the Harbour application, 8 days on: a recruiter screen
 the day before (phone, 30 minutes) and a hiring-manager round two days
 ahead (video, 45 minutes, with Priya Nair) — 1 upcoming, 1 past.
+The demo closes with a calendar export 8 days on: 3 events in the next
+14 days — the hiring-manager round at 14:30 for 45 minutes and both
+offer deadlines 6 days out; no follow-up is due, because both
+applications had activity recorded that day.
 
 ## Exit codes
 
