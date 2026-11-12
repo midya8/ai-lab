@@ -112,3 +112,6 @@ If the target defines `probs_batch(histories)`, `speculative_generate` scores al
 ## CLI
 
 `PYTHONPATH=src python -m specdec FILE [--target-order 4] [--draft-order 1] [--cost-ratio 0.1] [--n 2000]` fits a byte-level n-gram target/draft pair on any file, calibrates alpha offline, recommends k, then runs a real speculative decode and prints calibrated vs measured acceptance as JSON. On this repo's ROADMAP.md (prose, tiny data) the draft is weak: calibrated alpha 0.28 vs measured 0.19 (calibration contexts are in-sample, so it is optimistic), k=1, predicted speedup ~1.1x. Byte n-grams are a toy pair; this is a calibration tool, not a speed claim.
+
+## alpha_profile
+`alpha_profile(target, draft, contexts, cost_ratio, k)` reports the spread of per-context acceptance (mean/min/max/std) and compares the speedup predicted from the mean alpha with the mean of per-context speedups, showing how much a single global alpha hides. Analytic only; not benchmarked.

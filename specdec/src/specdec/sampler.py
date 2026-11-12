@@ -135,3 +135,22 @@ def recommend_k(target, draft, contexts, cost_ratio, k_max=32):
     a = estimate_alpha(target, draft, contexts)
     k, s = optimal_k(a, cost_ratio, k_max)
     return k, a, s
+
+
+def alpha_profile(target, draft, contexts, cost_ratio, k):
+    """Per-context acceptance spread and the cost of assuming one global alpha.
+
+    expected_speedup is concave-ish in alpha, so averaging alpha first can
+    mis-state the mean of per-context speedups. Returns a dict with the
+    per-context alphas' mean/min/max/std, the speedup predicted from the mean
+    alpha, and the mean of per-context speedups (both analytic, same k).
+    """
+    contexts = list(contexts)
+    if not contexts:
+        raise ValueError("need at least one context")
+    al = np.array([theoretical_alpha(target.probs(c), draft.probs(c)) for c in contexts])
+    per_ctx = float(np.mean([expected_speedup(float(a), k, cost_ratio) for a in al]))
+    return {"n": len(al), "alpha_mean": float(al.mean()), "alpha_min": float(al.min()),
+            "alpha_max": float(al.max()), "alpha_std": float(al.std()),
+            "speedup_from_mean_alpha": expected_speedup(float(al.mean()), k, cost_ratio),
+            "mean_of_context_speedups": per_ctx}
