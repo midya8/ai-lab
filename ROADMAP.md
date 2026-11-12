@@ -240,6 +240,7 @@
 - logsentry: seasonality-aware volume detector `detect_seasonal` (6 tests, v0.7)
 - reviewkit: AST rule py-naive-now (`datetime.now()`/`today()` without tz; 123 tests)
 - reviewkit: AST rule py-open-no-encoding (text-mode `open()` without encoding; 124 tests)
+- bpekit: `compare` two tokenizers (bytes/token, ratio, boundary Jaccard; 3 tests, 64 total)
 
 
 ## Next
