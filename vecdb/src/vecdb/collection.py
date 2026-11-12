@@ -162,6 +162,36 @@ class Collection:
             rest.remove(best)
         return [cands[i] for i in chosen]
 
+    def find_duplicates(self, threshold: float = 0.95, k: int = 5, **search_params):
+        """Near-duplicate pairs among live rows: ``(id_a, id_b, cosine)`` with cosine >= ``threshold``,
+        each pair once (ids sorted), highest similarity first. Uses ``k`` neighbours per row via the index,
+        so with an approximate index it can miss pairs (exact for ``flat``)."""
+        if not -1.0 <= threshold <= 1.0:
+            raise ValueError("threshold must be in [-1, 1]")
+        rows = sorted(self._row_of.values())
+        if len(rows) < 2:
+            return []
+        V = self.index.reconstruct(rows).astype(np.float64)
+        Vn = V / np.maximum(np.linalg.norm(V, axis=1, keepdims=True), 1e-12)
+        ids, _ = self.index.search(V.astype(np.float32), min(k + 1, len(rows)), **search_params)
+        pos = {r: i for i, r in enumerate(rows)}
+        seen, out = set(), []
+        for i, nb in enumerate(ids):
+            for r in nb:
+                j = pos.get(int(r)) if r >= 0 else None
+                if j is None or j == i:
+                    continue
+                key = (min(i, j), max(i, j))
+                if key in seen:
+                    continue
+                seen.add(key)
+                cs = float(Vn[i] @ Vn[j])
+                if cs >= threshold:
+                    a_, b_ = sorted((self._ids[rows[i]], self._ids[rows[j]]))
+                    out.append((a_, b_, cs))
+        out.sort(key=lambda t: -t[2])
+        return out
+
     def count(self, where: dict | None = None) -> int:
         if not where:
             return len(self)
