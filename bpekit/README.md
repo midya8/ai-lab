@@ -47,3 +47,19 @@ PYTHONPATH=src python -m bpekit eval corpus.txt -v 400   # held-out bytes/token
 ## Vocabulary utilisation
 
 `bpekit.usage.usage(tok, text)` reports how many merged tokens a text never emits, the unigram entropy of emitted ids, and the most frequent merged tokens. A high unused fraction on held-out text signals a vocab over-fitted to the training split. Mechanics only are tested (3 tests, 26 total); no corpus-level finding is claimed.
+
+## Domain transfer (`bpekit.transfer`, `experiments/transfer.py`)
+
+Train one tokenizer per corpus (vocab 600) and score each on every corpus's held-out tail
+(bytes/token, higher is better). Corpora are this monorepo's own READMEs, Python source and JSON.
+
+| trained on \ scored on | prose | python | json |
+|---|---|---|---|
+| prose | 1.85 | 1.85 | 1.57 |
+| python | 1.58 | 2.20 | 1.63 |
+| json | 1.54 | 1.75 | 1.90 |
+
+Mean off-domain loss vs the best tokenizer per column: prose 16.6%, python 14.4%, json 18.6%.
+Caveat: the diagonal is not always the column maximum here (the prose tokenizer scores as well on
+Python as on prose) because held-out tails are small, unrepresentative slices of heterogeneous
+files; this is a single run on one corpus split, so read it as indicative, not a benchmark.

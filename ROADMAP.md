@@ -220,6 +220,7 @@
 - bpekit: BPE-dropout stochastic encoding (lossless, seeded; 20 tests)
 - bpekit: vocab-size sweep (held-out bytes/token vs vocab; 23 tests)
 - datadoctor: `per_class_summary` (per-class flagged rates + top given->suggested confusions; 2 tests, 78 total)
+- bpekit: cross-domain transfer matrix (prose/python/json; 29 tests)
 
 
 ## Next
