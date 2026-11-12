@@ -90,3 +90,7 @@ Chunks cut only at word boundaries, never exceed `max_tokens` (except a single w
 ## Token budgets (`bpekit.truncate`)
 
 `truncate(tok, text, max_tokens, keep='head'|'tail'|'middle')` fits text into a token budget without splitting a UTF-8 character; `middle` keeps head and tail joined by a marker whose token cost is counted. The re-encoded result is guaranteed not to exceed the budget (4 tests, 57 total).
+
+## CLI additions
+
+`python -m bpekit fertility tok.json corpus.txt` prints fertility stats; `python -m bpekit truncate tok.json "text" -n 20 --keep middle` fits text into a token budget (1 test, 58 total).
