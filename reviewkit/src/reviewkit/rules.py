@@ -493,6 +493,12 @@ def ast_findings(ctx: FileContext, source: str, complexity_threshold: int = 10) 
                 add(node.lineno, "py-unsafe-deserialize", "high",
                     "Deserialising with pickle-style formats executes code embedded in the data.",
                     "Use JSON (or a schema-validated format) for anything that crosses a trust boundary.")
+            if (isinstance(f, ast.Attribute) and f.attr in ("now", "today") and not node.args and not node.keywords
+                    and ((isinstance(f.value, ast.Name) and f.value.id in ("datetime", "dt"))
+                         or (isinstance(f.value, ast.Attribute) and f.value.attr == "datetime"))):
+                add(node.lineno, "py-naive-now", "low",
+                    f"`datetime.{f.attr}()` without a timezone returns a naive local time that breaks across servers and DST.",
+                    "Use `datetime.now(timezone.utc)` and convert to local time only for display.")
             if (isinstance(f, ast.Attribute) and isinstance(f.value, ast.Name) and f.value.id == "requests"
                     and f.attr in _REQUEST_FUNCS):
                 kws = {k.arg for k in node.keywords}
@@ -618,6 +624,7 @@ RULE_TABLE.update({
     "py-raise-notimplemented": ("high", "`raise NotImplemented` instead of `NotImplementedError`."),
     "py-assert-tuple": ("high", "`assert` on a non-empty tuple is always true."),
     "py-float-equality": ("low", "`==` / `!=` against a non-integer float literal."),
+    "py-naive-now": ("low", "`datetime.now()` / `today()` with no timezone."),
     "py-utcnow": ("low", "`datetime.utcnow()` / `utcfromtimestamp` (naive, deprecated)."),
     "py-return-in-finally": ("medium", "`return` inside `finally` swallows exceptions."),
     "py-compare-none": ("low", "`== None` / `!= None` instead of `is None`."),

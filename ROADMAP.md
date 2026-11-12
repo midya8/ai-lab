@@ -238,6 +238,7 @@
 - bpekit: fertility metric (tokens/word, p95, single-token share, worst words; 3 tests, 51 total)
 - bpekit: `truncate` token-budget truncation (head/tail/middle, UTF-8 safe; 57 tests)
 - logsentry: seasonality-aware volume detector `detect_seasonal` (6 tests, v0.7)
+- reviewkit: AST rule py-naive-now (`datetime.now()`/`today()` without tz; 123 tests)
 
 
 ## Next
