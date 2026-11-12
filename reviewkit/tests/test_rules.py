@@ -384,3 +384,10 @@ def test_open_no_encoding():
     assert rules("a.py", "f = open('x.txt', encoding='utf-8')\n") == []
     assert rules("a.py", "f = open('x.bin', 'rb')\n") == []
     assert rules("a.py", "f = open('x', 'r', -1, 'utf-8')\n") == []
+
+
+def test_urlopen_no_timeout():
+    src = "import urllib.request\nurllib.request.urlopen(u)\n"
+    assert rules("a.py", src) == [(2, "py-urlopen-no-timeout")]
+    assert rules("a.py", "import urllib.request\nurllib.request.urlopen(u, timeout=5)\n") == []
+    assert rules("a.py", "import urllib.request\nurllib.request.urlopen(u, None, 5)\n") == []

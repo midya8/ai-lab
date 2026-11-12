@@ -244,6 +244,7 @@
 - reviewkit: AST rule py-open-no-encoding (text-mode `open()` without encoding; 124 tests)
 - bpekit: `compare` two tokenizers (bytes/token, ratio, boundary Jaccard; 3 tests, 64 total)
 - datadoctor: class_balance + label_shift (TV distance, chi-square vs train; 5 tests, 86 total)
+- reviewkit: AST rule py-urlopen-no-timeout (125 tests)
 
 
 ## Next

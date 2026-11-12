@@ -506,6 +506,11 @@ def ast_findings(ctx: FileContext, source: str, complexity_threshold: int = 10) 
                     add(node.lineno, "py-open-no-encoding", "low",
                         "`open()` in text mode without `encoding` depends on the platform locale (cp1252 on Windows).",
                         "Pass `encoding=\"utf-8\"` explicitly, or open in binary mode.")
+            if (isinstance(f, ast.Attribute) and f.attr == "urlopen" and len(node.args) < 3
+                    and not any(k.arg in ("timeout", None) for k in node.keywords)):
+                add(node.lineno, "py-urlopen-no-timeout", "medium",
+                    "`urlopen` without a timeout can hang forever on a stalled server.",
+                    "Pass `timeout=` (for example 10 seconds).")
             if (isinstance(f, ast.Attribute) and f.attr in ("now", "today") and not node.args and not node.keywords
                     and ((isinstance(f.value, ast.Name) and f.value.id in ("datetime", "dt"))
                          or (isinstance(f.value, ast.Attribute) and f.value.attr == "datetime"))):
@@ -638,6 +643,7 @@ RULE_TABLE.update({
     "py-assert-tuple": ("high", "`assert` on a non-empty tuple is always true."),
     "py-float-equality": ("low", "`==` / `!=` against a non-integer float literal."),
     "py-open-no-encoding": ("low", "Text-mode `open()` without `encoding=`."),
+    "py-urlopen-no-timeout": ("medium", "`urllib.request.urlopen` without a timeout."),
     "py-naive-now": ("low", "`datetime.now()` / `today()` with no timezone."),
     "py-utcnow": ("low", "`datetime.utcnow()` / `utcfromtimestamp` (naive, deprecated)."),
     "py-return-in-finally": ("medium", "`return` inside `finally` swallows exceptions."),
