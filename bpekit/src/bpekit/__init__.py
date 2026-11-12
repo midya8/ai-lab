@@ -20,3 +20,5 @@ from .undertrained import undertrained
 __all__ += ["undertrained"]
 from .lengths import length_hist
 __all__ += ["length_hist"]
+from .entropy import token_entropy
+__all__ += ["token_entropy"]
