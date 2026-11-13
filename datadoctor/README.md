@@ -156,3 +156,4 @@ better-calibrated probability, not a better detector, on this data.
 `datadoctor.near_conflicts(X, y, radius)` extends this to near-duplicates: every pair of rows within `radius` that carry different labels (exact blocked O(n^2) scan, guarded by `max_rows`).
 
 - `categorical_drift(train, test)`: chi-square homogeneity test (own chi-square survival function, checked against known quantiles), PSI, and unseen-category rate for categorical features; any unseen category flags.
+- `bbse_weights(y_val, pred_val, pred_test)`: black-box label-shift estimation (BBSE): solves C w = mu from the validation confusion matrix and test prediction histogram to recover p_test(y)/p_train(y) without test labels; assumes only the label prior shifted (p(x|y) fixed) and errors on a singular confusion matrix.
