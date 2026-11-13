@@ -134,6 +134,32 @@ class Collection:
             out.append([Hit(self._ids[r], float(d), dict(self._meta[r])) for r, d in zip(ri, di) if r >= 0])
         return out
 
+    def query_grouped(self, vector, group_by: str, k: int = 5, per_group: int = 1,
+                      fetch_k: int | None = None, where: dict | None = None, **search_params):
+        """Top ``k`` groups by best hit, at most ``per_group`` hits each (e.g. one chunk per document).
+
+        Hits whose metadata lacks ``group_by`` form no group and are skipped. Over-fetches
+        ``fetch_k`` (default ``max(50, 10*k*per_group)``) neighbours and groups them in rank
+        order, so with a very large group the result can hold fewer than ``k`` groups.
+        Returns ``[(group_value, [Hit, ...]), ...]`` ordered by each group's best distance.
+        """
+        if k < 1 or per_group < 1:
+            raise ValueError("k and per_group must be >= 1")
+        fetch_k = fetch_k or max(50, 10 * k * per_group)
+        hits = self.query(np.asarray(vector, dtype=np.float32)[None, :], k=fetch_k, where=where, **search_params)[0]
+        groups: dict = {}
+        for h in hits:
+            if group_by not in h.metadata:
+                continue
+            g = h.metadata[group_by]
+            try:
+                bucket = groups.setdefault(g, [])
+            except TypeError:
+                raise ValueError(f"metadata {group_by!r} must be hashable") from None
+            if len(bucket) < per_group:
+                bucket.append(h)
+        return list(groups.items())[:k]
+
     def query_mmr(self, vector, k: int = 10, fetch_k: int = 50, lambda_mult: float = 0.5,
                   where: dict | None = None, **search_params):
         """Maximal Marginal Relevance: fetch ``fetch_k`` candidates, then greedily pick ``k`` that balance
