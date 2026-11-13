@@ -266,6 +266,7 @@
 - agentflow: `ToolJournal` tool-call-level checkpointing; retries/resume replay journaled side-effecting calls instead of re-running them (7 tests, 74 total)
 - logsentry v0.9: `--incidents/--gap` CLI flags group batch anomalies into incidents (3 tests, 35 total)
 - agentflow: sync `Orchestrator` gets `tool_journal` parity with the async one (thread-safe stats, journal shared across both; 3 tests, 77 total)
+- bpekit: token healing (`heal_prompt`, `healed_continuation`) for prompt-boundary artefacts (6 tests, 92 total)
 
 
 ## Next

@@ -30,3 +30,5 @@ from .coverage import coverage
 __all__ += ["coverage"]
 from .tree import merge_tree, merge_depth, format_tree
 __all__ += ["merge_tree", "merge_depth", "format_tree"]
+from .healing import heal_prompt, healed_continuation
+__all__ += ["heal_prompt", "healed_continuation"]
