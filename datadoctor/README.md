@@ -146,6 +146,8 @@ better-calibrated probability, not a better detector, on this data.
 
 `feature_drift(X_train, X_test, names)` ranks features by two-sample KS statistic (asymptotic p-value, Bonferroni-corrected) and PSI (quantile bins of train), flagging `p < alpha/d` or `PSI > 0.25`. Covariate drift only; it says nothing about label shift (see `label_shift`). 5 tests.
 
+`adversarial_validation(X_train, X_test, quadratic=False)` trains a train-vs-test classifier (out-of-fold AUC) with a label-permutation null and p-value (default 20 permutations, so the smallest possible p is ~0.048). AUC ~0.5 means indistinguishable. It catches joint shifts KS/PSI cannot: in a test with identical marginals but a changed correlation, the linear detector stays near chance (AUC < 0.6) while `quadratic=True` (pairwise product features) gets AUC > 0.8. `top_features` is an indicative |coef| ranking from a linear fit, not causal. 5 tests.
+
 `feature_health(X, names, corr_threshold=0.98)` reports NaN fraction per feature, constant (or all-NaN) columns, and redundant pairs with |Pearson r| above the threshold (pairwise-complete rows). 3 tests.
 
 ### conflicts
