@@ -262,6 +262,7 @@
 - bpekit: `merge_tree`/`merge_depth`/`format_tree` show how a token decomposes into merges (3 tests, 86 total)
 - logsentry: `group_incidents` merges anomalies into incidents with heuristic severity (6 tests, 32 total)
 - datadoctor: `near_conflicts` radius-based label disagreement between near-duplicate rows (exact blocked scan, brute-force parity test; 3 tests)
+- reviewkit: `py-open-unclosed` rule for `open(...).read()/write()` without a with-block (1 test, 129 total)
 
 
 ## Next

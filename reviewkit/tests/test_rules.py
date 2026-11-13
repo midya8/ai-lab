@@ -410,3 +410,11 @@ def test_subprocess_no_check():
     assert rules("a.py", "import subprocess\nsubprocess.run(['ls'])\n") == [(2, "py-subprocess-no-check")]
     assert rules("a.py", "import subprocess\nsubprocess.run(['ls'], check=True)\n") == []
     assert rules("a.py", "import subprocess\nsubprocess.run(['ls'], **kw)\n") == []
+
+
+def test_open_unclosed():
+    assert rules("a.py", "data = open('f', encoding='utf-8').read()\n") == [(1, "py-open-unclosed")]
+    assert rules("a.py", "open('f', 'w', encoding='utf-8').write('x')\n") == [(1, "py-open-unclosed")]
+    assert rules("a.py", "with open('f') as fh:\n    data = fh.read()\n") == []
+    assert rules("a.py", "from pathlib import Path\nd = Path('f').read_text()\n") == []
+    assert rules("a.py", "d = self.open('f', encoding='utf-8').read()\n") == []

@@ -523,6 +523,12 @@ def ast_findings(ctx: FileContext, source: str, complexity_threshold: int = 10) 
                 add(node.lineno, "py-subprocess-no-check", "low",
                     "`subprocess.run` without `check=` silently ignores a non-zero exit status.",
                     "Pass `check=True`, or `check=False` explicitly and inspect `returncode`.")
+            if (isinstance(f, ast.Attribute) and f.attr in ("read", "readlines", "readline", "write")
+                    and isinstance(f.value, ast.Call) and isinstance(f.value.func, ast.Name)
+                    and f.value.func.id == "open"):
+                add(node.lineno, "py-open-unclosed", "low",
+                    f"`open(...).{f.attr}()` never closes the file explicitly; the handle lingers until garbage collection.",
+                    "Use `with open(...) as fh:` (or `Path.read_text()` / `write_text()`).")
             if (isinstance(f, ast.Attribute) and f.attr == "urlopen" and len(node.args) < 3
                     and not any(k.arg in ("timeout", None) for k in node.keywords)):
                 add(node.lineno, "py-urlopen-no-timeout", "medium",
@@ -670,6 +676,7 @@ RULE_TABLE.update({
     "py-not-in-style": ("low", "`not a in b` / `not a is b` instead of `not in` / `is not`."),
     "py-self-compare": ("low", "Name compared with itself."),
     "py-subprocess-no-check": ("low", "`subprocess.run` without `check=`."),
+    "py-open-unclosed": ("low", "`open(...).read()/write()` without a with-block."),
     "py-duplicate-except": ("medium", "Exception type caught twice in one try."),
     "py-blocking-in-async": ("medium", "time.sleep / requests call inside async def."),
     "py-useless-comparison": ("medium", "Comparison as a bare statement has no effect."),
