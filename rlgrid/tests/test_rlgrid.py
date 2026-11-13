@@ -45,3 +45,16 @@ def test_slip_transitions_sum_to_one():
 def test_render_shape():
     env = GridWorld()
     assert len(env.render(greedy_policy(value_iteration(env))).splitlines()) == env.h
+
+
+def test_cliff_sarsa_falls_less_than_q_learning():
+    import numpy as np
+    from rlgrid.env import CLIFF_MAP
+    falls = {}
+    for name, fn in [("q", q_learning), ("s", sarsa)]:
+        f = []
+        for sd in range(4):
+            _, r = fn(GridWorld(CLIFF_MAP, seed=sd), episodes=400, eps=0.1, seed=sd, gamma=0.99)
+            f.append((r[-100:] < -0.5).mean())
+        falls[name] = np.mean(f)
+    assert falls["s"] < falls["q"]

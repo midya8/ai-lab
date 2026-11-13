@@ -10,6 +10,9 @@ DEFAULT_MAP = [
     "...P..#G",
 ]
 
+# Sutton & Barto-style cliff: the shortest route hugs the pits, the safe one detours via the top row.
+CLIFF_MAP = ["............", "............", "............", "S.PPPPPPPP.G"]
+
 
 class GridWorld:
     """Map chars: S start, G goal (+1), P pit (-1, terminal), # wall, . floor.

@@ -279,6 +279,7 @@
 - vecdb: `Collection.query_grouped` (top-k groups by metadata field, e.g. one chunk per document; 4 tests, 167 total)
 - vecdb: `HybridCollection.query_grouped` (fused BM25+vector search collapsed to top-k groups by metadata; 3 tests)
 - rlgrid v0.1: tabular RL (Q-learning, SARSA, Dyna-Q, value iteration), 7 tests
+- rlgrid: cliff-walking map + experiment reproducing the SARSA vs Q-learning safety gap (8 tests)
 
 
 ## Next
@@ -302,4 +303,4 @@
 17. microgrid follow-ups: (done conv2d/pooling) (done iterative backward) (done transformer blocks) (done char-LM training + generation on the corpus, memorisation disclosed) (done AdamW/clip/cosine schedule) (done parity vs tiny-transformer) (done leak-free stdlib-source corpus run) (done KV-cache generation) (done 3-seed + wd ablation) (done int8 KV cache + top-k/top-p sampling) (done int8-KV perplexity) (done weight-only quantisation) (done GPTQ-style rounding vs RTN) (done group-wise scales: helps at <=3 bits only) (done sequential Hessian re-collection: helps most at 2-3 bits) -> next: a new project
 18. specdec follow-ups: (done peaky target re-test) (done adaptive k) (done multi-draft recursive rejection at one position) (done m-ary tree along accepted path) (done microgrid real draft/target pair, v0.7: c=0.49 limits gain) (done backoff lookup draft: ties best fixed n, no gain) (done batched verification API, v0.9: exact, no wall-clock win without KV cache) (done CLI: calibrate+benchmark on any file) full branching-tree verification, KV-cached verification
 19. voicekit follow-ups: CNN word classifier on microgrid, (done per-word thresholds from validation data, 84 tests) (done benchmark vs global threshold: null result, F1 0.953/0.957/0.955) (done WakeGate event gating) (done WakeGate max_session_s cap, 2 tests) (done `smooth_events` posterior smoothing, 3 tests) better VAD below 5 dB, a real-speech benchmark from a download-free source
-20. rlgrid follow-ups: cliff-walking map for SARSA vs Q safety gap, policy-gradient (REINFORCE) agent, eligibility traces
+20. rlgrid follow-ups: (done cliff-walking safety gap) policy-gradient (REINFORCE) agent, eligibility traces
