@@ -285,6 +285,7 @@
 - rlgrid: Expected SARSA and Double Q-learning added to the cliff experiment (Double Q 0.4% falls, Expected SARSA 1.9% vs SARSA 4.9%; 9 tests)
 - rlgrid: `reinforce` policy-gradient agent (tabular softmax, optional learned value baseline; 11 tests)
 - rlgrid: `sarsa_lambda` (replacing/accumulating traces, Watkins Q(lambda)) and `n_step_sarsa`; speed-up experiment (17 tests)
+- rlgrid: `prioritized_sweeping` (priority-queue planning with predecessor propagation; 3.0 episodes to optimal vs Dyna-Q 4.1 vs Q-learning 19.0, tiny map, disclosed; 20 tests)
 
 
 ## Next

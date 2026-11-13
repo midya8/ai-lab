@@ -57,3 +57,15 @@ Toy environment only; no claim about deep RL.
 | n-step SARSA n 1 / 2 / 4 / 8 | +0.326 / +0.485 / +0.535 / +0.422 |
 
 Intermediate lambda / n learn fastest early; the extremes lose (lam 0 / n 1 propagate credit slowly, n 8 is noisier). Caveat: single environment, no confidence intervals, and n-step SARSA with n=4 left a greedy policy that loops against a wall on one of four test seeds (rarely-visited states keep optimistic zero values).
+
+## Prioritized sweeping
+
+`prioritized_sweeping(env, planning=10, theta=1e-4)` keeps a last-seen deterministic model and a priority queue of state-action pairs by |TD error|, backing up the largest first and pushing their predecessors. It returns `(q, returns, n_backups)`. `experiments/sweeping.py` (default grid, slip 0, 10 seeds, library-default hyperparameters, planning=10 for both planners) measures episodes until the greedy policy first matches value iteration's optimum:
+
+| agent | episodes to optimal (mean) |
+|---|---|
+| Q-learning | 19.0 |
+| Dyna-Q | 4.1 |
+| prioritized sweeping | 3.0 |
+
+Caveats: the gap between Dyna-Q and sweeping is one episode on a tiny deterministic map; I did not count Dyna-Q's backups, so this says nothing about compute efficiency (sweeping used about 1300 backups on average), and no significance test was run.

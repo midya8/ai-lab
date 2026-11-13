@@ -127,3 +127,21 @@ def test_n_step_learns_and_handles_truncation():
     assert wins >= 3
     q2, r2 = n_step_sarsa(GridWorld(seed=2), n=3, episodes=5, max_steps=4, seed=2)
     assert np.isfinite(q2).all() and len(r2) == 5
+
+
+def test_prioritized_sweeping_solves_det_grid():
+    env = GridWorld(seed=3)
+    q, rets, n = prioritized_sweeping(env, episodes=150, seed=3)
+    opt = evaluate(env, greedy_policy(value_iteration(env)), 1)[0]
+    assert abs(evaluate(env, greedy_policy(q), 1)[0] - opt) < 1e-9
+    assert n > 0 and len(rets) == 150
+
+
+def test_prioritized_sweeping_zero_planning_is_no_backups():
+    q, _, n = prioritized_sweeping(GridWorld(seed=0), episodes=5, planning=0)
+    assert n == 0 and np.all(q == 0)
+
+
+def test_prioritized_sweeping_beats_q_early():
+    sc = lambda f, **k: np.mean([f(GridWorld(seed=s), episodes=20, seed=s, **k)[1][5:].mean() for s in range(4)])
+    assert sc(prioritized_sweeping) > sc(q_learning)

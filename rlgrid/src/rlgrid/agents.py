@@ -247,3 +247,54 @@ def n_step_sarsa(env, n=4, episodes=500, alpha=0.3, gamma=0.97, eps=0.1, seed=0,
             t += 1
         returns.append(total)
     return q, np.array(returns)
+
+
+def prioritized_sweeping(env, episodes=500, alpha=0.5, gamma=0.97, eps=0.1, seed=0, max_steps=200,
+                         planning=10, theta=1e-4):
+    """Prioritized sweeping (Moore & Atkeson 1993; Sutton & Barto 8.4) with a deterministic last-seen model.
+    Planning backups are taken from a max-priority queue of |TD error| > theta and propagate to the
+    predecessors of each updated state. Returns (q, episode_returns, n_backups) where n_backups counts every
+    Q update (real + planning), so sample/compute efficiency can be compared with dyna_q."""
+    import heapq
+    rng = np.random.default_rng(seed)
+    q = np.zeros((env.n_states, env.n_actions))
+    model, preds, returns, backups = {}, {}, [], 0
+    pq, best = [], {}  # heap of (-priority, counter, s, a); best[(s,a)] = latest priority
+    counter = 0
+
+    def push(s, a, p):
+        nonlocal counter
+        if p > theta and p > best.get((s, a), 0.0):
+            best[(s, a)] = p
+            counter += 1
+            heapq.heappush(pq, (-p, counter, s, a))
+
+    def td(s, a):
+        r, s2, d = model[(s, a)]
+        return (r if d else r + gamma * q[s2].max()) - q[s, a]
+
+    for _ in range(episodes):
+        s = env.reset(); total = 0.0
+        for _ in range(max_steps):
+            a = _eps_greedy(q, s, eps, rng)
+            s2, r, done = env.step(a)
+            total += r
+            model[(s, a)] = (r, s2, done)
+            preds.setdefault(s2, set()).add((s, a))
+            push(s, a, abs(td(s, a)))
+            for _ in range(planning):
+                if not pq:
+                    break
+                negp, _, ps, pa = heapq.heappop(pq)
+                if best.get((ps, pa), 0.0) != -negp:
+                    continue  # stale entry
+                best.pop((ps, pa))
+                q[ps, pa] += alpha * td(ps, pa)
+                backups += 1
+                for qs, qa in preds.get(ps, ()):
+                    push(qs, qa, abs(td(qs, qa)))
+            s = s2
+            if done:
+                break
+        returns.append(total)
+    return q, np.array(returns), backups
