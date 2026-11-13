@@ -26,3 +26,5 @@ from .variants import boundary_variants
 __all__ += ["boundary_variants"]
 from .zipf import zipf_fit
 __all__ += ["zipf_fit"]
+from .coverage import coverage
+__all__ += ["coverage"]

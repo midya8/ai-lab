@@ -116,3 +116,5 @@ Chunks cut only at word boundaries, never exceed `max_tokens` (except a single w
 `zipf_fit(tok, text, top=None)` fits log-frequency against log-rank of emitted tokens (slope near -1 means Zipf-like; r2 gives fit quality; 3 tests).
 
 `boundary_variants(tok, text, min_count=1, limit=None)` compares each word's tokenization with and without a leading space and ranks words by how many extra tokens the space costs (2 tests).
+
+`bpekit.coverage.coverage(tok, text, ks)` gives the fraction of emitted tokens covered by the k most frequent ids and the number of distinct ids needed for 90% / 99% coverage, a quick view of how skewed token use is. Mechanics only (3 tests); no corpus-level finding is claimed.
