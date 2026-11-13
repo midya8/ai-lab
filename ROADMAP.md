@@ -290,6 +290,7 @@
 - mctslab: `tt_uct_search` transposition-table UCT; did not beat plain UCT on tic-tac-toe (disclosed; 12 tests)
 - mctslab: Connect-Four strength ladder experiment (more iterations beat fewer; 10-game cells, disclosed; 14 tests)
 - mctslab: PUCT with pluggable prior/value + open-line heuristic; 12-0 vs UCT at 60 iters (heuristic) vs 0.46 (rollout value), small-sample caveats disclosed; 5 tests, 19 total
+- mctslab: root-parallel UCT (summed visit counts, process-pool optional); at equal budget 4 trees were slightly worse than 1 vs a perfect player (null result, 50-game cells, disclosed)
 
 
 ## Next
