@@ -168,3 +168,82 @@ def reinforce(env, episodes=500, lr=0.2, gamma=0.97, seed=0, max_steps=200, base
                 v[s_t] += lr_v * (g - v[s_t])
         returns.append(total)
     return theta, np.array(returns)
+
+
+def sarsa_lambda(env, episodes=500, alpha=0.3, gamma=0.97, eps=0.1, lam=0.8, seed=0,
+                 max_steps=200, watkins=False, trace="replacing"):
+    """SARSA(lambda) with eligibility traces; watkins=True gives Watkins's Q(lambda)
+    (off-policy: traces are cut after an exploratory action). lam=0 equals one-step SARSA
+    (or Q-learning when watkins=True)."""
+    assert trace in ("replacing", "accumulating") and 0.0 <= lam <= 1.0
+    rng = np.random.default_rng(seed)
+    q = np.zeros((env.n_states, env.n_actions))
+    returns = []
+    for _ in range(episodes):
+        e = np.zeros_like(q)
+        s = env.reset()
+        a = _eps_greedy(q, s, eps, rng)
+        total = 0.0
+        for _ in range(max_steps):
+            s2, r, done = env.step(a)
+            total += r
+            a2 = _eps_greedy(q, s2, eps, rng)
+            if done:
+                target = r
+            elif watkins:
+                target = r + gamma * q[s2].max()
+            else:
+                target = r + gamma * q[s2, a2]
+            delta = target - q[s, a]
+            if trace == "replacing":
+                e[s] = 0.0
+                e[s, a] = 1.0
+            else:
+                e[s, a] += 1.0
+            q += alpha * delta * e
+            e *= gamma * lam
+            if watkins and not done and q[s2, a2] < q[s2].max():
+                e[:] = 0.0  # exploratory action: cut the trace
+            s, a = s2, a2
+            if done:
+                break
+        returns.append(total)
+    return q, np.array(returns)
+
+
+def n_step_sarsa(env, n=4, episodes=500, alpha=0.3, gamma=0.97, eps=0.1, seed=0, max_steps=200):
+    """On-policy n-step SARSA (Sutton & Barto 7.2)."""
+    assert n >= 1
+    rng = np.random.default_rng(seed)
+    q = np.zeros((env.n_states, env.n_actions))
+    returns = []
+    for _ in range(episodes):
+        s = env.reset()
+        a = _eps_greedy(q, s, eps, rng)
+        S, A, R = [s], [a], [0.0]
+        T, t, total, term = max_steps, 0, 0.0, False
+        while True:
+            if t < T:
+                s2, r, done = env.step(A[t])
+                total += r
+                S.append(s2); R.append(r)
+                a2 = _eps_greedy(q, s2, eps, rng)  # always drawn so n=1 matches sarsa() RNG-for-RNG
+                if done or t + 1 >= max_steps:
+                    T = t + 1
+                    term = done
+                else:
+                    A.append(a2)
+            tau = t - n + 1
+            if tau >= 0:
+                end = min(tau + n, T)
+                G = sum(gamma ** (i - tau - 1) * R[i] for i in range(tau + 1, end + 1))
+                if tau + n < T:
+                    G += gamma ** n * q[S[tau + n], A[tau + n]]
+                elif not term:  # time-limit truncation: bootstrap
+                    G += gamma ** (end - tau) * q[S[end]].max()
+                q[S[tau], A[tau]] += alpha * (G - q[S[tau], A[tau]])
+            if tau == T - 1:
+                break
+            t += 1
+        returns.append(total)
+    return q, np.array(returns)

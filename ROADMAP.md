@@ -284,6 +284,7 @@
 - rlgrid: cliff-walking map + experiment reproducing the SARSA vs Q-learning safety gap (8 tests)
 - rlgrid: Expected SARSA and Double Q-learning added to the cliff experiment (Double Q 0.4% falls, Expected SARSA 1.9% vs SARSA 4.9%; 9 tests)
 - rlgrid: `reinforce` policy-gradient agent (tabular softmax, optional learned value baseline; 11 tests)
+- rlgrid: `sarsa_lambda` (replacing/accumulating traces, Watkins Q(lambda)) and `n_step_sarsa`; speed-up experiment (17 tests)
 
 
 ## Next
@@ -307,4 +308,4 @@
 17. microgrid follow-ups: (done conv2d/pooling) (done iterative backward) (done transformer blocks) (done char-LM training + generation on the corpus, memorisation disclosed) (done AdamW/clip/cosine schedule) (done parity vs tiny-transformer) (done leak-free stdlib-source corpus run) (done KV-cache generation) (done 3-seed + wd ablation) (done int8 KV cache + top-k/top-p sampling) (done int8-KV perplexity) (done weight-only quantisation) (done GPTQ-style rounding vs RTN) (done group-wise scales: helps at <=3 bits only) (done sequential Hessian re-collection: helps most at 2-3 bits) -> next: a new project
 18. specdec follow-ups: (done peaky target re-test) (done adaptive k) (done multi-draft recursive rejection at one position) (done m-ary tree along accepted path) (done microgrid real draft/target pair, v0.7: c=0.49 limits gain) (done backoff lookup draft: ties best fixed n, no gain) (done batched verification API, v0.9: exact, no wall-clock win without KV cache) (done CLI: calibrate+benchmark on any file) full branching-tree verification, KV-cached verification
 19. voicekit follow-ups: CNN word classifier on microgrid, (done per-word thresholds from validation data, 84 tests) (done benchmark vs global threshold: null result, F1 0.953/0.957/0.955) (done WakeGate event gating) (done WakeGate max_session_s cap, 2 tests) (done `smooth_events` posterior smoothing, 3 tests) better VAD below 5 dB, a real-speech benchmark from a download-free source
-20. rlgrid follow-ups: (done cliff-walking safety gap) (done REINFORCE) eligibility traces / n-step
+20. rlgrid follow-ups: (done cliff-walking safety gap) (done REINFORCE) (done eligibility traces / n-step) -> next: actor-critic with function approximation, or a new project

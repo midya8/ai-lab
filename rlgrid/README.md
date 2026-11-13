@@ -43,3 +43,17 @@ Toy environment only; no claim about deep RL.
 ## REINFORCE
 
 `reinforce(env, baseline=True)` is a tabular softmax policy-gradient agent (Monte-Carlo returns, optional learned V(s) baseline). `greedy_policy(theta)` extracts the argmax policy. Tests check it solves the deterministic gridworld; the baseline test is a loose sanity check (4 seeds), not a significance claim.
+
+## Eligibility traces and n-step returns
+
+`sarsa_lambda(env, lam=..., watkins=False, trace="replacing")` is SARSA(lambda) (set `watkins=True` for Watkins's Q(lambda), which cuts traces after exploratory actions); `n_step_sarsa(env, n=...)` is on-policy n-step SARSA. Tests pin the limits: lambda=0 reproduces SARSA / Q-learning and n=1 reproduces SARSA exactly (same RNG stream).
+
+`experiments/traces.py` (default grid, slip 0.1, 8 seeds x 60 episodes, alpha=0.3 and eps=0.1 fixed beforehand; mean return over the 60 episodes):
+
+| method | value |
+|---|---|
+| SARSA(lambda) lam 0 / 0.3 / 0.6 / 0.8 / 0.9 | +0.318 / +0.456 / +0.527 / +0.482 / +0.445 |
+| Watkins Q(lambda) lam 0 / 0.3 / 0.6 / 0.8 / 0.9 | +0.296 / +0.438 / +0.440 / +0.427 / +0.403 |
+| n-step SARSA n 1 / 2 / 4 / 8 | +0.326 / +0.485 / +0.535 / +0.422 |
+
+Intermediate lambda / n learn fastest early; the extremes lose (lam 0 / n 1 propagate credit slowly, n 8 is noisier). Caveat: single environment, no confidence intervals, and n-step SARSA with n=4 left a greedy policy that loops against a wall on one of four test seeds (rarely-visited states keep optimistic zero values).

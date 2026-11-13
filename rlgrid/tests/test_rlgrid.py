@@ -82,3 +82,48 @@ def test_reinforce_baseline_not_worse_on_average():
     with_b = np.mean([reinforce(env, episodes=150, seed=s)[1][-50:].mean() for s in range(4)])
     no_b = np.mean([reinforce(env, episodes=150, seed=s, baseline=False)[1][-50:].mean() for s in range(4)])
     assert with_b >= no_b - 0.05
+
+
+def test_sarsa_lambda_zero_equals_sarsa():
+    env1, env2 = GridWorld(slip=0.1, seed=3), GridWorld(slip=0.1, seed=3)
+    qa, ra = sarsa(env1, episodes=40, alpha=0.3, seed=3)
+    qb, rb = sarsa_lambda(env2, episodes=40, alpha=0.3, lam=0.0, seed=3)
+    assert np.allclose(qa, qb) and np.allclose(ra, rb)
+
+
+def test_watkins_lambda_zero_equals_q_learning():
+    env1, env2 = GridWorld(slip=0.1, seed=4), GridWorld(slip=0.1, seed=4)
+    qa, _ = q_learning(env1, episodes=40, alpha=0.3, seed=4)
+    qb, _ = sarsa_lambda(env2, episodes=40, alpha=0.3, lam=0.0, watkins=True, seed=4)
+    assert np.allclose(qa, qb)
+
+
+def test_traces_speed_up_credit_assignment():
+    env = GridWorld(seed=0)
+    _, r0 = sarsa_lambda(env, episodes=25, lam=0.0, seed=0)
+    _, r9 = sarsa_lambda(GridWorld(seed=0), episodes=25, lam=0.9, seed=0)
+    assert r9.mean() > r0.mean()
+
+
+def test_sarsa_lambda_solves_det_grid():
+    env = GridWorld(seed=1)
+    q, _ = sarsa_lambda(env, episodes=500, lam=0.8, seed=1, watkins=True)
+    opt = evaluate(env, greedy_policy(value_iteration(env)), 1)[0]
+    assert abs(evaluate(env, greedy_policy(q), 1)[0] - opt) < 1e-9
+
+
+def test_n_step_one_equals_sarsa():
+    qa, ra = sarsa(GridWorld(seed=5), episodes=40, alpha=0.3, seed=5)
+    qb, rb = n_step_sarsa(GridWorld(seed=5), n=1, episodes=40, alpha=0.3, seed=5)
+    assert np.allclose(qa, qb) and np.allclose(ra, rb)
+
+
+def test_n_step_learns_and_handles_truncation():
+    wins = 0
+    for sd in range(4):  # one seed (2) leaves a wall-bumping loop on the greedy path, so check a majority
+        env = GridWorld(seed=sd)
+        q, _ = n_step_sarsa(env, n=4, episodes=500, seed=sd)
+        wins += evaluate(env, greedy_policy(q), 5)[1] == 1.0
+    assert wins >= 3
+    q2, r2 = n_step_sarsa(GridWorld(seed=2), n=3, episodes=5, max_steps=4, seed=2)
+    assert np.isfinite(q2).all() and len(r2) == 5
