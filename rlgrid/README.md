@@ -83,3 +83,16 @@ Caveats: the gap between Dyna-Q and sweeping is one episode on a tiny determinis
 | REINFORCE + baseline (tabular) | 1.0 | +0.550 |
 
 Findings: linear coordinates fail completely (a walled maze is not linearly separable in position), RBF features learn much faster than one-hot by sharing credit between neighbours, but tabular REINFORCE with a baseline still had the best mean return here. Caveats: tiny deterministic map, no confidence intervals, sigma values were two guesses, and one-step actor-critic with one-hot features was slowed by its small step size.
+
+## DQN in numpy (`rlgrid.dqn`)
+
+`dqn(env, ...)` trains a one-hidden-layer ReLU Q-network with uniform replay and an optional target network; `dqn_policy(net, phi)` gives the greedy policy (4 tests incl. a finite-difference gradient check). `python experiments/dqn_ablation.py` (default grid, 5 seeds, 300 episodes):
+
+| variant | greedy success | last-50 train return |
+|---|---|---|
+| replay + target | 1.00 | +0.850 |
+| no target | 1.00 | +0.851 |
+| no replay | 1.00 | +0.837 |
+| neither | 0.60 | -0.289 |
+
+Findings, honestly: removing *either* stabiliser alone does nothing measurable on this tiny deterministic grid; only removing both hurts. Hyperparameters (lr 0.2, eps decay 0.99, hidden 64, 200-step cap) were chosen after a small search on seeds 0-2, which overlap the evaluation seeds, so treat the absolute numbers as optimistic. The first attempt (lr 0.05, decay 0.97, 100-step cap) never reached the goal: exploration collapsed before the sparse reward was found. Coordinate features (`features="coords"`) did not work with the small MLP here (0/5 success at default settings); one-hot is the default, which makes the net tabular-equivalent, so this shows the training loop is correct rather than any generalisation.
