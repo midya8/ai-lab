@@ -68,3 +68,5 @@ retry, calls are matched positionally and replayed while tool and args are ident
 divergence the rest runs live. Failed calls are not journaled. Editing a task prompt (or upstream
 tasks) changes its fingerprint and invalidates its entries. Assumption: the agent re-issues the same
 early calls; if it does not, replay simply stops. Works with both `AsyncOrchestrator` and the sync `Orchestrator(agents, tool_journal=...)`, and the journal file is shared between them (tests in `tests/test_toolckpt.py`, `tests/test_toolckpt_sync.py`).
+
+Journals can grow forever, so `ToolJournal(path, ttl_s=...)` ignores entries older than the TTL (timestamped on write; legacy entries never expire) and `journal.compact(live_fps=None)` atomically rewrites the file keeping the newest entry per call and dropping expired or dead-fingerprint entries (`tests/test_toolckpt_compact.py`).
