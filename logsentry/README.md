@@ -35,3 +35,6 @@ Per-template rate detectors, streaming mode, Prometheus exporter.
 
 ## Seasonality-aware volume detection (v0.7)
 `seasonal.py` / `detect_seasonal(events, window=60, period=24)` compares each window only to windows at the same phase of the cycle (e.g. same time on previous days) using median/MAD with a Poisson noise floor (scale >= sqrt(median)), so regular daily peaks are not flagged. Tests on a synthetic sinusoidal workload: the plain rolling detector raises volume false alarms on the clean cycle, the seasonal one raises none, and an injected 3x surge at the cycle peak (or a near-total drop) is found. The first `min_cycles` cycles are warm-up. Synthetic data only; the Poisson floor was added after a first version false-alarmed on the clean series.
+
+## Incident grouping (v0.8)
+`group_incidents(anomalies, window=60, gap=2)` in `incidents.py` chains anomalies whose windows are within `gap` windows into one `Incident` (start/end, per-kind counts, peak |score|, `summary()`), so one outage yields one page rather than a burst of alerts. The `low/medium/high` severity is a hand-set heuristic (kind diversity and peak score), not calibrated. 6 tests.
