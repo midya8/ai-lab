@@ -297,6 +297,7 @@
 - datadoctor: `bbse_weights` (black-box label-shift estimation from validation confusion matrix; recovers a 0.7/0.2/0.1 test prior within 0.04 on synthetic data; 5 tests, 121 total)
 - datadoctor: `wasserstein_drift` (exact W1 per feature in train-sigma units; pure shift recovered exactly; 5 tests, 126 total)
 - bpelab v0.1: byte-level BPE trainer/tokenizer (7 tests)
+- bpelab: compression-vs-vocab-size curve on held-out stdlib text (8 tests)
 
 
 ## Next
@@ -322,4 +323,4 @@
 19. voicekit follow-ups: CNN word classifier on microgrid, (done per-word thresholds from validation data, 84 tests) (done benchmark vs global threshold: null result, F1 0.953/0.957/0.955) (done WakeGate event gating) (done WakeGate max_session_s cap, 2 tests) (done `smooth_events` posterior smoothing, 3 tests) better VAD below 5 dB, a real-speech benchmark from a download-free source
 20. rlgrid follow-ups: (done cliff-walking safety gap) (done REINFORCE) (done eligibility traces / n-step) (done actor-critic with linear/RBF features, 4 tests) (done numpy DQN + replay/target ablation, 4 tests) -> next: a new project (RL or other)
 21. mctslab follow-ups: (done transposition table, null result) (done Connect-Four ladder) (done PUCT with heuristic value) (done AlphaZero-lite in numpy, tic-tac-toe) -> next: Connect-Four/gravity support and a conv net on microgrid; old: PUCT with a learned policy/value net (AlphaZero-lite on microgrid), Connect-Four benchmarks, parallel root search
-22. bpelab follow-ups: compression-vs-vocab-size curve, wire into tiny-transformer/microgrid, unigram-LM tokenizer comparison
+22. bpelab follow-ups: (done compression curve) wire into tiny-transformer/microgrid, unigram-LM tokenizer comparison
