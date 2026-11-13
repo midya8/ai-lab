@@ -147,3 +147,6 @@ better-calibrated probability, not a better detector, on this data.
 `feature_drift(X_train, X_test, names)` ranks features by two-sample KS statistic (asymptotic p-value, Bonferroni-corrected) and PSI (quantile bins of train), flagging `p < alpha/d` or `PSI > 0.25`. Covariate drift only; it says nothing about label shift (see `label_shift`). 5 tests.
 
 `feature_health(X, names, corr_threshold=0.98)` reports NaN fraction per feature, constant (or all-NaN) columns, and redundant pairs with |Pearson r| above the threshold (pairwise-complete rows). 3 tests.
+
+### conflicts
+`datadoctor.label_conflicts(X, y)` groups identical feature rows with disagreeing labels and names the minority rows as likely label errors (ties are listed without a guess).
