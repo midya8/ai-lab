@@ -28,3 +28,4 @@ from .drift import feature_drift, ks_statistic, psi  # noqa: F401
 from .health import feature_health  # noqa: F401
 from .conflicts import label_conflicts, near_conflicts  # noqa: F401
 from .leakage_features import leaky_features  # noqa: F401
+from .missingness import informative_missingness  # noqa: F401

@@ -275,6 +275,7 @@
 - bpekit: `ChoiceConstraint` / `constrained_pick` token-level constrained decoding over fixed string choices (any tokenisation path allowed, eos on complete; 7 tests, 99 total)
 - datadoctor: `leaky_features` target-leakage screen (single-feature held-out histogram accuracy vs majority baseline; flags proxies, 3 tests, 103 total)
 - llm-router: per-model `TokenBucket` rate limits; exhausted models are skipped and the router falls through (8 tests, 73 total)
+- datadoctor: `informative_missingness` (chi-square of NaN indicator vs label, Bonferroni; own gamma-based p-value; 3 tests, 106 total)
 
 
 ## Next
