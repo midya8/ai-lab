@@ -192,6 +192,47 @@ class Collection:
         out.sort(key=lambda t: -t[2])
         return out
 
+    def tune(self, queries=None, k: int = 10, target_recall: float = 0.95, grid=None,
+             n_sample: int = 100, seed: int = 0) -> dict:
+        """Smallest search setting whose recall@k against exact search reaches ``target_recall``.
+
+        Ground truth is a brute-force scan of the live vectors. ``queries`` defaults to ``n_sample``
+        stored vectors with a little noise (a proxy: pass real queries when you have them).
+        Tunes ``ef`` (hnsw) or ``nprobe`` (ivf); a flat index is already exact. Returns
+        ``{"param", "value", "recall", "reached", "curve": [(value, recall), ...]}``; when the target is
+        not reached the best (largest) setting is reported with ``reached=False``.
+        """
+        if self.index_kind == "flat":
+            return {"param": None, "value": None, "recall": 1.0, "reached": True, "curve": []}
+        if len(self) == 0:
+            raise ValueError("cannot tune an empty collection")
+        rows = np.fromiter(self._row_of.values(), dtype=np.int64)
+        X = np.asarray(self.index.reconstruct(rows), dtype=np.float32)
+        if queries is None:
+            rng = np.random.default_rng(seed)
+            pick = rng.choice(len(X), size=min(n_sample, len(X)), replace=False)
+            scale = float(X.std()) if X.size else 1.0
+            queries = X[pick] + 0.1 * scale * rng.standard_normal((len(pick), X.shape[1])).astype(np.float32)
+        Q = np.atleast_2d(np.asarray(queries, dtype=np.float32))
+        k = min(k, len(X))
+        exact = FlatIndex(self.dim, self.metric_name)
+        exact.add(X)
+        truth, _ = exact.search(Q, k)
+        truth_ids = [{self._ids[rows[t]] for t in row if t >= 0} for row in truth]
+        param = "ef" if self.index_kind == "hnsw" else "nprobe"
+        grid = list(grid) if grid else ([k, 2 * k, 4 * k, 8 * k, 16 * k, 32 * k] if param == "ef"
+                                        else [1, 2, 4, 8, 16, 32, 64])
+        grid = sorted({int(g) for g in grid})
+        curve = []
+        for g in grid:
+            res = self.query(Q, k=k, **{param: g})
+            rec = float(np.mean([len({h.id for h in r} & t) / max(1, len(t)) for r, t in zip(res, truth_ids)]))
+            curve.append((g, rec))
+            if rec >= target_recall:
+                return {"param": param, "value": g, "recall": rec, "reached": True, "curve": curve}
+        g, rec = curve[-1]
+        return {"param": param, "value": g, "recall": rec, "reached": False, "curve": curve}
+
     def count(self, where: dict | None = None) -> int:
         if not where:
             return len(self)

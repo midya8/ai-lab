@@ -255,6 +255,7 @@
 - specdec: `alpha_profile` per-context acceptance spread vs speedup-from-mean-alpha (analytic; 3 tests, 46 total)
 - bpekit: `zipf_fit` log-rank/log-frequency power-law fit of emitted tokens (3 tests)
 - voicekit: `score_segments` segmentation scoring (recall/precision/IoU/onset-offset error; 2 tests, 108 total)
+- vecdb: Collection.tune() finds smallest ef/nprobe reaching a target recall@k vs exact search (4 tests; default queries are noisy stored vectors, a proxy)
 
 
 ## Next
