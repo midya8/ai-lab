@@ -418,3 +418,10 @@ def test_open_unclosed():
     assert rules("a.py", "with open('f', encoding='utf-8') as fh:\n    data = fh.read()\n") == []
     assert rules("a.py", "from pathlib import Path\nd = Path('f').read_text()\n") == []
     assert rules("a.py", "d = self.open('f', encoding='utf-8').read()\n") == []
+
+
+def test_type_compare():
+    assert rules("a.py", "if type(x) == int:\n    pass\n") == [(1, "py-type-compare")]
+    assert rules("a.py", "if type(a) != type(b):\n    pass\n") == [(1, "py-type-compare")]
+    assert rules("a.py", "if type(x) is int:\n    pass\n") == []
+    assert rules("a.py", "if isinstance(x, int):\n    pass\n") == []

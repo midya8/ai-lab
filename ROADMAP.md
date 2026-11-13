@@ -269,6 +269,7 @@
 - bpekit: token healing (`heal_prompt`, `healed_continuation`) for prompt-boundary artefacts (6 tests, 92 total)
 - agentflow: `ToolJournal` TTL expiry + atomic `compact()` (4 tests, 81 total)
 - agentflow: `ToolJournal(max_lines=N)` size-based auto-compaction (3 tests, 84 total)
+- reviewkit: AST rule py-type-compare (`type(x) == T`; 130 tests)
 
 
 ## Next

@@ -629,6 +629,12 @@ def ast_findings(ctx: FileContext, source: str, complexity_threshold: int = 10) 
                 add(node.lineno, "py-self-compare", "low",
                     f"`{node.left.id}` is compared with itself; the result is constant (except NaN checks).",
                     "Fix the typo'd operand, or use `math.isnan` for NaN checks.")
+            if any(isinstance(o, (ast.Eq, ast.NotEq)) for o in node.ops) and any(
+                    isinstance(x, ast.Call) and isinstance(x.func, ast.Name) and x.func.id == "type"
+                    and len(x.args) == 1 and not x.keywords for x in [node.left, *node.comparators]):
+                add(node.lineno, "py-type-compare", "low",
+                    "`type(x) == T` ignores subclasses and is brittle.",
+                    "Use `isinstance(x, T)`, or `type(x) is T` if exact type is intended.")
             for op, comp in zip(node.ops, node.comparators):
                 if isinstance(comp, ast.UnaryOp) and isinstance(comp.op, (ast.USub, ast.UAdd)):
                     comp = comp.operand
@@ -699,6 +705,7 @@ RULE_TABLE.update({
     "py-xml-untrusted": ("medium", "Stdlib XML parser on possibly untrusted input."),
     "py-ssl-unverified": ("high", "TLS certificate/hostname verification disabled via ssl."),
     "py-fstring-no-placeholder": ("low", "f-string without any placeholder."),
+    "py-type-compare": ("low", "`type(x) == T` instead of isinstance."),
     "py-compare-bool": ("low", "`== True` / `== False` instead of truthiness."),
     "py-unreachable-code": ("medium", "Statements after return/raise/continue/break."),
     "py-duplicate-dict-key": ("medium", "Dict literal repeats a constant key."),
