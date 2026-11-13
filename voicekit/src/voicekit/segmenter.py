@@ -164,3 +164,40 @@ def segment_signal(x: np.ndarray, cfg: SegmenterConfig | None = None, sr: int = 
     """Offline convenience: run the streaming segmenter over a whole signal."""
     s = StreamSegmenter(cfg, sr)
     return s.feed(x) + s.flush()
+
+
+def score_segments(segs: list[Segment], regions: list[tuple[int, int]], sr: int = SR) -> dict:
+    """Compare detected segments with reference sample regions ``(start, end)``.
+
+    Each reference is matched greedily to the unused segment with the highest time IoU
+    (must be > 0). Returns recall (references matched), precision (segments matched),
+    mean IoU of matched pairs, and mean absolute onset/offset error in seconds.
+    """
+    ref = [(a / sr, b / sr) for a, b in regions]
+    det = [(s.start_s, s.end_s) for s in segs]
+    used: set[int] = set()
+    ious, on_err, off_err = [], [], []
+    for ra, rb in ref:
+        best, best_iou = -1, 0.0
+        for j, (da, db) in enumerate(det):
+            if j in used:
+                continue
+            inter = max(0.0, min(rb, db) - max(ra, da))
+            union = (rb - ra) + (db - da) - inter
+            iou = inter / union if union > 0 else 0.0
+            if iou > best_iou:
+                best, best_iou = j, iou
+        if best >= 0:
+            used.add(best)
+            ious.append(best_iou)
+            on_err.append(abs(det[best][0] - ra))
+            off_err.append(abs(det[best][1] - rb))
+    m = len(ious)
+    mean = lambda v: float(np.mean(v)) if v else 0.0  # noqa: E731
+    return {
+        "recall": m / len(ref) if ref else 1.0,
+        "precision": m / len(det) if det else 1.0,
+        "mean_iou": mean(ious),
+        "onset_err_s": mean(on_err),
+        "offset_err_s": mean(off_err),
+    }

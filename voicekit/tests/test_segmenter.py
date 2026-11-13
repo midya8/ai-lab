@@ -88,3 +88,21 @@ def test_config_changes_sensitivity():
     x, _ = utterance(5, 8)
     strict = segment_signal(x, SegmenterConfig(on_margin=5.0, off_margin=4.0))
     assert strict == []
+
+
+def test_score_segments_clean_word_has_high_iou():
+    from voicekit.segmenter import score_segments
+    x, region = utterance(20)
+    r = score_segments(segment_signal(x), [region])
+    assert r["recall"] == 1.0 and r["precision"] == 1.0
+    assert r["mean_iou"] > 0.6 and r["onset_err_s"] < 0.15
+
+
+def test_score_segments_edge_cases():
+    from voicekit.segmenter import Segment, score_segments
+    assert score_segments([], [(0, 8000)])["recall"] == 0.0
+    assert score_segments([], [])["recall"] == 1.0
+    seg = Segment(0, 100, np.zeros((100, 129)), np.zeros(129))  # 0.0-1.0 s
+    r = score_segments([seg], [(0, 8000), (40000, 48000)])
+    assert r["recall"] == 0.5 and r["precision"] == 1.0 and abs(r["mean_iou"] - 1.0) < 1e-9
+    assert score_segments([seg], [(80000, 88000)])["precision"] == 0.0
