@@ -24,8 +24,24 @@ async def _maybe_await(fn, *args):
     return await out if inspect.isawaitable(out) else out
 
 
-async def arun_agent(agent: Agent, prompt: str) -> str:
-    """Async twin of ``Agent.run`` (same protocol, same step limit)."""
+async def _scoped_call(agent: Agent, scope, tool: str, args):
+    hit = scope.journal.lookup(scope.fp, scope.seq, tool, args) if not scope._diverged else None
+    if hit is not None:
+        scope.seq += 1
+        scope.replayed += 1
+        return hit["obs"]
+    scope._diverged = True
+    seq = scope.seq
+    scope.seq += 1
+    obs = await _maybe_await(agent.tools.call, tool, args)
+    scope.live += 1
+    scope.journal.store(scope.fp, seq, tool, args, obs)
+    return obs
+
+
+async def arun_agent(agent: Agent, prompt: str, scope=None) -> str:
+    """Async twin of ``Agent.run`` (same protocol, same step limit). ``scope`` is an optional
+    ``ToolScope`` that replays journaled tool calls instead of re-executing them."""
     messages = [{"role": "system", "content": agent.system or f"You are {agent.name}. Tools: {agent.tools.names()}"},
                 {"role": "user", "content": prompt}]
     for _ in range(agent.max_steps):
@@ -41,7 +57,10 @@ async def arun_agent(agent: Agent, prompt: str) -> str:
             return str(msg["final"])
         if "tool" in msg:
             try:
-                obs = await _maybe_await(agent.tools.call, msg["tool"], msg.get("args", {}))
+                if scope is None:
+                    obs = await _maybe_await(agent.tools.call, msg["tool"], msg.get("args", {}))
+                else:
+                    obs = await _scoped_call(agent, scope, msg["tool"], msg.get("args", {}))
             except Exception as e:
                 obs = f"ERROR: {e}"
             messages.append({"role": "user", "content": f"observation: {obs}"})
@@ -52,18 +71,30 @@ async def arun_agent(agent: Agent, prompt: str) -> str:
 
 class AsyncOrchestrator:
     def __init__(self, agents: List[Agent], max_concurrency: int = 8,
-                 backoff: float = 0.0, timeout: Optional[float] = None):
+                 backoff: float = 0.0, timeout: Optional[float] = None, tool_journal=None):
         self.agents = {a.name: a for a in agents}
         self.max_concurrency = max_concurrency
         self.backoff = backoff
         self.timeout = timeout  # seconds per attempt, None = unlimited
+        self.tool_journal = tool_journal  # ToolJournal or None
+        self.tool_stats = {"replayed": 0, "live": 0}
+        self._fps: Dict[str, str] = {}
         self._planner = Orchestrator(agents)
 
     def plan(self, tasks: List[Task]) -> List[List[str]]:
         return self._planner.plan(tasks)
 
     async def _attempt(self, task: Task, prompt: str) -> str:
-        coro = arun_agent(self.agents[task.agent], prompt)
+        scope = self.tool_journal.scope(self._fps[task.id]) if self.tool_journal is not None else None
+        try:
+            return await self._attempt_inner(task, prompt, scope)
+        finally:
+            if scope is not None:
+                self.tool_stats["replayed"] += scope.replayed
+                self.tool_stats["live"] += scope.live
+
+    async def _attempt_inner(self, task: Task, prompt: str, scope) -> str:
+        coro = arun_agent(self.agents[task.agent], prompt, scope)
         if self.timeout is None:
             return await coro
         return await asyncio.wait_for(coro, self.timeout)
@@ -94,9 +125,11 @@ class AsyncOrchestrator:
         ``ok`` record matches their fingerprint are replayed (``Result.resumed``, no call)."""
         self.plan(tasks)
         fps: Dict[str, str] = {}
-        if log is not None:
+        if log is not None or self.tool_journal is not None:
             from .runlog import fingerprints
             fps = fingerprints(tasks)
+            self._fps = fps
+        if log is not None:
             run_id = run_id or log.new_run_id()
         sem = asyncio.Semaphore(self.max_concurrency)
         pending = {t.id: t for t in tasks}

@@ -51,3 +51,20 @@ python -m agentflow log run.jsonl --compact
 
 ## Async orchestration (v0.6)
 `AsyncOrchestrator(agents, max_concurrency=8, timeout=None)` runs the same `Task` DAG on an asyncio loop. Agents may have a coroutine `llm.complete` and coroutine tools; plain sync ones run in worker threads, so existing agents work unchanged. A semaphore bounds in-flight tasks, `timeout` is per attempt (a timeout is an ordinary failure and can be retried), failures cascade as `skipped`, and `stream()` yields `(task_id, Result)` as each task lands. Abandoning the stream cancels in-flight tasks. `await orch.run(tasks)` or `orch.run_sync(tasks)`. `run`/`stream`/`run_sync` also take `log=RunLog(path), resume=True`: results are journaled as they land (all finished tasks are written before any is yielded, so abandoning the stream loses nothing finished) and tasks whose fingerprint still matches are replayed without a call, same journal format as the sync `Orchestrator`, so a run started sync can be resumed async and back.
+
+## Tool-call checkpointing (`ToolJournal`)
+
+`RunLog` resumes whole tasks; `ToolJournal` goes one level down so a retried or resumed task does
+not repeat side effects (emails, charges, tickets) its agent already performed.
+
+```python
+from agentflow import AsyncOrchestrator, ToolJournal
+orch = AsyncOrchestrator(agents, tool_journal=ToolJournal("tools.jsonl"))
+orch.run_sync(tasks)          # orch.tool_stats -> {"replayed": n, "live": m}
+```
+
+Successful calls are journaled as (task fingerprint, call index, tool, args) -> observation. On a
+retry, calls are matched positionally and replayed while tool and args are identical; at the first
+divergence the rest runs live. Failed calls are not journaled. Editing a task prompt (or upstream
+tasks) changes its fingerprint and invalidates its entries. Assumption: the agent re-issues the same
+early calls; if it does not, replay simply stops. Async orchestrator only (tests in `tests/test_toolckpt.py`).
