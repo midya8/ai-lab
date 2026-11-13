@@ -150,3 +150,5 @@ better-calibrated probability, not a better detector, on this data.
 
 ### conflicts
 `datadoctor.label_conflicts(X, y)` groups identical feature rows with disagreeing labels and names the minority rows as likely label errors (ties are listed without a guess).
+
+`datadoctor.near_conflicts(X, y, radius)` extends this to near-duplicates: every pair of rows within `radius` that carry different labels (exact blocked O(n^2) scan, guarded by `max_rows`).
