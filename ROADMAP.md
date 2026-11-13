@@ -277,6 +277,7 @@
 - llm-router: per-model `TokenBucket` rate limits; exhausted models are skipped and the router falls through (8 tests, 73 total)
 - datadoctor: `informative_missingness` (chi-square of NaN indicator vs label, Bonferroni; own gamma-based p-value; 3 tests, 106 total)
 - vecdb: `Collection.query_grouped` (top-k groups by metadata field, e.g. one chunk per document; 4 tests, 167 total)
+- vecdb: `HybridCollection.query_grouped` (fused BM25+vector search collapsed to top-k groups by metadata; 3 tests)
 
 
 ## Next

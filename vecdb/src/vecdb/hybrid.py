@@ -233,6 +233,31 @@ class HybridCollection:
                     break
         return out
 
+    def query_grouped(self, vector, text: str, group_by: str, k: int = 5, per_group: int = 1,
+                      fetch_k: int | None = None, **kwargs):
+        """Fused (vector + BM25) search collapsed to the top ``k`` groups by metadata field.
+
+        Over-fetches ``fetch_k`` fused hits (default ``max(50, 10*k*per_group)``), keeps at most
+        ``per_group`` per group in fused-rank order; hits lacking ``group_by`` are skipped.
+        ``kwargs`` go to :meth:`query` (``where``, ``fusion``, ``alpha`` ...).
+        Returns ``[(group_value, [Hit, ...]), ...]`` ordered by each group's best fused hit.
+        """
+        if k < 1 or per_group < 1:
+            raise ValueError("k and per_group must be >= 1")
+        fetch_k = fetch_k or max(50, 10 * k * per_group)
+        groups: dict = {}
+        for h in self.query(vector, text, k=fetch_k, **kwargs):
+            if group_by not in h.metadata:
+                continue
+            g = h.metadata[group_by]
+            try:
+                bucket = groups.setdefault(g, [])
+            except TypeError:
+                raise ValueError(f"metadata {group_by!r} must be hashable") from None
+            if len(bucket) < per_group:
+                bucket.append(h)
+        return list(groups.items())[:k]
+
     def query_batch(self, vectors, texts: list[str], k: int = 10, **kwargs) -> list[list[Hit]]:
         """Run ``query`` for each (vector, text) pair; results are in input order."""
         vectors = np.asarray(vectors, dtype=np.float32)

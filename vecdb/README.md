@@ -21,6 +21,7 @@ hits = c.query(query_vector, k=5, where={"lang": "en", "year": {"$gte": 2023}}, 
 # pick the cheapest ef (hnsw) / nprobe (ivf) that reaches 95% recall@10 vs exact search
 print(c.tune(k=10, target_recall=0.95))  # {'param': 'ef', 'value': ..., 'recall': ..., 'reached': True, 'curve': [...]}
 diverse = c.query_mmr(query_vector, k=5, fetch_k=50, lambda_mult=0.5)  # MMR: relevance vs. redundancy
+# HybridCollection has the same: h.query_grouped(vec, "text", group_by="doc", k=5)
 by_doc = c.query_grouped(query_vector, group_by="doc", k=5, per_group=2)  # [(doc, [hits])], best groups first
 dupes = c.find_duplicates(threshold=0.95)  # [(id_a, id_b, cosine)], for corpus dedup
 c.save("my_collection"); c = Collection.load("my_collection")
