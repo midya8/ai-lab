@@ -14,10 +14,15 @@ The fingerprint chains the prompt and dependencies, so editing a prompt invalida
 """
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import threading
 import time
+try:
+    import fcntl
+except ImportError:  # non-POSIX: falls back to thread-only locking
+    fcntl = None
 from typing import Callable, Dict, List, Tuple
 
 
@@ -52,6 +57,25 @@ class ToolJournal:
         except FileNotFoundError:
             pass
 
+    @contextlib.contextmanager
+    def _flock(self):
+        """Exclusive cross-process lock on a sidecar ``<path>.lock`` file (POSIX only)."""
+        if fcntl is None:
+            yield
+            return
+        with open(self.path + ".lock", "a") as lf:
+            fcntl.flock(lf, fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                fcntl.flock(lf, fcntl.LOCK_UN)
+
+    def refresh(self) -> None:
+        """Re-read the file so entries written by other processes become visible."""
+        with self._lock:
+            self._lines = 0
+            self._load()
+
     def __len__(self) -> int:
         return len(self._cache)
 
@@ -65,12 +89,14 @@ class ToolJournal:
 
     def store(self, fp: str, seq: int, tool: str, args, obs) -> None:
         e = {"fp": fp, "seq": seq, "tool": tool, "args": json.loads(_canon(args)), "obs": str(obs), "ts": self._clock()}
-        with self._lock:
+        with self._lock, self._flock():
             self._cache[(fp, seq)] = e
             with open(self.path, "a", encoding="utf-8") as f:
                 f.write(json.dumps(e, ensure_ascii=False) + "\n")
             self._lines += 1
             if self.max_lines is not None and self._lines > self.max_lines:
+                self._lines = 0
+                self._load()  # merge other processes' entries before rewriting
                 self._compact_locked(None)
                 self.auto_compactions += 1
 
@@ -82,7 +108,9 @@ class ToolJournal:
         """Rewrite the file keeping only the newest entry per (fp, seq), dropping expired entries
         and, if ``live_fps`` is given, entries of fingerprints not in it. Atomic via rename.
         Returns the number of lines removed."""
-        with self._lock:
+        with self._lock, self._flock():
+            self._lines = 0
+            self._load()  # never drop entries another process appended
             return self._compact_locked(live_fps)
 
     def _compact_locked(self, live_fps) -> int:
