@@ -272,6 +272,7 @@
 - reviewkit: AST rule py-type-compare (`type(x) == T`; 130 tests)
 - agentflow: `ToolJournal` cross-process safety (fcntl sidecar lock, `refresh()`, compaction merges other processes' entries; 4 tests, 88 total)
 - agentflow: `ToolJournal` Windows `msvcrt` locking fallback (3 tests)
+- bpekit: `ChoiceConstraint` / `constrained_pick` token-level constrained decoding over fixed string choices (any tokenisation path allowed, eos on complete; 7 tests, 99 total)
 
 
 ## Next

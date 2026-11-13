@@ -118,3 +118,7 @@ Chunks cut only at word boundaries, never exceed `max_tokens` (except a single w
 `boundary_variants(tok, text, min_count=1, limit=None)` compares each word's tokenization with and without a leading space and ranks words by how many extra tokens the space costs (2 tests).
 
 `bpekit.coverage.coverage(tok, text, ks)` gives the fraction of emitted tokens covered by the k most frequent ids and the number of distinct ids needed for 90% / 99% coverage, a quick view of how skewed token use is. Mechanics only (3 tests); no corpus-level finding is claimed.
+
+## Constrained choices
+
+`ChoiceConstraint(tok, ["positive", "negative"], eos_id=None)` reports, at each step, the token ids that keep at least one choice reachable (`allowed()`), accepts any tokenisation path including raw bytes, and exposes `done` / `complete` / `result()`. `constrained_pick(tok, choices, score_fn)` greedy-decodes under it. Useful for classification-by-generation with a real model's logits; tested here with scripted scorers only.

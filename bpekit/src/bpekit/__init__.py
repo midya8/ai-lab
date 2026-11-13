@@ -32,3 +32,5 @@ from .tree import merge_tree, merge_depth, format_tree
 __all__ += ["merge_tree", "merge_depth", "format_tree"]
 from .healing import heal_prompt, healed_continuation
 __all__ += ["heal_prompt", "healed_continuation"]
+from .choices import ChoiceConstraint, constrained_pick
+__all__ += ["ChoiceConstraint", "constrained_pick"]
