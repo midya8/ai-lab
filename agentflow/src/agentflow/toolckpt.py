@@ -26,8 +26,12 @@ def _canon(args) -> str:
 
 
 class ToolJournal:
-    def __init__(self, path: str, ttl_s: "float | None" = None, clock: Callable[[], float] = time.time):
+    def __init__(self, path: str, ttl_s: "float | None" = None, clock: Callable[[], float] = time.time,
+                 max_lines: "int | None" = None):
         self.path = path
+        self.max_lines = max_lines  # auto-compact when the file holds more than this many lines
+        self.auto_compactions = 0
+        self._lines = 0
         self.ttl_s = ttl_s  # entries older than this are ignored on lookup and dropped by compact()
         self._clock = clock
         self._lock = threading.Lock()
@@ -38,6 +42,8 @@ class ToolJournal:
         try:
             with open(self.path, encoding="utf-8") as f:
                 for line in f:
+                    if line.strip():
+                        self._lines += 1
                     try:
                         e = json.loads(line)
                         self._cache[(e["fp"], int(e["seq"]))] = e
@@ -63,6 +69,10 @@ class ToolJournal:
             self._cache[(fp, seq)] = e
             with open(self.path, "a", encoding="utf-8") as f:
                 f.write(json.dumps(e, ensure_ascii=False) + "\n")
+            self._lines += 1
+            if self.max_lines is not None and self._lines > self.max_lines:
+                self._compact_locked(None)
+                self.auto_compactions += 1
 
     def _expired(self, e: dict) -> bool:
         # entries without a timestamp (older journals) never expire
@@ -73,20 +83,22 @@ class ToolJournal:
         and, if ``live_fps`` is given, entries of fingerprints not in it. Atomic via rename.
         Returns the number of lines removed."""
         with self._lock:
-            try:
-                with open(self.path, encoding="utf-8") as f:
-                    before = sum(1 for line in f if line.strip())
-            except FileNotFoundError:
-                return 0
-            keep = {k: e for k, e in self._cache.items()
-                    if not self._expired(e) and (live_fps is None or k[0] in live_fps)}
-            tmp = self.path + ".tmp"
-            with open(tmp, "w", encoding="utf-8") as f:
-                for e in keep.values():
-                    f.write(json.dumps(e, ensure_ascii=False) + "\n")
-            os.replace(tmp, self.path)
-            self._cache = keep
-            return before - len(keep)
+            return self._compact_locked(live_fps)
+
+    def _compact_locked(self, live_fps) -> int:
+        before = self._lines
+        keep = {k: e for k, e in self._cache.items()
+                if not self._expired(e) and (live_fps is None or k[0] in live_fps)}
+        if not os.path.exists(self.path):
+            return 0
+        tmp = self.path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            for e in keep.values():
+                f.write(json.dumps(e, ensure_ascii=False) + "\n")
+        os.replace(tmp, self.path)
+        self._cache = keep
+        self._lines = len(keep)
+        return before - len(keep)
 
     def scope(self, fp: str) -> "ToolScope":
         return ToolScope(self, fp)
