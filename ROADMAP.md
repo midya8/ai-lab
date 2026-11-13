@@ -295,6 +295,7 @@
 - datadoctor: `adversarial_validation` (train-vs-test domain classifier, AUC + permutation null; quadratic option catches correlation-only shifts that KS/PSI miss; 5 tests, 111 total)
 - datadoctor: `categorical_drift` (chi-square + PSI + unseen-category rate for categorical features; 5 tests, 116 total)
 - datadoctor: `bbse_weights` (black-box label-shift estimation from validation confusion matrix; recovers a 0.7/0.2/0.1 test prior within 0.04 on synthetic data; 5 tests, 121 total)
+- datadoctor: `wasserstein_drift` (exact W1 per feature in train-sigma units; pure shift recovered exactly; 5 tests, 126 total)
 
 
 ## Next
