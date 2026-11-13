@@ -154,3 +154,5 @@ better-calibrated probability, not a better detector, on this data.
 `datadoctor.label_conflicts(X, y)` groups identical feature rows with disagreeing labels and names the minority rows as likely label errors (ties are listed without a guess).
 
 `datadoctor.near_conflicts(X, y, radius)` extends this to near-duplicates: every pair of rows within `radius` that carry different labels (exact blocked O(n^2) scan, guarded by `max_rows`).
+
+- `categorical_drift(train, test)`: chi-square homogeneity test (own chi-square survival function, checked against known quantiles), PSI, and unseen-category rate for categorical features; any unseen category flags.
