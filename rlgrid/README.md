@@ -39,3 +39,7 @@ Added afterwards (same settings, no tuning; added after seeing the two rows abov
 Both beat SARSA online here. Double Q's low fall rate is plausibly from reduced maximisation bias, but I did not ablate that, so it is a hypothesis, not a finding.
 
 Toy environment only; no claim about deep RL.
+
+## REINFORCE
+
+`reinforce(env, baseline=True)` is a tabular softmax policy-gradient agent (Monte-Carlo returns, optional learned V(s) baseline). `greedy_policy(theta)` extracts the argmax policy. Tests check it solves the deterministic gridworld; the baseline test is a loose sanity check (4 seeds), not a significance claim.

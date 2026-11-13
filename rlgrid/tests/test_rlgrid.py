@@ -67,3 +67,18 @@ def test_expected_sarsa_and_double_q_reach_optimum_on_deterministic_map():
     for fn in (expected_sarsa, double_q):
         q, _ = fn(GridWorld(slip=0.0), episodes=600, seed=1)
         assert evaluate(env, greedy_policy(q), 5)[0] >= opt - 1e-9
+
+
+def test_reinforce_learns_det_gridworld():
+    env = GridWorld(seed=0)
+    th, rets = reinforce(env, episodes=400, seed=0)
+    assert rets[-50:].mean() > rets[:50].mean()
+    mean, win = evaluate(env, greedy_policy(th), 1)
+    assert win == 1.0
+
+
+def test_reinforce_baseline_not_worse_on_average():
+    env = GridWorld(seed=0)
+    with_b = np.mean([reinforce(env, episodes=150, seed=s)[1][-50:].mean() for s in range(4)])
+    no_b = np.mean([reinforce(env, episodes=150, seed=s, baseline=False)[1][-50:].mean() for s in range(4)])
+    assert with_b >= no_b - 0.05

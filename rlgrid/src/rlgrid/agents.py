@@ -128,3 +128,43 @@ def evaluate(env, policy, episodes=100, max_steps=200):
                 break
         rets.append(tot)
     return float(np.mean(rets)), wins / episodes
+
+
+def reinforce(env, episodes=500, lr=0.2, gamma=0.97, seed=0, max_steps=200, baseline=True, lr_v=0.2):
+    """REINFORCE (Williams 1992) with a tabular softmax policy.
+
+    With baseline=True a per-state value table V(s) is learned by Monte-Carlo
+    regression and subtracted from the return (variance reduction, same
+    expected gradient). Returns (logits, episode_returns); greedy_policy(logits)
+    gives the argmax policy.
+    """
+    rng = np.random.default_rng(seed)
+    theta = np.zeros((env.n_states, env.n_actions))
+    v = np.zeros(env.n_states)
+    returns = []
+    for _ in range(episodes):
+        s = env.reset()
+        traj, total = [], 0.0
+        for _ in range(max_steps):
+            z = theta[s] - theta[s].max()
+            p = np.exp(z) / np.exp(z).sum()
+            a = int(rng.choice(len(p), p=p))
+            s2, r, done = env.step(a)
+            traj.append((s, a, r))
+            total += r
+            s = s2
+            if done:
+                break
+        g = 0.0
+        for s_t, a_t, r_t in reversed(traj):
+            g = r_t + gamma * g
+            adv = g - (v[s_t] if baseline else 0.0)
+            z = theta[s_t] - theta[s_t].max()
+            p = np.exp(z) / np.exp(z).sum()
+            grad = -p
+            grad[a_t] += 1.0
+            theta[s_t] += lr * adv * grad
+            if baseline:
+                v[s_t] += lr_v * (g - v[s_t])
+        returns.append(total)
+    return theta, np.array(returns)
