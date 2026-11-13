@@ -34,3 +34,23 @@ More search clearly helps, but 10 games per cell is a tiny sample (one game move
 ## Root-parallel UCT
 
 `root_parallel_search` runs several independent trees (own seeds, split budget) and sums root visits. Results are identical sequentially or with `processes=True`. Experiment (`experiments/root_parallel.py`, tic-tac-toe vs perfect player, 50 games per cell, equal total budget): single tree lost 33/24/15 games at budgets 20/40/80; root-4 was slightly worse at every budget (losses 43/27/20). Splitting a small budget hurts; the benefit is wall-clock only.
+
+## AlphaZero-lite (`azlite.py`)
+
+A numpy policy/value MLP (hand-written backprop + Adam, gradient-checked in tests) trained only
+from PUCT self-play (visit-count policy targets, game-outcome value targets; exploration via
+temperature sampling plus 25% random moves). `net.prior_fn` / `net.value_fn` plug into `puct_search`.
+
+`python experiments/azlite_selfplay.py 200` (tic-tac-toe, 64 hidden units, 25 self-play iterations,
+15 iterations at eval, hyperparameters fixed a priori, 40 games per cell, one seed, ~30 s):
+
+| matchup (15 iters each) | W / D / L |
+|---|---|
+| AZ-lite vs random | 36 / 4 / 0 |
+| AZ-lite vs UCT | 29 / 10 / 1 |
+| AZ-lite vs perfect minimax | 0 / 38 / 2 |
+| UCT vs perfect | 0 / 12 / 28 |
+
+With only 30 training rounds it *lost* to UCT (12/4/24), so the learning is real but needs enough
+self-play. Caveats: tic-tac-toe only, single seed, tiny sample; the 2 losses to a perfect player show
+it is not solved. Gravity (Connect-Four) boards are unsupported since moves must equal cell indices.
