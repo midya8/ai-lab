@@ -124,10 +124,47 @@ class UnigramTokenizer:
             self._cache[w] = got
         return got
 
-    def encode(self, text: str):
+    def _sample_word(self, w: bytes, alpha, rng):
+        """Forward-filtering backward-sampling over the lattice (Kudo 2018,
+        subword regularisation). Probabilities are proportional to
+        exp(alpha * log p) per segmentation, so alpha=1 samples from the
+        unigram LM posterior and alpha->inf approaches Viterbi."""
+        n = len(w)
+        fwd = [-math.inf] * (n + 1)
+        fwd[0] = 0.0
+        for j in range(1, n + 1):
+            terms = []
+            for i in range(max(0, j - self.max_len), j):
+                lp = self.logp.get(w[i:j])
+                if lp is not None and fwd[i] > -math.inf:
+                    terms.append(fwd[i] + alpha * lp)
+            m = max(terms)
+            fwd[j] = m + math.log(sum(math.exp(t - m) for t in terms))
+        out, j = [], n
+        while j > 0:
+            cands, ws = [], []
+            for i in range(max(0, j - self.max_len), j):
+                lp = self.logp.get(w[i:j])
+                if lp is not None and fwd[i] > -math.inf:
+                    cands.append(i)
+                    ws.append(math.exp(fwd[i] + alpha * lp - fwd[j]))
+            i = rng.choices(cands, weights=ws)[0]
+            out.append(self.ids[w[i:j]])
+            j = i
+        return out[::-1]
+
+    def encode(self, text: str, sample_alpha=None, rng=None):
+        """Viterbi by default; with sample_alpha, a random segmentation."""
         out = []
+        if sample_alpha is not None:
+            import random
+            rng = rng or random.Random()
         for w in PRETOKEN_RE.findall(text):
-            out.extend(self._encode_word(w.encode("utf-8")))
+            wb = w.encode("utf-8")
+            if sample_alpha is None:
+                out.extend(self._encode_word(wb))
+            else:
+                out.extend(self._sample_word(wb, sample_alpha, rng))
         return out
 
     def decode(self, ids) -> str:

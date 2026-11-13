@@ -39,3 +39,7 @@ Held-out bytes/token vs BPE (`experiments/unigram_vs_bpe.py`, small 60k-char tra
 | 768 | 2.373 | 2.484 |
 
 Mixed: unigram is slightly worse at small vocabs and better at 768. Pruning uses a cheap proxy (expected count x -logp) rather than SentencePiece's exact re-segmentation loss, and the corpus is tiny, so don't read this as a general ranking.
+
+## Unigram sampling (subword regularisation)
+
+`UnigramTokenizer.encode(text, sample_alpha=0.5, rng=random.Random(0))` draws a random segmentation by forward-filtering backward-sampling, with probability proportional to p(seg)^alpha. alpha=1 is the LM posterior; large alpha approaches Viterbi. A test verifies the empirical frequencies against the exact posterior on a toy vocabulary.

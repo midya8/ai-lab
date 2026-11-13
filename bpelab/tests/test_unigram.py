@@ -54,3 +54,36 @@ def test_save_load(tmp_path):
     p = tmp_path / "u.json"; t.save(p)
     u = UnigramTokenizer.load(p)
     assert u.encode(TEXT) == t.encode(TEXT) and u.vocab_size == t.vocab_size
+
+
+def test_sampling_roundtrips_and_varies():
+    import random
+    t = UnigramTokenizer.train(TEXT, 300, seed_size=500)
+    s = "unbelievably happy believers"
+    rng = random.Random(0)
+    seen = set()
+    for _ in range(40):
+        ids = t.encode(s, sample_alpha=0.05, rng=rng)
+        assert t.decode(ids) == s
+        seen.add(tuple(ids))
+    assert len(seen) > 1
+
+
+def test_sampling_high_alpha_matches_viterbi():
+    import random
+    t = UnigramTokenizer.train(TEXT, 300, seed_size=500)
+    s = "the quick brown fox"
+    assert t.encode(s, sample_alpha=200.0, rng=random.Random(1)) == t.encode(s)
+
+
+def test_sampling_distribution_matches_lm_posterior():
+    import random, math
+    from collections import Counter
+    t = UnigramTokenizer({b"a": -1.0, b"b": -1.5, b"ab": -2.0})
+    rng = random.Random(3)
+    c = Counter(tuple(t.encode("ab", sample_alpha=1.0, rng=rng)) for _ in range(6000))
+    p_ab = math.exp(-2.0)
+    p_a_b = math.exp(-2.5)
+    exp_frac = p_ab / (p_ab + p_a_b)
+    got = c[(t.ids[b"ab"],)] / 6000
+    assert abs(got - exp_frac) < 0.03
