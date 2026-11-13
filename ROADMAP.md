@@ -264,6 +264,7 @@
 - datadoctor: `near_conflicts` radius-based label disagreement between near-duplicate rows (exact blocked scan, brute-force parity test; 3 tests)
 - reviewkit: `py-open-unclosed` rule for `open(...).read()/write()` without a with-block (1 test, 129 total)
 - agentflow: `ToolJournal` tool-call-level checkpointing; retries/resume replay journaled side-effecting calls instead of re-running them (7 tests, 74 total)
+- logsentry v0.9: `--incidents/--gap` CLI flags group batch anomalies into incidents (3 tests, 35 total)
 
 
 ## Next

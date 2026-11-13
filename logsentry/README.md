@@ -38,3 +38,6 @@ Per-template rate detectors, streaming mode, Prometheus exporter.
 
 ## Incident grouping (v0.8)
 `group_incidents(anomalies, window=60, gap=2)` in `incidents.py` chains anomalies whose windows are within `gap` windows into one `Incident` (start/end, per-kind counts, peak |score|, `summary()`), so one outage yields one page rather than a burst of alerts. The `low/medium/high` severity is a hand-set heuristic (kind diversity and peak score), not calibrated. 6 tests.
+
+## Incidents in the CLI (v0.9)
+`python -m logsentry.cli --demo --incidents [--gap N] [--json]` prints one line per incident instead of one per anomalous window (batch mode). 3 tests; the demo's incident count is whatever the grouping yields, no tuning.
