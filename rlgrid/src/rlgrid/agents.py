@@ -298,3 +298,60 @@ def prioritized_sweeping(env, episodes=500, alpha=0.5, gamma=0.97, eps=0.1, seed
                 break
         returns.append(total)
     return q, np.array(returns), backups
+
+
+def make_features(env, kind="onehot", rbf_sigma=1.0):
+    """State -> feature matrix (n_states, d). kinds: onehot (tabular), coords
+    (bias, row, col, normalised: cannot represent walls), rbf (Gaussian bumps on
+    every cell, width rbf_sigma in cells: generalises across neighbours)."""
+    n = env.n_states
+    rc = np.array([(s // env.w, s % env.w) for s in range(n)], dtype=float)
+    if kind == "onehot":
+        return np.eye(n)
+    if kind == "coords":
+        return np.column_stack([np.ones(n), rc[:, 0] / max(env.h - 1, 1), rc[:, 1] / max(env.w - 1, 1)])
+    if kind == "rbf":
+        d2 = ((rc[:, None, :] - rc[None, :, :]) ** 2).sum(-1)
+        return np.exp(-d2 / (2 * rbf_sigma ** 2))
+    raise ValueError(f"unknown feature kind {kind!r}")
+
+
+def actor_critic(env, episodes=500, alpha_pi=0.1, alpha_v=0.1, gamma=0.97, seed=0,
+                 max_steps=200, features="onehot", rbf_sigma=1.0):
+    """One-step actor-critic with LINEAR function approximation.
+
+    Policy: softmax(phi(s) @ theta); critic: V(s) = phi(s) @ w, trained by TD(0).
+    The TD error is the advantage estimate: theta += alpha_pi * delta * grad log pi.
+    Updates are per step (online), unlike REINFORCE's per-episode Monte-Carlo.
+    Returns (theta, w, episode_returns, phi); policy(s) = argmax(phi[s] @ theta).
+    """
+    rng = np.random.default_rng(seed)
+    phi = make_features(env, features, rbf_sigma) if isinstance(features, str) else np.asarray(features, float)
+    d = phi.shape[1]
+    theta, w = np.zeros((d, env.n_actions)), np.zeros(d)
+    returns = []
+    for _ in range(episodes):
+        s, total = env.reset(), 0.0
+        for _ in range(max_steps):
+            logits = phi[s] @ theta
+            p = np.exp(logits - logits.max())
+            p /= p.sum()
+            a = int(rng.choice(len(p), p=p))
+            s2, r, done = env.step(a)
+            # bootstrap through time-limit truncation, not through true termination
+            target = r + (0.0 if done else gamma * (phi[s2] @ w))
+            delta = target - phi[s] @ w
+            w += alpha_v * delta * phi[s]
+            grad = -p
+            grad[a] += 1.0
+            theta += alpha_pi * delta * np.outer(phi[s], grad)
+            total += r
+            s = s2
+            if done:
+                break
+        returns.append(total)
+    return theta, w, np.array(returns), phi
+
+
+def ac_policy(theta, phi):
+    return (phi @ theta).argmax(axis=1)

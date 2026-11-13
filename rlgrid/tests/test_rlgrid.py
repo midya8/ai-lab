@@ -145,3 +145,37 @@ def test_prioritized_sweeping_zero_planning_is_no_backups():
 def test_prioritized_sweeping_beats_q_early():
     sc = lambda f, **k: np.mean([f(GridWorld(seed=s), episodes=20, seed=s, **k)[1][5:].mean() for s in range(4)])
     assert sc(prioritized_sweeping) > sc(q_learning)
+
+
+def test_features_shapes_and_unknown_kind():
+    env = GridWorld()
+    assert make_features(env, "onehot").shape == (env.n_states, env.n_states)
+    assert make_features(env, "coords").shape == (env.n_states, 3)
+    rbf = make_features(env, "rbf")
+    assert np.allclose(np.diag(rbf), 1.0) and np.allclose(rbf, rbf.T)
+    try:
+        make_features(env, "nope")
+        assert False
+    except ValueError:
+        pass
+
+
+def test_actor_critic_onehot_solves_det_grid():
+    env = GridWorld(seed=0)
+    theta, w, rets, phi = actor_critic(env, episodes=400, seed=0)
+    mean, win = evaluate(env, ac_policy(theta, phi), 1)
+    assert win == 1.0 and mean > 0.8
+    assert rets[-50:].mean() > rets[:50].mean()
+
+
+def test_actor_critic_deterministic_given_seed():
+    a = actor_critic(GridWorld(seed=0), episodes=20, seed=3)[2]
+    b = actor_critic(GridWorld(seed=0), episodes=20, seed=3)[2]
+    assert np.array_equal(a, b)
+
+
+def test_actor_critic_custom_feature_matrix():
+    env = GridWorld(seed=0)
+    phi = np.eye(env.n_states)
+    _, w, rets, _ = actor_critic(env, episodes=5, features=phi, seed=0)
+    assert w.shape == (env.n_states,) and len(rets) == 5

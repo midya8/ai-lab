@@ -69,3 +69,17 @@ Intermediate lambda / n learn fastest early; the extremes lose (lam 0 / n 1 prop
 | prioritized sweeping | 3.0 |
 
 Caveats: the gap between Dyna-Q and sweeping is one episode on a tiny deterministic map; I did not count Dyna-Q's backups, so this says nothing about compute efficiency (sweeping used about 1300 backups on average), and no significance test was run.
+
+## Actor-critic with linear function approximation
+
+`actor_critic(env, features="onehot"|"coords"|"rbf")` is a one-step online actor-critic: softmax policy `softmax(phi(s) @ theta)`, critic `V = phi(s) @ w` trained by TD(0), with the TD error as the advantage. `make_features` builds the feature maps; a custom `(n_states, d)` matrix also works. `experiments/actor_critic.py` (default grid, slip 0, 10 seeds, 300 episodes, step sizes 0.1/0.1 fixed a priori and not tuned per feature set):
+
+| agent | final greedy success | mean training return |
+|---|---|---|
+| actor-critic one-hot | 1.0 | +0.023 |
+| actor-critic coords (row, col) | 0.0 | -1.791 |
+| actor-critic RBF sigma=0.7 | 1.0 | +0.432 |
+| actor-critic RBF sigma=1.0 | 1.0 | +0.426 |
+| REINFORCE + baseline (tabular) | 1.0 | +0.550 |
+
+Findings: linear coordinates fail completely (a walled maze is not linearly separable in position), RBF features learn much faster than one-hot by sharing credit between neighbours, but tabular REINFORCE with a baseline still had the best mean return here. Caveats: tiny deterministic map, no confidence intervals, sigma values were two guesses, and one-step actor-critic with one-hot features was slowed by its small step size.
