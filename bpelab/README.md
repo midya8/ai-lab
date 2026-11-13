@@ -25,3 +25,17 @@ Trained on 200k chars of stdlib source, evaluated on 100k chars from disjoint fi
 | 1024 | 3.293 | 2.504 |
 
 Held-out gains show diminishing returns and a widening train/held-out gap (memorised file-specific tokens) as vocab grows; this is a small-corpus result, not a claim about large-scale tokenizers.
+
+## Unigram-LM tokenizer (v0.2)
+
+`UnigramTokenizer` (Kudo 2018): seed vocab of bytes + frequent substrings, EM via forward-backward over each word's segmentation lattice, pruning to the vocab budget, Viterbi encoding, byte fallback (lossless). 7 tests incl. EM likelihood monotonicity and Viterbi optimality.
+
+Held-out bytes/token vs BPE (`experiments/unigram_vs_bpe.py`, small 60k-char train, single run):
+
+| vocab | BPE | Unigram |
+|---|---|---|
+| 384 | 1.871 | 1.857 |
+| 512 | 2.121 | 2.055 |
+| 768 | 2.373 | 2.484 |
+
+Mixed: unigram is slightly worse at small vocabs and better at 768. Pruning uses a cheap proxy (expected count x -logp) rather than SentencePiece's exact re-segmentation loss, and the corpus is tiny, so don't read this as a general ranking.

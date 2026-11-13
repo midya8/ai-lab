@@ -299,6 +299,7 @@
 - bpelab v0.1: byte-level BPE trainer/tokenizer (7 tests)
 - bpelab: compression-vs-vocab-size curve on held-out stdlib text (8 tests)
 - bpelab: BPE-dropout stochastic encoding `encode(dropout=, rng=)` (4 tests, 12 total)
+- bpelab v0.2: unigram-LM tokenizer (EM + pruning + Viterbi), mixed result vs BPE (19 tests)
 
 
 ## Next
@@ -324,4 +325,4 @@
 19. voicekit follow-ups: CNN word classifier on microgrid, (done per-word thresholds from validation data, 84 tests) (done benchmark vs global threshold: null result, F1 0.953/0.957/0.955) (done WakeGate event gating) (done WakeGate max_session_s cap, 2 tests) (done `smooth_events` posterior smoothing, 3 tests) better VAD below 5 dB, a real-speech benchmark from a download-free source
 20. rlgrid follow-ups: (done cliff-walking safety gap) (done REINFORCE) (done eligibility traces / n-step) (done actor-critic with linear/RBF features, 4 tests) (done numpy DQN + replay/target ablation, 4 tests) -> next: a new project (RL or other)
 21. mctslab follow-ups: (done transposition table, null result) (done Connect-Four ladder) (done PUCT with heuristic value) (done AlphaZero-lite in numpy, tic-tac-toe) -> next: Connect-Four/gravity support and a conv net on microgrid; old: PUCT with a learned policy/value net (AlphaZero-lite on microgrid), Connect-Four benchmarks, parallel root search
-22. bpelab follow-ups: (done compression curve) (done BPE-dropout) wire into tiny-transformer/microgrid, unigram-LM tokenizer comparison
+22. bpelab follow-ups: (done compression curve) (done BPE-dropout) (done unigram-LM) wire into tiny-transformer/microgrid, unigram-LM tokenizer comparison
