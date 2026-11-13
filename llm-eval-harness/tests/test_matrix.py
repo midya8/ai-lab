@@ -48,3 +48,38 @@ def test_tag_table_means_and_best():
 def test_markdown_has_tag_section(capsys):
     main([SUITE, "--matrix", "echo,rules"])
     assert "## By tag" in capsys.readouterr().out
+
+
+def test_parse_http_spec_and_errors():
+    from evalharness.backends import parse_backend_spec, HTTPBackend
+    b = parse_backend_spec("http@http://localhost:11434/v1/chat/completions#llama3", "k")
+    assert isinstance(b, HTTPBackend) and b.model == "llama3" and b.api_key == "k"
+    assert b.url.endswith("/chat/completions") and b.name == "http:llama3"
+    assert parse_backend_spec(" rules ").name == "rules"
+    for bad in ("http@nohash", "http@ftp://x#m", "http@http://x#", "nope"):
+        with pytest.raises(ValueError):
+            parse_backend_spec(bad)
+
+
+def test_matrix_cli_with_live_http_backend(capsys):
+    import json, threading
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+
+    class H(BaseHTTPRequestHandler):
+        def do_POST(self):
+            self.rfile.read(int(self.headers["Content-Length"]))
+            out = json.dumps({"choices": [{"message": {"content": "Paris"}}]}).encode()
+            self.send_response(200); self.send_header("Content-Length", str(len(out)))
+            self.end_headers(); self.wfile.write(out)
+        def log_message(self, *a): pass
+
+    os.environ["no_proxy"] = "127.0.0.1"
+    srv = HTTPServer(("127.0.0.1", 0), H)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    try:
+        url = f"http://127.0.0.1:{srv.server_port}/v1/chat/completions"
+        assert main([SUITE, "--matrix", f"rules,http@{url}#stub"]) == 0
+    finally:
+        srv.shutdown()
+    out = capsys.readouterr().out
+    assert "rules" in out and "http:stub" in out

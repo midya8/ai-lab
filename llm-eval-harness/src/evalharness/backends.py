@@ -69,3 +69,17 @@ def get_backend(spec: str, **kw) -> Backend:
     if spec == "http":
         return HTTPBackend(**kw)
     raise ValueError(f"unknown backend {spec!r}")
+
+
+def parse_backend_spec(spec: str, api_key: str = "") -> Backend:
+    """Parse a matrix entry. Plain names (echo, rules) or `http@URL#MODEL`,
+    e.g. http@http://localhost:11434/v1/chat/completions#llama3."""
+    spec = spec.strip()
+    if spec.startswith("http@"):
+        url, sep, model = spec[5:].rpartition("#")
+        if not sep or not url or not model:
+            raise ValueError(f"bad http spec {spec!r}: expected http@URL#MODEL")
+        if not url.startswith(("http://", "https://")):
+            raise ValueError(f"bad http spec {spec!r}: URL must start with http(s)://")
+        return HTTPBackend(url=url, model=model, api_key=api_key)
+    return get_backend(spec)

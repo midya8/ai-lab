@@ -283,7 +283,7 @@
 ## Next
 
 1. rag-evals: (done hard benchmark) (done chunk sweep) -> next: dense embeddings beyond LSA
-2. llm-eval-harness: (done) (done matrix) (done per-tag matrix) -> next: HTTP-model matrix specs
+2. llm-eval-harness: (done) (done matrix) (done per-tag matrix) (done HTTP-model matrix specs, 18 tests)
 3. tiny-transformer follow-ups: (done v0.5, top-p, grad accumulation); (done clipping); (done dropout); (done weight tying); (done early stopping); (done repetition penalty); (done LR finder); (done label smoothing); (done per-position eval); (done sliding-window eval); (done lora-lab on its attention) (done RoPE) (done GQA/MQA) (done context extension: PI + NTK) -> next: a key-value recall benchmark with a larger model to test long-context use properly
 4. agentflow follow-ups: (done shared memory) (done TTL) (done memory-aware Supervisor) (done failure fallback retries) (done circuit breaker) (done run metrics) (done Supervisor-in-DAG adapter) (done llm-router backend) (done persistent run log + resume) (done async orchestrator) (done async RunLog resume) (done async tool-call-level checkpointing) (done sync Orchestrator parity) (done journal TTL + compaction) (done size-based auto-compaction) -> (done cross-process file locking) (done Windows locking fallback)
 5. lora-lab: (done rank sweep) (done LoRA on tiny-transformer attention) (done adapter hub) (done QLoRA-style quantized base) -> (done LoftQ-style init) (done double quantization + bits/error frontier) -> next: paged/streamed adapter serving, or 2-bit (NF2) bases to see where LoftQ finally matters

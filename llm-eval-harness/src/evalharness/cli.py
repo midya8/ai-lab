@@ -2,7 +2,7 @@ import argparse
 import json
 import sys
 
-from .backends import get_backend
+from .backends import get_backend, parse_backend_spec
 from .report import compare, render_html, render_markdown
 from .matrix import render_matrix_markdown, run_matrix
 from .runner import load_suite, run_suite
@@ -17,11 +17,11 @@ def main(argv=None):
     p.add_argument("--baseline", help="prior run JSON; exit 1 on regression")
     p.add_argument("--summary-file", help="append Markdown report here (e.g. $GITHUB_STEP_SUMMARY)")
     p.add_argument("--html", help="write a self-contained HTML report here")
-    p.add_argument("--matrix", help="comma-separated offline backends (echo,rules) to compare side by side")
+    p.add_argument("--matrix", help="comma-separated backends to compare: echo, rules, or http@URL#MODEL")
     a = p.parse_args(argv)
     if a.matrix:
         md = render_matrix_markdown(run_matrix(
-            [get_backend(n.strip()) for n in a.matrix.split(",")], load_suite(a.suite)))
+            [parse_backend_spec(n, a.api_key) for n in a.matrix.split(",")], load_suite(a.suite)))
         if a.summary_file:
             with open(a.summary_file, "a") as f:
                 f.write(md + "\n")
