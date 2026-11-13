@@ -289,6 +289,7 @@
 - mctslab v0.1: UCT MCTS + exact minimax solver + arena (7 tests)
 - mctslab: `tt_uct_search` transposition-table UCT; did not beat plain UCT on tic-tac-toe (disclosed; 12 tests)
 - mctslab: Connect-Four strength ladder experiment (more iterations beat fewer; 10-game cells, disclosed; 14 tests)
+- mctslab: PUCT with pluggable prior/value + open-line heuristic; 12-0 vs UCT at 60 iters (heuristic) vs 0.46 (rollout value), small-sample caveats disclosed; 5 tests, 19 total
 
 
 ## Next
@@ -313,4 +314,4 @@
 18. specdec follow-ups: (done peaky target re-test) (done adaptive k) (done multi-draft recursive rejection at one position) (done m-ary tree along accepted path) (done microgrid real draft/target pair, v0.7: c=0.49 limits gain) (done backoff lookup draft: ties best fixed n, no gain) (done batched verification API, v0.9: exact, no wall-clock win without KV cache) (done CLI: calibrate+benchmark on any file) full branching-tree verification, KV-cached verification
 19. voicekit follow-ups: CNN word classifier on microgrid, (done per-word thresholds from validation data, 84 tests) (done benchmark vs global threshold: null result, F1 0.953/0.957/0.955) (done WakeGate event gating) (done WakeGate max_session_s cap, 2 tests) (done `smooth_events` posterior smoothing, 3 tests) better VAD below 5 dB, a real-speech benchmark from a download-free source
 20. rlgrid follow-ups: (done cliff-walking safety gap) (done REINFORCE) (done eligibility traces / n-step) (done actor-critic with linear/RBF features, 4 tests) -> next: a new project (RL or other)
-21. mctslab follow-ups: (done transposition table, null result) (done Connect-Four ladder) PUCT with a learned policy/value net (AlphaZero-lite on microgrid), Connect-Four benchmarks, parallel root search
+21. mctslab follow-ups: (done transposition table, null result) (done Connect-Four ladder) (done PUCT with heuristic value) learned policy/value net (AlphaZero-lite on microgrid); old: PUCT with a learned policy/value net (AlphaZero-lite on microgrid), Connect-Four benchmarks, parallel root search
