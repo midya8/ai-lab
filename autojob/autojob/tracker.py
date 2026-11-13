@@ -67,6 +67,7 @@ def next_id(entries):
 
 def add_application(log_path, company, title, source=None, match_score=None,
                     packet_dir=None, today=None, deadline=None,
+                    referrer=None,
                     required_matched=None, required_missing=None,
                     preferred_matched=None, preferred_missing=None):
     """Append an application. Refuses duplicates on (company, title).
@@ -77,7 +78,11 @@ def add_application(log_path, company, title, source=None, match_score=None,
     logged by older callers simply carry no skill data. ``deadline``
     (v0.15) is the posting's closing date as supplied by the caller;
     it is stored as a field on the entry, like ``match_score`` — a
-    property of the posting, not an event.
+    property of the posting, not an event. ``source`` (v0.18) is how
+    the posting was found, one of the fixed channels in sources.py,
+    and ``referrer`` is the name of the person who referred you (or
+    the recruiter who brought the role); both are stored as fields on
+    the entry, like ``deadline``.
     """
     entries = read_log(log_path)
     for entry in entries:
@@ -101,6 +106,8 @@ def add_application(log_path, company, title, source=None, match_score=None,
     }
     if deadline is not None:
         entry["deadline"] = deadline
+    if referrer is not None:
+        entry["referrer"] = referrer
     if required_matched is not None:
         entry["required_matched"] = list(required_matched)
     if required_missing is not None:
@@ -311,6 +318,40 @@ def record_deadline(log_path, app_id, deadline, today=None):
                     f"{entry['status']!r} (terminal)"
                 )
             entry["deadline"] = deadline
+            _write_log(log_path, entries)
+            return entry
+    raise TrackerError(f"no application with id {app_id!r}")
+
+
+def record_source(log_path, app_id, source):
+    """Set (or replace) how an application was found.
+
+    Stores the (already validated) ``{"source": ..., "referrer": ...}``
+    dict from ``sources.validate_source`` as the entry's ``source``
+    and ``referrer`` fields. Re-recording replaces both: a posting
+    you thought came from a job board may turn out to have come from
+    a recruiter, and a stale referrer must not linger when the source
+    changes — so a record with no referrer removes the old one.
+    Deliberately no history event: a source is a property of the
+    application, not something that happened to it, so recording one
+    must not reset the follow-up or stale clocks (see
+    followup.last_activity, which takes the latest date of any
+    history event) and does not appear in the timeline feed. Refuses
+    terminal applications: there is nothing left to submit for them.
+    """
+    entries = read_log(log_path)
+    for entry in entries:
+        if entry["id"] == app_id:
+            if entry.get("status") in TERMINAL:
+                raise TrackerError(
+                    f"cannot record a source for {app_id}: status is "
+                    f"{entry['status']!r} (terminal)"
+                )
+            entry["source"] = source["source"]
+            if source.get("referrer"):
+                entry["referrer"] = source["referrer"]
+            else:
+                entry.pop("referrer", None)
             _write_log(log_path, entries)
             return entry
     raise TrackerError(f"no application with id {app_id!r}")

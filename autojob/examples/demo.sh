@@ -18,7 +18,13 @@ python3 -m autojob apply --profile examples/profile.example.json \
     --deadline "$(date -d '+10 days' +%F)"
 python3 -m autojob apply --profile examples/profile.example.json \
     --posting examples/job2.example.md --out-dir "$WORK/applications" \
-    --deadline "$(date -d '+30 days' +%F)"
+    --deadline "$(date -d '+30 days' +%F)" --source job-board
+# Sources: Harbour came through a job board (recorded at apply time);
+# Northwind came through a referral — Maya Patel — recorded afterwards.
+# Eight days on, the job-board row shows 1 of 1 reaching an interview
+# and the referral row 0 of 1, with Maya Patel listed to follow up with.
+python3 -m autojob sources --log "$WORK/applications/applications.jsonl" \
+    --record --id APP-001 --source referral --referrer "Maya Patel"
 python3 -m autojob list --log "$WORK/applications/applications.jsonl"
 python3 -m autojob status --log "$WORK/applications/applications.jsonl" \
     --id APP-001 --to screening
@@ -159,7 +165,8 @@ python3 -m autojob goals --log "$WORK/applications/applications.jsonl" \
 # missing-skills roll-up names what the rejected postings kept asking
 # for, and the --reason filter shows just the skills-gap row.
 python3 -m autojob apply --profile examples/profile.example.json \
-    --posting examples/job3.example.md --out-dir "$WORK/applications"
+    --posting examples/job3.example.md --out-dir "$WORK/applications" \
+    --source company-site
 python3 -m autojob status --log "$WORK/applications/applications.jsonl" \
     --id APP-002 --to rejected
 python3 -m autojob status --log "$WORK/applications/applications.jsonl" \
@@ -175,4 +182,27 @@ python3 -m autojob rejections --log "$WORK/applications/applications.jsonl" \
     --today "$FUTURE"
 python3 -m autojob rejections --log "$WORK/applications/applications.jsonl" \
     --today "$FUTURE" --reason skills-gap
+# Sources: three channels, one application each — the job board led
+# somewhere (Harbour reached an interview), the referral and the
+# company site have not yet. The referral filter shows just Maya Patel.
+python3 -m autojob sources --log "$WORK/applications/applications.jsonl"
+python3 -m autojob sources --log "$WORK/applications/applications.jsonl" \
+    --source referral
+# Next actions: one prioritised list of what to do. Eight days on,
+# the Northwind posting closes in 2 days and its offer decision is
+# due in 6 — two actions, soonest first. Eight days further on, the
+# closing date is 6 days overdue, the offer decision 2 days overdue,
+# and the Northwind application has gone 8 days without a word, past
+# the 7-day screening wait, so a follow-up is due too. Sam Chen has
+# also gone quiet by a 7-day bar (not by the default 14), and the
+# --kind filter shows just the two dated actions.
+python3 -m autojob next --log "$WORK/applications/applications.jsonl" \
+    --today "$FUTURE"
+LATER="$(date -d '+16 days' +%F)"
+python3 -m autojob next --log "$WORK/applications/applications.jsonl" \
+    --today "$LATER"
+python3 -m autojob next --log "$WORK/applications/applications.jsonl" \
+    --today "$LATER" --quiet-days 7
+python3 -m autojob next --log "$WORK/applications/applications.jsonl" \
+    --today "$LATER" --kind deadline --kind offer
 echo "demo OK: packets in $WORK/applications (removed on exit)"

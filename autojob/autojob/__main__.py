@@ -43,12 +43,17 @@ Subcommands (all offline, stdlib only):
   rejections [--log L] [--reason REASON] [--json] [--out F] [--today YYYY-MM-DD]
   rejections --record --id APP-001 --reason ghosted [--note TEXT]
             [--today YYYY-MM-DD]
+  sources   [--log L] [--source CHANNEL] [--json] [--out F]
+  sources   --record --id APP-001 --source referral --referrer NAME
+  next      [--log L] [--days N] [--kind KIND ...] [--wait-days N]
+            [--quiet-days N] [--stale-days N] [--json] [--out F]
+            [--today YYYY-MM-DD]
 
 Exit codes: 0 ok · 1 usage error · 2 profile/posting load error ·
 3 match below --fail-under · 4 draft/apply refused below --min-coverage ·
 5 duplicate application · 6 illegal status transition, follow-up refused,
 offer refused, interview refused, contact refused, deadline refused,
-or rejection refused.
+rejection refused, or source refused.
 
 autojob prepares application packets for a human to review and submit. It
 never submits anything and never invents experience: every fact in a draft
@@ -81,6 +86,8 @@ from .interview import (InterviewError, collect_interviews,
                         render_interview_markdown, validate_interview)
 from .letter import draft_letter, review_notes
 from .match import match_profile
+from .next import (NEXT_KINDS, NextError, collect_next, next_json,
+                   render_next_markdown)
 from .offer import (OfferError, compare_offers, offer_json,
                     render_offer_markdown, validate_offer)
 from .plan import build_plan, plan_json, render_plan_markdown
@@ -94,13 +101,16 @@ from .rejections import (REJECTION_REASONS, RejectionError,
 from .report import match_json, match_report
 from .salary import (analyze_salaries, render_salary_markdown, salary_json,
                      target_from_profile)
+from .sources import (SOURCE_CHOICES, SourceError, collect_sources,
+                      render_sources_markdown, sources_json,
+                      validate_source)
 from .tailor import build_tailor, render_tailor_markdown, tailor_json
 from .timeline import (KINDS, collect_timeline, render_timeline_markdown,
                        timeline_json)
 from .tracker import (TrackerError, add_application, find_application,
                       read_log, record_contact, record_deadline,
                       record_followup, record_interview, record_offer,
-                      record_rejection, set_status, slug)
+                      record_rejection, record_source, set_status, slug)
 
 DEFAULT_OUT_DIR = "applications"
 
@@ -221,6 +231,16 @@ def _cmd_apply(args):
         except DeadlineError as exc:
             print(f"error: cannot apply: {exc}", file=sys.stderr)
             return 1
+    source = None
+    referrer = None
+    if args.source is not None:
+        try:
+            cleaned = validate_source(args.source, args.referrer)
+        except SourceError as exc:
+            print(f"error: cannot apply: {exc}", file=sys.stderr)
+            return 1
+        source = cleaned["source"]
+        referrer = cleaned["referrer"]
     packet, files = _build_packet(profile, posting, match, args.out_dir)
     log_path = args.log or str(Path(args.out_dir) / "applications.jsonl")
     if args.dry_run:
@@ -247,10 +267,11 @@ def _cmd_apply(args):
             log_path,
             company=posting.get("company") or "unknown company",
             title=posting.get("title") or "unknown role",
-            source=args.source,
+            source=source,
             match_score=match["score"],
             packet_dir=str(packet),
             deadline=deadline,
+            referrer=referrer,
             required_matched=match["required_matched"],
             required_missing=match["required_missing"],
             preferred_matched=match["preferred_matched"],
@@ -924,6 +945,105 @@ def _cmd_rejections(args):
     return 0
 
 
+def _cmd_sources(args):
+    if args.record:
+        if not args.id:
+            print("error: --record needs --id APP-001", file=sys.stderr)
+            return 1
+        try:
+            source = validate_source(args.source, args.referrer)
+        except SourceError as exc:
+            print(f"error: cannot record source: {exc}",
+                  file=sys.stderr)
+            return 1
+        try:
+            entry = record_source(args.log, args.id, source)
+        except TrackerError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 6
+        detail = f" ({source['referrer']})" if source["referrer"] else ""
+        print(f"recorded a source for {entry['id']}: "
+              f"{entry['company']} — {entry['title']} "
+              f"({source['source']}{detail})")
+        return 0
+    if args.id or args.referrer:
+        print("error: --id and --referrer need --record", file=sys.stderr)
+        return 1
+    if args.source is not None and args.source not in SOURCE_CHOICES:
+        print(f"error: --source must be one of "
+              f"{', '.join(SOURCE_CHOICES)}, got {args.source!r}",
+              file=sys.stderr)
+        return 1
+    try:
+        entries = read_log(args.log)
+    except TrackerError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    data = collect_sources(entries, source=args.source)
+    text = (sources_json(data) if args.json
+            else render_sources_markdown(data))
+    if args.out:
+        Path(args.out).write_text(text, encoding="utf-8")
+        print(f"wrote {args.out}")
+    else:
+        print(text, end="")
+    return 0
+
+
+def _cmd_next(args):
+    if args.today is not None:
+        try:
+            today = datetime.date.fromisoformat(args.today)
+        except ValueError:
+            print(f"error: --today must be YYYY-MM-DD, got {args.today!r}",
+                  file=sys.stderr)
+            return 1
+    else:
+        today = datetime.date.today()
+    if args.days is not None and args.days < 0:
+        print(f"error: --days must be 0 or more, got {args.days}",
+              file=sys.stderr)
+        return 1
+    for name, value in (("wait-days", args.wait_days),
+                        ("quiet-days", args.quiet_days),
+                        ("stale-days", args.stale_days)):
+        if value is not None and value < 0:
+            print(f"error: --{name} must be 0 or more, got {value}",
+                  file=sys.stderr)
+            return 1
+    if args.kind:
+        unknown = [kind for kind in args.kind if kind not in NEXT_KINDS]
+        if unknown:
+            print(f"error: --kind must be one of "
+                  f"{', '.join(NEXT_KINDS)}, got {', '.join(unknown)}",
+                  file=sys.stderr)
+            return 1
+    try:
+        entries = read_log(args.log)
+    except TrackerError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    try:
+        data = collect_next(entries, today=today,
+                            days=args.days if args.days is not None else 7,
+                            kinds=args.kind,
+                            wait_days=args.wait_days,
+                            quiet_days=(args.quiet_days
+                                      if args.quiet_days is not None else 14),
+                            stale_days=(args.stale_days
+                                      if args.stale_days is not None else 14))
+    except NextError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    text = next_json(data) if args.json else render_next_markdown(data)
+    if args.out:
+        Path(args.out).write_text(text, encoding="utf-8")
+        print(f"wrote {args.out}")
+    else:
+        print(text, end="")
+    return 0
+
+
 def _cmd_calendar(args):
     if args.today is not None:
         try:
@@ -1023,6 +1143,10 @@ def build_parser():
     p.add_argument("--out-dir", default=DEFAULT_OUT_DIR)
     p.add_argument("--log")
     p.add_argument("--source")
+    p.add_argument("--referrer", default=None,
+                   help="with --source referral: who referred you; with "
+                        "any other source: the recruiter or person who "
+                        "brought the role, if any")
     p.add_argument("--deadline", default=None,
                    help="the posting's closing date YYYY-MM-DD, recorded "
                         "on the application")
@@ -1344,6 +1468,54 @@ def build_parser():
     p.add_argument("--note", default=None,
                    help="with --record: what you were told, in your own words")
     p.set_defaults(func=_cmd_rejections)
+
+    p = sub.add_parser("sources", help="which channels your applications "
+                                         "came through and what worked, or "
+                                         "record a source with --record")
+    p.add_argument("--log", default=f"{DEFAULT_OUT_DIR}/applications.jsonl")
+    p.add_argument("--json", action="store_true")
+    p.add_argument("--out", default=None,
+                   help="write the list to this file instead of stdout")
+    p.add_argument("--source", default=None,
+                   help="only this channel (list mode), or the channel to "
+                        "record (with --record): "
+                        + ", ".join(SOURCE_CHOICES))
+    p.add_argument("--referrer", default=None,
+                   help="with --record: who referred you (required for a "
+                        "referral), or the recruiter or person who brought "
+                        "the role")
+    p.add_argument("--record", action="store_true",
+                   help="record a source instead of listing")
+    p.add_argument("--id", default=None,
+                   help="with --record: the application to record for")
+    p.set_defaults(func=_cmd_sources)
+
+    p = sub.add_parser("next", help="one prioritised list of what to do: "
+                                      "due follow-ups, upcoming interviews, "
+                                      "closing dates, offer deadlines, quiet "
+                                      "contacts, stale applications, and "
+                                      "rejections missing a reason")
+    p.add_argument("--log", default=f"{DEFAULT_OUT_DIR}/applications.jsonl")
+    p.add_argument("--json", action="store_true")
+    p.add_argument("--out", default=None,
+                   help="write the list to this file instead of stdout")
+    p.add_argument("--today", default=None,
+                   help="reference date YYYY-MM-DD (default: today)")
+    p.add_argument("--days", type=int, default=7,
+                   help="how far ahead dated actions are looked for "
+                        "(overdue ones are always shown; default 7)")
+    p.add_argument("--kind", action="append", default=None,
+                   help="only this kind of action (repeatable): "
+                        + ", ".join(NEXT_KINDS))
+    p.add_argument("--wait-days", type=int, default=None,
+                   help="follow-up wait in days (default: per-stage waits)")
+    p.add_argument("--quiet-days", type=int, default=14,
+                   help="days of silence before a contact counts as quiet "
+                        "(default 14)")
+    p.add_argument("--stale-days", type=int, default=14,
+                   help="days without movement before an application "
+                        "counts as stale (default 14)")
+    p.set_defaults(func=_cmd_next)
 
     p = sub.add_parser("report", help="funnel analytics over logged applications")
     p.add_argument("--log", default=f"{DEFAULT_OUT_DIR}/applications.jsonl")

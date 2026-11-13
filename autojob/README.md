@@ -2,7 +2,7 @@
 
 A job-application assistant that prepares applications from your own
 profile — and refuses to invent anything about you. Pure standard-library
-Python, 439 tests, no API keys, fully offline.
+Python, 508 tests, no API keys, fully offline.
 
 Built in November 2026 as a portfolio project. It is not client work, it is
 not affiliated with any employer, and the example profile and posting in
@@ -356,6 +356,56 @@ it builds is a draft for a human to review and send.
     replaces the reason when you learn the real one later. `--reason`
     filters the list to one reason, `--json` prints it as JSON,
     `--out` writes it, `--today` pins the reference date.
+22. **Sources and referrals** (`autojob/sources.py`, v0.18) — `sources`
+    answers which channels your applications actually came through
+    and which ones led anywhere: one row per channel with the count,
+    how many reached an interview and the rate among that channel's
+    own applications (always with `n=`, because a 1.00 rate on a
+    single application means nothing), and how many were hired. A
+    referral is listed separately with the referrer's name, so you
+    can see who to thank and who to follow up with. The source is one
+    of six fixed values (`job-board`, `company-site`, `referral`,
+    `recruiter`, `networking`, `other`); `apply --source referral
+    --referrer "Maya Patel"` records it when you apply, and `sources
+    --record --id APP-001 --source job-board` sets or corrects it
+    later. A referral without a referrer is refused — the point of
+    tracking one is knowing who referred you — and recording a source
+    is refused on a terminal application, the same rule as a closing
+    date. "Reached interview" comes from the tracker's history, so an
+    application that reached the interview stage and was then
+    rejected still counts: it got that far. Applications with no
+    source recorded are counted in the header, not hidden, and an old
+    free-text source from before v0.18 is treated as unrecorded rather
+    than guessed into a channel. Recording a source is a field on the
+    entry, not a history event: it does not reset the follow-up or
+    stale clocks and does not appear in the timeline feed. `--source`
+    filters the list to one channel, `--json` prints it as JSON,
+    `--out` writes it.
+23. **Next actions** (`autojob/next.py`, v0.19) — `next` is the one
+    list to look at in the morning: it pulls together everything the
+    other commands already know — follow-ups due, interviews coming
+    up, posting closing dates, offer decision deadlines, contacts gone
+    quiet, applications with no movement, and rejected applications
+    still missing a reason — and orders them by urgency, so the first
+    line is the thing to do first. Overdue items come before today's,
+    today's before soon, soon before later, and a rejection with no
+    reason recorded — which has no date to be urgent about — last.
+    Within the same urgency and date, interviews come first (they are
+    fixed in someone else's calendar), then closing dates, then offer
+    decisions, then follow-ups, then contacts, then stale
+    applications, then recording a reason. The window is 7 days by
+    default (`--days N` changes it), and overdue actions are always
+    shown, whatever the window. A follow-up and a stale flag for the
+    same application are two different actions, not a duplicate: one
+    is a nudge to send, the other is a prompt to check whether the
+    application is still live. Terminal applications never produce a
+    follow-up, interview, deadline, offer, contact, or stale action —
+    there is nothing left to do for them — except a rejected one with
+    no reason recorded, which asks you to record the reason. `next`
+    records nothing and changes nothing; `--kind` narrows the list
+    when you only want one sort of work, `--wait-days`,
+    `--quiet-days`, and `--stale-days` move the bars the checks use,
+    and `--json` / `--out` / `--today` work as elsewhere.
 
 ## Quick start
 
@@ -445,6 +495,12 @@ python -m autojob rejections --record --id APP-001 --reason salary \
     --note "Their band topped out below the target range."
 python -m autojob rejections
 python -m autojob rejections --reason skills-gap --json
+
+# one prioritised list of what to do: due follow-ups, upcoming
+# interviews, closing dates, offer deadlines, quiet contacts,
+# stale applications, rejections missing a reason
+python -m autojob next
+python -m autojob next --kind deadline --kind offer --json
 ```
 
 ## Demo numbers
@@ -533,6 +589,7 @@ names Communication (required, on the Harbour rejection) and the ML
 stack — PyTorch, TensorFlow, Statistics, Machine Learning — on the
 Vector Labs one; the `--reason skills-gap` filter shows just the
 Vector Labs row.
+The demo closes with one prioritised list of what to do. Eight days on, `next` shows two actions: the Northwind posting closes in 2 days and its offer decision is due in 6. Eight days further on, the same list shows three — the closing date is 6 days overdue, the offer decision 2 days overdue, and the Northwind application has gone 8 days without a word, past the 7-day screening wait, so a follow-up is due too (a second nudge, one already sent). At a 7-day quiet bar Sam Chen joins the list as a fourth action, 8 days since the last word; `--kind deadline --kind offer` narrows it back to the two dated actions. The two rejected applications never appear — Harbour and Vector Labs both have their reasons recorded — and nothing is stale, because the last activity was 8 days ago against a 14-day bar.
 
 ## Exit codes
 
