@@ -259,6 +259,7 @@
 - voicekit: `score_segments` segmentation scoring (recall/precision/IoU/onset-offset error; 2 tests, 108 total)
 - vecdb: Collection.tune() finds smallest ef/nprobe reaching a target recall@k vs exact search (4 tests; default queries are noisy stored vectors, a proxy)
 - bpekit: coverage() token-frequency coverage curve with k90/k99 (3 tests)
+- bpekit: `merge_tree`/`merge_depth`/`format_tree` show how a token decomposes into merges (3 tests, 86 total)
 - logsentry: `group_incidents` merges anomalies into incidents with heuristic severity (6 tests, 32 total)
 - datadoctor: `near_conflicts` radius-based label disagreement between near-duplicate rows (exact blocked scan, brute-force parity test; 3 tests)
 

@@ -28,3 +28,5 @@ from .zipf import zipf_fit
 __all__ += ["zipf_fit"]
 from .coverage import coverage
 __all__ += ["coverage"]
+from .tree import merge_tree, merge_depth, format_tree
+__all__ += ["merge_tree", "merge_depth", "format_tree"]
