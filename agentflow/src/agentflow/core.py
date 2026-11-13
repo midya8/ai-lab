@@ -9,6 +9,7 @@ cascade as "skipped" to dependents.
 from __future__ import annotations
 
 import json
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
 from dataclasses import dataclass, field
@@ -59,7 +60,8 @@ class Agent:
     system: str = ""
     max_steps: int = 6
 
-    def run(self, prompt: str) -> str:
+    def run(self, prompt: str, scope=None) -> str:
+        """``scope`` (a ToolScope) replays journaled tool calls instead of re-running them."""
         messages = [{"role": "system", "content": self.system or f"You are {self.name}. Tools: {self.tools.names()}"},
                     {"role": "user", "content": prompt}]
         for _ in range(self.max_steps):
@@ -75,7 +77,11 @@ class Agent:
                 return str(msg["final"])
             if "tool" in msg:
                 try:
-                    obs = self.tools.call(msg["tool"], msg.get("args", {}))
+                    if scope is None:
+                        obs = self.tools.call(msg["tool"], msg.get("args", {}))
+                    else:
+                        obs = scope.call_sync(msg["tool"], msg.get("args", {}),
+                                              lambda t, a: self.tools.call(t, a))
                 except Exception as e:  # surfaced to the model so it can recover
                     obs = f"ERROR: {e}"
                 messages.append({"role": "user", "content": f"observation: {obs}"})
@@ -109,7 +115,11 @@ class _Safe(dict):
 
 
 class Orchestrator:
-    def __init__(self, agents: List[Agent], max_workers: int = 4, backoff: float = 0.0):
+    def __init__(self, agents: List[Agent], max_workers: int = 4, backoff: float = 0.0, tool_journal=None):
+        self.tool_journal = tool_journal  # ToolJournal or None
+        self.tool_stats = {"replayed": 0, "live": 0}
+        self._fps: Dict[str, str] = {}
+        self._stats_lock = threading.Lock()
         self.agents = {a.name: a for a in agents}
         self.max_workers = max_workers
         self.backoff = backoff
@@ -145,7 +155,15 @@ class Orchestrator:
         err = None
         for attempt in range(1, task.retries + 2):
             try:
-                return Result("ok", self.agents[task.agent].run(prompt), attempts=attempt)
+                scope = self.tool_journal.scope(self._fps[task.id]) if self.tool_journal is not None else None
+                try:
+                    out = self.agents[task.agent].run(prompt, scope) if scope is not None else self.agents[task.agent].run(prompt)
+                finally:
+                    if scope is not None:
+                        with self._stats_lock:
+                            self.tool_stats["replayed"] += scope.replayed
+                            self.tool_stats["live"] += scope.live
+                return Result("ok", out, attempts=attempt)
             except Exception as e:
                 err = str(e)
                 if attempt <= task.retries:
@@ -159,9 +177,11 @@ class Orchestrator:
         are replayed instead of re-executed."""
         self.plan(tasks)
         fps = {}
-        if log is not None:
+        if log is not None or self.tool_journal is not None:
             from .runlog import fingerprints
             fps = fingerprints(tasks)
+            self._fps = fps
+        if log is not None:
             run_id = run_id or log.new_run_id()
         pending = {t.id: t for t in tasks}
         results: Dict[str, Result] = {}

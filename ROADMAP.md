@@ -265,6 +265,7 @@
 - reviewkit: `py-open-unclosed` rule for `open(...).read()/write()` without a with-block (1 test, 129 total)
 - agentflow: `ToolJournal` tool-call-level checkpointing; retries/resume replay journaled side-effecting calls instead of re-running them (7 tests, 74 total)
 - logsentry v0.9: `--incidents/--gap` CLI flags group batch anomalies into incidents (3 tests, 35 total)
+- agentflow: sync `Orchestrator` gets `tool_journal` parity with the async one (thread-safe stats, journal shared across both; 3 tests, 77 total)
 
 
 ## Next
@@ -272,7 +273,7 @@
 1. rag-evals: (done hard benchmark) (done chunk sweep) -> next: dense embeddings beyond LSA
 2. llm-eval-harness: (done) (done matrix) (done per-tag matrix) -> next: HTTP-model matrix specs
 3. tiny-transformer follow-ups: (done v0.5, top-p, grad accumulation); (done clipping); (done dropout); (done weight tying); (done early stopping); (done repetition penalty); (done LR finder); (done label smoothing); (done per-position eval); (done sliding-window eval); (done lora-lab on its attention) (done RoPE) (done GQA/MQA) (done context extension: PI + NTK) -> next: a key-value recall benchmark with a larger model to test long-context use properly
-4. agentflow follow-ups: (done shared memory) (done TTL) (done memory-aware Supervisor) (done failure fallback retries) (done circuit breaker) (done run metrics) (done Supervisor-in-DAG adapter) (done llm-router backend) (done persistent run log + resume) (done async orchestrator) (done async RunLog resume) (done async tool-call-level checkpointing) -> next: sync Orchestrator parity
+4. agentflow follow-ups: (done shared memory) (done TTL) (done memory-aware Supervisor) (done failure fallback retries) (done circuit breaker) (done run metrics) (done Supervisor-in-DAG adapter) (done llm-router backend) (done persistent run log + resume) (done async orchestrator) (done async RunLog resume) (done async tool-call-level checkpointing) (done sync Orchestrator parity) -> next: journal compaction/TTL
 5. lora-lab: (done rank sweep) (done LoRA on tiny-transformer attention) (done adapter hub) (done QLoRA-style quantized base) -> (done LoftQ-style init) (done double quantization + bits/error frontier) -> next: paged/streamed adapter serving, or 2-bit (NF2) bases to see where LoftQ finally matters
 6. logsentry: (done v0.6 Grafana dashboard)
 7. ticket-triage: (done urgency head) (done active learning) (done multi-label tags) (done tag-aware routing) (done SLA-breach simulation) (done drift monitor: PSI/OOV/confidence, 61 tests) -> next: feed live router output into the simulator
