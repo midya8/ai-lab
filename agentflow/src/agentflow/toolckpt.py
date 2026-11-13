@@ -23,6 +23,10 @@ try:
     import fcntl
 except ImportError:  # non-POSIX: falls back to thread-only locking
     fcntl = None
+try:
+    import msvcrt  # Windows
+except ImportError:
+    msvcrt = None
 from typing import Callable, Dict, List, Tuple
 
 
@@ -60,6 +64,21 @@ class ToolJournal:
     @contextlib.contextmanager
     def _flock(self):
         """Exclusive cross-process lock on a sidecar ``<path>.lock`` file (POSIX only)."""
+        if fcntl is None and msvcrt is not None:
+            with open(self.path + ".lock", "a+b") as lf:
+                lf.seek(0)
+                while True:
+                    try:
+                        msvcrt.locking(lf.fileno(), msvcrt.LK_NBLCK, 1)
+                        break
+                    except OSError:
+                        time.sleep(0.01)  # LK_LOCK gives up after ~10s; poll instead
+                try:
+                    yield
+                finally:
+                    lf.seek(0)
+                    msvcrt.locking(lf.fileno(), msvcrt.LK_UNLCK, 1)
+            return
         if fcntl is None:
             yield
             return
