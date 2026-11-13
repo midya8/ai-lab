@@ -517,6 +517,12 @@ def ast_findings(ctx: FileContext, source: str, complexity_threshold: int = 10) 
                 add(node.lineno, "py-numpy-allow-pickle", "high",
                     "`allow_pickle=True` makes `np.load` unpickle object arrays, which executes code from the file.",
                     "Store plain numeric arrays (the default `allow_pickle=False`), or only load files you produced.")
+            if (isinstance(f, ast.Attribute) and f.attr == "run"
+                    and isinstance(f.value, ast.Name) and f.value.id == "subprocess"
+                    and not any(k.arg in ("check", None) for k in node.keywords)):
+                add(node.lineno, "py-subprocess-no-check", "low",
+                    "`subprocess.run` without `check=` silently ignores a non-zero exit status.",
+                    "Pass `check=True`, or `check=False` explicitly and inspect `returncode`.")
             if (isinstance(f, ast.Attribute) and f.attr == "urlopen" and len(node.args) < 3
                     and not any(k.arg in ("timeout", None) for k in node.keywords)):
                 add(node.lineno, "py-urlopen-no-timeout", "medium",
@@ -663,6 +669,7 @@ RULE_TABLE.update({
     "py-raise-notimplemented": ("medium", "`raise NotImplemented` (should be NotImplementedError)."),
     "py-not-in-style": ("low", "`not a in b` / `not a is b` instead of `not in` / `is not`."),
     "py-self-compare": ("low", "Name compared with itself."),
+    "py-subprocess-no-check": ("low", "`subprocess.run` without `check=`."),
     "py-duplicate-except": ("medium", "Exception type caught twice in one try."),
     "py-blocking-in-async": ("medium", "time.sleep / requests call inside async def."),
     "py-useless-comparison": ("medium", "Comparison as a bare statement has no effect."),

@@ -50,7 +50,7 @@ import subprocess
 
 
 def go(cmd, blob):
-    subprocess.run(cmd, shell=True)  # EXPECT: py-shell-true
+    subprocess.run(cmd, shell=True)  # EXPECT: py-shell-true, py-subprocess-no-check
     return pickle.loads(blob)  # EXPECT: py-unsafe-deserialize
 
 

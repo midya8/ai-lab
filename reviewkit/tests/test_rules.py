@@ -404,3 +404,9 @@ def test_numpy_allow_pickle():
     ok = "import numpy as np\nw = np.load(p)\nv = np.load(p, allow_pickle=False)\nm = model.load(p, allow_pickle=True)\n"
     assert rules("a.py", bad) == [(2, "py-numpy-allow-pickle")]
     assert rules("a.py", ok) == []
+
+
+def test_subprocess_no_check():
+    assert rules("a.py", "import subprocess\nsubprocess.run(['ls'])\n") == [(2, "py-subprocess-no-check")]
+    assert rules("a.py", "import subprocess\nsubprocess.run(['ls'], check=True)\n") == []
+    assert rules("a.py", "import subprocess\nsubprocess.run(['ls'], **kw)\n") == []

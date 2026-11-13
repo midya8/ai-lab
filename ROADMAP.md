@@ -198,6 +198,7 @@
 - reviewkit: AST rule py-unreachable-code (statements after return/raise/continue/break; 96 tests)
 - reviewkit: AST rule py-compare-bool (`== True` / `!= False`; 97 tests)
 - reviewkit: AST rule py-duplicate-except (exception type caught twice in one try; 98 tests)
+- reviewkit: AST rule py-subprocess-no-check (`subprocess.run` without `check=`; dev bench label updated; 129 tests)
 - reviewkit: AST rule py-fstring-no-placeholder (f-string with no placeholders; 99 tests)
 - reviewkit: AST rule py-blocking-in-async (time.sleep/requests inside async def; 100 tests)
 - reviewkit: AST rule py-useless-comparison (comparison as a bare statement; 101 tests)
