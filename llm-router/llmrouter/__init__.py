@@ -3,6 +3,7 @@
 from .breaker import CircuitBreaker
 from .budget import Budget, BudgetExceeded
 from .cache import ResponseCache, cache_key
+from .ratelimit import TokenBucket
 from .semantic import SemanticCache
 from .clock import ManualClock, SystemClock
 from .complexity import Complexity, score_prompt
@@ -16,6 +17,6 @@ __all__ = [
     "AllModelsFailed", "Budget", "BudgetExceeded", "CircuitBreaker", "Complexity",
     "Completion", "LatencyTracker", "LearnedComplexity", "ManualClock", "ModelSpec", "ProviderError", "ResponseCache", "SemanticCache",
     "RouteResult", "Router", "RouterError", "STRATEGIES", "SimProvider",
-    "SystemClock", "cache_key", "load_models", "score_prompt",
+    "SystemClock", "TokenBucket", "cache_key", "load_models", "score_prompt",
 ]
 __version__ = "0.1.0"

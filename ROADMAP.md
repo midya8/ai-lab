@@ -274,6 +274,7 @@
 - agentflow: `ToolJournal` Windows `msvcrt` locking fallback (3 tests)
 - bpekit: `ChoiceConstraint` / `constrained_pick` token-level constrained decoding over fixed string choices (any tokenisation path allowed, eos on complete; 7 tests, 99 total)
 - datadoctor: `leaky_features` target-leakage screen (single-feature held-out histogram accuracy vs majority baseline; flags proxies, 3 tests, 103 total)
+- llm-router: per-model `TokenBucket` rate limits; exhausted models are skipped and the router falls through (8 tests, 73 total)
 
 
 ## Next
@@ -285,7 +286,7 @@
 5. lora-lab: (done rank sweep) (done LoRA on tiny-transformer attention) (done adapter hub) (done QLoRA-style quantized base) -> (done LoftQ-style init) (done double quantization + bits/error frontier) -> next: paged/streamed adapter serving, or 2-bit (NF2) bases to see where LoftQ finally matters
 6. logsentry: (done v0.6 Grafana dashboard)
 7. ticket-triage: (done urgency head) (done active learning) (done multi-label tags) (done tag-aware routing) (done SLA-breach simulation) (done drift monitor: PSI/OOV/confidence, 61 tests) -> next: feed live router output into the simulator
-8. llm-router: (done v0.1) -> (done latency tracking) (done semantic cache) (done learned complexity classifier) (done persistence)
+8. llm-router: (done v0.1) -> (done latency tracking) (done semantic cache) (done learned complexity classifier) (done persistence) (done per-model rate limits)
 9. promptlab: (done v0.1) -> v0.2 multi-sample done; (done GitHub Action + summary); (done LLM-judge checks + calibration) (done pairwise judge + position-swap bias audit) (done multi-judge ensembles + Fleiss kappa, v0.5) (done pairwise gate) (done ensemble gate) (done cost metering + budgets) (done HTTP-backed models/judges) (done concurrent cases, --workers) (done shared 429 cooldown across workers) (done concurrent ensemble judge calls)
 10. docqa: (done v0.1) -> (done paraphrase) (done broad benchmark) (done yes/no fixes) (done agentkit integration) (done agentflow worker) (done HTTP service) (done cache + metrics) (done typo-tolerant spelling) (done hybrid retrieval, null result) (done docqa on llm-router: grounded generation) next: answer-stage semantic scoring
 11. autojob: (done v0.1 — profile validation, posting parse, transparent match scoring, facts-only cover-letter drafts, review notes, JSONL tracker; never submits; 49 tests) (done v0.2 — status history + funnel analytics, 66 tests) (done v0.3 — interview-prep packets, 77 tests) (done v0.4 — follow-up reminders with facts-only draft emails, 93 tests) (done v0.5 — tailored resume sections: skills matrix, lead-with order, role ranking, summary ingredients; 107 tests) (done v0.6 — weekly digest + gap leaderboard, 123 tests) (done v0.7 — gap-closing plan, 143 tests) (done v0.8 — posting ranking, 162 tests) (done v0.9 — salary analysis, 189 tests) (done v0.10 — offer comparison, 219 tests) (done v0.11 — interview rounds log, 254 tests) (done v0.12 — calendar export, 283 tests) (done v0.13 — contacts log, 316 tests) (done v0.14 — activity timeline, 340 tests) (done v0.15 — posting closing dates, 374 tests) (done v0.16 — weekly goals + streaks, 405 tests) (done v0.17 — rejection analysis, 439 tests)

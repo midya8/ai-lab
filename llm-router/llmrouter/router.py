@@ -84,6 +84,7 @@ class Router:
         allow_downgrade_on_failure: bool = False,
         latency_tracker: "LatencyTracker | None" = None,
         scorer=None,
+        rate_limits: "dict[str, TokenBucket] | None" = None,
     ) -> None:
         if not models:
             raise ValueError("at least one model is required")
@@ -100,6 +101,10 @@ class Router:
         self.allow_downgrade = allow_downgrade_on_failure
         self.latency_tracker = latency_tracker
         self.scorer = scorer or score_prompt
+        self.rate_limits = dict(rate_limits or {})
+        unknown = set(self.rate_limits) - {m.name for m in self.models}
+        if unknown:
+            raise ValueError(f"rate_limits for unknown models: {sorted(unknown)}")
         self.breakers = {
             m.name: CircuitBreaker(breaker_threshold, breaker_cooldown_s, self.clock)
             for m in self.models
@@ -107,7 +112,7 @@ class Router:
         self._top = max(self.models, key=lambda m: m.quality)
         self._stats = {
             "requests": 0, "cache_hits": 0, "cost": 0.0, "baseline_cost": 0.0,
-            "latency_ms": 0.0, "fallbacks": 0, "failures": 0, "degraded": 0,
+            "latency_ms": 0.0, "fallbacks": 0, "failures": 0, "degraded": 0, "rate_limited": 0,
             "per_model": {m.name: 0 for m in self.models},
         }
 
@@ -222,6 +227,12 @@ class Router:
             if not self.breakers[spec.name].allow():
                 attempts.append(Attempt(spec.name, "skipped", "circuit open"))
                 continue
+            bucket = self.rate_limits.get(spec.name)
+            if bucket is not None and not bucket.try_acquire():
+                self._stats["rate_limited"] += 1
+                attempts.append(Attempt(spec.name, "skipped",
+                                        f"rate limited (retry in {bucket.wait_time():.1f}s)"))
+                continue
             try:
                 comp = self.provider.complete(spec, prompt, max_tokens)
             except ProviderError as exc:
@@ -286,6 +297,7 @@ class Router:
             "fallbacks": s["fallbacks"],
             "provider_failures": s["failures"],
             "budget_degraded_requests": s["degraded"],
+            "rate_limited_skips": s["rate_limited"],
             "per_model": dict(s["per_model"]),
             **({"observed_latency": self.latency_tracker.snapshot()} if self.latency_tracker else {}),
         }

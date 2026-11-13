@@ -94,6 +94,14 @@ needs nothing else.
 python -m pytest        # or: python -m unittest discover -s tests
 ```
 
+## Per-model rate limits
+
+Pass `rate_limits={"model-name": TokenBucket.per_minute(60)}` and the router spends a
+token before each call; an empty bucket skips that model (attempt note: `rate limited
+(retry in Ns)`) and falls through to the next candidate instead of eating a provider 429.
+Cache hits cost no token. Counted as `rate_limited_skips` in `stats()`. Buckets use the
+injectable clock, so tests never sleep.
+
 ## Observed-latency tracking
 
 Catalogue latencies are static guesses. Pass a `LatencyTracker` and the router learns
