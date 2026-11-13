@@ -116,7 +116,36 @@ class BPETokenizer:
         self._cache[word_bytes] = ids
         return ids
 
-    def encode(self, text: str):
+    def _encode_word_dropout(self, word_bytes: bytes, dropout, rng):
+        """BPE-dropout (Provilkov et al. 2020): each candidate merge is skipped with prob `dropout`."""
+        ids = list(word_bytes)
+        while len(ids) > 1:
+            best, best_rank = None, None
+            for p in zip(ids, ids[1:]):
+                r = self.ranks.get(p)
+                if r is None or rng.random() < dropout:
+                    continue
+                if best_rank is None or r < best_rank:
+                    best, best_rank = p, r
+            if best is None:
+                break
+            ids = list(_merge_word(tuple(ids), best, 256 + best_rank))
+        return ids
+
+    def encode(self, text: str, dropout: float = 0.0, rng=None):
+        """Encode text. With dropout > 0, sample a stochastic segmentation (still decodes losslessly)."""
+        if dropout > 0:
+            import random
+            rng = rng or random.Random()
+            chunks = self._special_re.split(text) if self._special_re else [text]
+            out = []
+            for ch in chunks:
+                if ch in self.special_ids:
+                    out.append(self.special_ids[ch])
+                    continue
+                for w in PRETOKEN_RE.findall(ch):
+                    out.extend(self._encode_word_dropout(w.encode("utf-8"), dropout, rng))
+            return out
         chunks = self._special_re.split(text) if self._special_re else [text]
         out = []
         for ch in chunks:
