@@ -2,7 +2,7 @@
 
 A job-application assistant that prepares applications from your own
 profile — and refuses to invent anything about you. Pure standard-library
-Python, 405 tests, no API keys, fully offline.
+Python, 439 tests, no API keys, fully offline.
 
 Built in November 2026 as a portfolio project. It is not client work, it is
 not affiliated with any employer, and the example profile and posting in
@@ -329,6 +329,33 @@ it builds is a draft for a human to review and send.
     `--json` prints the view as JSON, `--out` writes it, `--today`
     pins the reference date, `--goals` points at a different goals
     file.
+21. **Rejection analysis** (`autojob/rejections.py`, v0.17) — `rejections`
+    lists every rejected application with the stage it reached, how
+    long it took to hear back, and the reason you recorded, most
+    recently rejected first. `rejections --record --id APP-001 --reason
+    salary --note "Their band topped out below the target range."`
+    stores the reason on an application that is already `rejected` —
+    a live application has not been rejected yet, and a hired or
+    withdrawn one was not rejected at all, so recording is refused
+    for both. The reason is one of nine fixed categories (`ghosted`,
+    `skills-gap`, `experience-level`, `salary`, `location`,
+    `internal-hire`, `role-closed`, `culture-fit`, `other`); the note
+    is what you were actually told, in your own words. The stage
+    reached comes from the tracker's history — the status immediately
+    before the move to `rejected` — and the days to a decision run
+    from `applied_at` to that move; a row whose dates will not parse
+    shows no day count instead of a guessed one. The summary counts
+    rejections by reason (including how many carry no reason yet) and
+    by furthest stage reached, gives the median days to a decision,
+    and rolls up the skills those postings asked for that the profile
+    lacked — a pattern to look at, not a cause, since a missing skill
+    on a rejected application does not prove it is why you were
+    turned down. Recording a reason is a field on the entry, not a
+    history event: it does not reset the follow-up or stale clocks
+    and does not appear in the timeline feed, and re-recording
+    replaces the reason when you learn the real one later. `--reason`
+    filters the list to one reason, `--json` prints it as JSON,
+    `--out` writes it, `--today` pins the reference date.
 
 ## Quick start
 
@@ -412,6 +439,12 @@ python -m autojob apply --profile my-profile.json --posting job.md \
 python -m autojob goals --set-weekly 2
 python -m autojob goals
 python -m autojob goals --weeks 4 --json
+
+# record why a rejected application ended, then see the pattern
+python -m autojob rejections --record --id APP-001 --reason salary \
+    --note "Their band topped out below the target range."
+python -m autojob rejections
+python -m autojob rejections --reason skills-gap --json
 ```
 
 ## Demo numbers
@@ -490,13 +523,24 @@ this week, so the target is met and the streak is 1 week; 8 days on,
 the new week shows 0 of 2 with 2 to go, and the streak still stands
 at 1, because last week met the target — the weeks before the first
 application carry no verdict at all.
+The demo closes with two rejections: the Harbour application, which
+reached the interview stage, is recorded as ending over salary, and
+the Vector Labs application, which never got past the application,
+as a skills gap (the profile has neither PyTorch nor TensorFlow).
+Both were applied to and rejected on the same day, so the report
+shows a median of 0.0 days to a decision; the missing-skills roll-up
+names Communication (required, on the Harbour rejection) and the ML
+stack — PyTorch, TensorFlow, Statistics, Machine Learning — on the
+Vector Labs one; the `--reason skills-gap` filter shows just the
+Vector Labs row.
 
 ## Exit codes
 
 0 ok · 1 usage error · 2 profile/posting load error · 3 match below
 `--fail-under` · 4 draft/apply refused below `--min-coverage` ·
 5 duplicate application · 6 illegal status transition, follow-up refused,
-offer refused, interview refused, contact refused, or deadline refused.
+offer refused, interview refused, contact refused, deadline refused,
+or rejection refused.
 
 ## What it will not do
 

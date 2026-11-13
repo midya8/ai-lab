@@ -316,6 +316,41 @@ def record_deadline(log_path, app_id, deadline, today=None):
     raise TrackerError(f"no application with id {app_id!r}")
 
 
+def record_rejection(log_path, app_id, rejection, today=None):
+    """Record why a rejected application ended.
+
+    Stores the (already validated) rejection dict — category plus an
+    optional note — as the entry's ``rejection`` field, with the date
+    it was recorded. Re-recording replaces the reason: you may learn
+    the real one later, so this is a set, not an append. Deliberately
+    no history event: the rejection itself is already in the history
+    as a status move, so recording the reason must not reset the
+    follow-up or stale clocks (see followup.last_activity, which takes
+    the latest date of any history event) and does not appear in the
+    timeline feed. Refuses anything that is not already ``rejected``:
+    a live application has not been rejected yet, and a hired or
+    withdrawn one was not rejected at all — move it to ``rejected``
+    first with ``set_status``. ``today`` defaults to the real current
+    date; pass an explicit date in tests.
+    """
+    if today is None:
+        today = datetime.date.today().isoformat()
+    entries = read_log(log_path)
+    for entry in entries:
+        if entry["id"] == app_id:
+            if entry.get("status") != "rejected":
+                raise TrackerError(
+                    f"cannot record a rejection reason for {app_id}: "
+                    f"status is {entry['status']!r} (must be 'rejected')"
+                )
+            stored = dict(rejection)
+            stored["recorded_at"] = today
+            entry["rejection"] = stored
+            _write_log(log_path, entries)
+            return entry
+    raise TrackerError(f"no application with id {app_id!r}")
+
+
 def find_application(entries, app_id):
     for entry in entries:
         if entry["id"] == app_id:

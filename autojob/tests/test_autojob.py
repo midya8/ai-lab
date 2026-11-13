@@ -43,6 +43,10 @@ from autojob.posting import find_skills, parse_posting, parse_salary
 from autojob.prep import build_prep, prep_json, render_prep_markdown
 from autojob.profile import ProfileError, load_profile, total_experience_years, validate_profile
 from autojob.rank import rank_json, rank_postings, render_rank_markdown
+from autojob.rejections import (REJECTION_REASONS, RejectionError,
+                                collect_rejections, rejections_json,
+                                render_rejections_markdown,
+                                validate_rejection)
 from autojob.salary import (analyze_salaries, render_salary_markdown,
                             salary_json, target_from_profile)
 from autojob.offer import (OfferError, compare_offers, first_year_total,
@@ -52,8 +56,8 @@ from autojob.tailor import build_tailor, render_tailor_markdown, tailor_json
 from autojob.timeline import (collect_timeline, render_timeline_markdown,
                               timeline_json)
 from autojob.tracker import (TrackerError, add_application, read_log,
-                             record_contact, record_deadline,
-                             record_followup, record_interview, record_offer,
+                             record_contact, record_deadline, record_followup,
+                             record_interview, record_offer, record_rejection,
                              set_status, slug)
 
 HERE = Path(__file__).resolve().parent
@@ -463,7 +467,7 @@ class TestCLI(unittest.TestCase):
 
     def test_version(self):
         self.assertTrue(__version__.startswith("0."))
-        self.assertEqual(__version__, "0.16.0")
+        self.assertEqual(__version__, "0.17.0")
 
 
 def _fixture_log(tmp):
@@ -4890,6 +4894,428 @@ class TestGoalsCLI(unittest.TestCase):
                                  "--today", "2026-11-08"])
             self.assertEqual(code, 0)
             self.assertEqual(log.read_bytes(), before)
+
+
+class TestRejections(unittest.TestCase):
+    def _entries(self):
+        return [
+            {"id": "APP-001", "company": "Northwind Analytics",
+             "title": "Data Analyst", "status": "rejected",
+             "applied_at": "2026-11-01", "match_score": 0.625,
+             "required_missing": ["Communication"],
+             "preferred_missing": ["dbt", "Snowflake"],
+             "history": [{"status": "applied", "at": "2026-11-01"},
+                         {"status": "screening", "at": "2026-11-03"},
+                         {"status": "interview", "at": "2026-11-05"},
+                         {"status": "rejected", "at": "2026-11-08"}],
+             "rejection": {"category": "salary",
+                           "note": "Band topped out below target.",
+                           "recorded_at": "2026-11-08"}},
+            {"id": "APP-002", "company": "Harbour Analytics",
+             "title": "Business Intelligence Analyst", "status": "rejected",
+             "applied_at": "2026-11-01", "match_score": 0.562,
+             "required_missing": ["Communication"],
+             "preferred_missing": ["Looker"],
+             "history": [{"status": "applied", "at": "2026-11-01"},
+                         {"status": "rejected", "at": "2026-11-04"}]},
+            {"id": "APP-003", "company": "Vector Labs",
+             "title": "Machine Learning Engineer", "status": "rejected",
+             "applied_at": "2026-11-01", "match_score": 0.15,
+             "required_missing": ["PyTorch", "TensorFlow", "Statistics",
+                                  "Machine Learning"],
+             "preferred_missing": ["AWS", "Kubernetes"],
+             "history": [{"status": "applied", "at": "2026-11-01"},
+                         {"status": "screening", "at": "2026-11-02"},
+                         {"status": "rejected", "at": "2026-11-06"}],
+             "rejection": {"category": "skills-gap", "note": None,
+                           "recorded_at": "2026-11-06"}},
+            {"id": "APP-004", "company": "Acme", "title": "Analyst",
+             "status": "applied", "applied_at": "2026-11-01"},
+            {"id": "APP-005", "company": "Beta", "title": "Analyst",
+             "status": "hired", "applied_at": "2026-11-01",
+             "history": [{"status": "applied", "at": "2026-11-01"},
+                         {"status": "hired", "at": "2026-11-07"}]},
+        ]
+
+    def test_validate_all_reasons_accepted(self):
+        for reason in REJECTION_REASONS:
+            cleaned = validate_rejection(reason)
+            self.assertEqual(cleaned["category"], reason)
+            self.assertIsNone(cleaned["note"])
+
+    def test_validate_missing_and_unknown_reason(self):
+        for bad in (None, "", "  ", "nope", "ghost", 42):
+            with self.assertRaises(RejectionError, msg=repr(bad)):
+                validate_rejection(bad)
+
+    def test_validate_reports_every_error_at_once(self):
+        with self.assertRaises(RejectionError) as ctx:
+            validate_rejection("nope", note=42)
+        message = str(ctx.exception)
+        self.assertIn("reason must be one of", message)
+        self.assertIn("note must be text", message)
+
+    def test_validate_note_stripped_or_none(self):
+        self.assertEqual(validate_rejection("ghosted", "  no reply  "),
+                         {"category": "ghosted", "note": "no reply"})
+        self.assertEqual(validate_rejection("other", ""),
+                         {"category": "other", "note": None})
+        self.assertEqual(validate_rejection("other"),
+                         {"category": "other", "note": None})
+
+    def test_collect_only_rejected_most_recent_first(self):
+        data = collect_rejections(self._entries(), today=TODAY)
+        self.assertEqual([row["id"] for row in data["rejections"]],
+                         ["APP-001", "APP-003", "APP-002"])
+        self.assertEqual(data["counts"]["total"], 3)
+
+    def test_collect_stage_and_dates(self):
+        data = collect_rejections(self._entries(), today=TODAY)
+        rows = {row["id"]: row for row in data["rejections"]}
+        self.assertEqual(rows["APP-001"]["stage_reached"], "interview")
+        self.assertEqual(rows["APP-001"]["rejected_at"], "2026-11-08")
+        self.assertEqual(rows["APP-001"]["days_to_reject"], 7)
+        self.assertEqual(rows["APP-001"]["days_since_rejection"], 0)
+        # Applied straight to rejected: the stage reached is applied.
+        self.assertEqual(rows["APP-002"]["stage_reached"], "applied")
+        self.assertEqual(rows["APP-002"]["days_to_reject"], 3)
+        self.assertEqual(rows["APP-002"]["days_since_rejection"], 4)
+        self.assertEqual(rows["APP-003"]["stage_reached"], "screening")
+        self.assertEqual(rows["APP-003"]["days_to_reject"], 5)
+        self.assertEqual(rows["APP-003"]["days_since_rejection"], 2)
+
+    def test_collect_reason_and_note(self):
+        data = collect_rejections(self._entries(), today=TODAY)
+        rows = {row["id"]: row for row in data["rejections"]}
+        self.assertEqual(rows["APP-001"]["reason"], "salary")
+        self.assertEqual(rows["APP-001"]["note"],
+                         "Band topped out below target.")
+        self.assertEqual(rows["APP-002"]["reason"], "not recorded")
+        self.assertIsNone(rows["APP-002"]["note"])
+        self.assertEqual(rows["APP-003"]["reason"], "skills-gap")
+        self.assertIsNone(rows["APP-003"]["note"])
+
+    def test_collect_counts_and_median(self):
+        data = collect_rejections(self._entries(), today=TODAY)
+        self.assertEqual(data["counts"]["by_reason"],
+                         {"salary": 1, "skills-gap": 1, "not recorded": 1})
+        self.assertEqual(data["counts"]["by_stage"],
+                         {"interview": 1, "screening": 1, "applied": 1})
+        self.assertEqual(data["counts"]["not_recorded"], 1)
+        self.assertEqual(data["median_days_to_reject"], 5.0)
+
+    def test_collect_missing_skills_rollup(self):
+        data = collect_rejections(self._entries(), today=TODAY)
+        self.assertEqual(data["missing"]["required"],
+                         {"Communication": 2, "Machine Learning": 1,
+                          "PyTorch": 1, "Statistics": 1, "TensorFlow": 1})
+        self.assertEqual(data["missing"]["preferred"],
+                         {"AWS": 1, "Kubernetes": 1, "Looker": 1,
+                          "Snowflake": 1, "dbt": 1})
+
+    def test_collect_reason_filter(self):
+        data = collect_rejections(self._entries(), today=TODAY,
+                                  reason="skills-gap")
+        self.assertEqual([row["id"] for row in data["rejections"]],
+                         ["APP-003"])
+        self.assertEqual(data["counts"]["total"], 1)
+        data = collect_rejections(self._entries(), today=TODAY,
+                                  reason="ghosted")
+        self.assertEqual(data["rejections"], [])
+        self.assertEqual(data["counts"]["total"], 0)
+        self.assertIsNone(data["median_days_to_reject"])
+
+    def test_collect_unknown_reason_filter_raises(self):
+        with self.assertRaises(ValueError):
+            collect_rejections(self._entries(), today=TODAY, reason="nope")
+
+    def test_collect_rejected_without_history(self):
+        entries = self._entries()
+        del entries[0]["history"]
+        data = collect_rejections(entries, today=TODAY)
+        row = [r for r in data["rejections"] if r["id"] == "APP-001"][0]
+        self.assertIsNone(row["rejected_at"])
+        self.assertIsNone(row["stage_reached"])
+        self.assertIsNone(row["days_to_reject"])
+        self.assertIsNone(row["days_since_rejection"])
+        self.assertEqual(row["reason"], "salary")
+
+    def test_collect_bad_dates_never_fatal(self):
+        entries = self._entries()
+        entries[0]["history"][-1]["at"] = "not a date"
+        entries[0]["applied_at"] = "also not a date"
+        data = collect_rejections(entries, today=TODAY)
+        row = [r for r in data["rejections"] if r["id"] == "APP-001"][0]
+        self.assertIsNone(row["rejected_at"])
+        self.assertIsNone(row["days_to_reject"])
+        # A row with no date sorts after dated rows.
+        self.assertEqual([r["id"] for r in data["rejections"]],
+                         ["APP-003", "APP-002", "APP-001"])
+
+    def test_collect_unknown_recorded_category_is_not_recorded(self):
+        entries = self._entries()
+        entries[0]["rejection"]["category"] = "hand-edited"
+        data = collect_rejections(entries, today=TODAY)
+        row = [r for r in data["rejections"] if r["id"] == "APP-001"][0]
+        self.assertEqual(row["reason"], "not recorded")
+
+    def test_collect_empty_state(self):
+        data = collect_rejections([], today=TODAY)
+        self.assertEqual(data["counts"]["total"], 0)
+        self.assertIsNone(data["median_days_to_reject"])
+        self.assertEqual(data["missing"], {"required": {}, "preferred": {}})
+
+    def test_render_header_rows_and_summary(self):
+        text = render_rejections_markdown(
+            collect_rejections(self._entries(), today=TODAY))
+        self.assertIn("Rejections — 3 rejected applications", text)
+        self.assertIn("median 5.0 days to a decision", text)
+        self.assertIn("1 with no reason recorded", text)
+        self.assertIn("by reason: not recorded 1, salary 1, skills-gap 1",
+                      text)
+        self.assertIn("furthest stage reached: applied 1, interview 1, "
+                      "screening 1", text)
+        self.assertIn("most often missing on rejected applications: "
+                      "Communication (required, 2)", text)
+        self.assertIn("APP-001  Northwind Analytics — Data Analyst", text)
+        self.assertIn("[reached interview]", text)
+        self.assertIn("rejected 2026-11-08 (7d after applying, 0d ago)",
+                      text)
+        self.assertIn("— salary", text)
+        self.assertIn("note: Band topped out below target.", text)
+        self.assertIn("missing: Communication (required), "
+                      "dbt (preferred), Snowflake (preferred)", text)
+
+    def test_render_empty_state(self):
+        text = render_rejections_markdown(
+            collect_rejections([], today=TODAY))
+        self.assertIn("No rejected applications yet", text)
+        self.assertIn("rejections --record --id APP-001 --reason ghosted",
+                      text)
+
+    def test_json_round_trip(self):
+        data = collect_rejections(self._entries(), today=TODAY)
+        parsed = json.loads(rejections_json(data))
+        self.assertEqual(parsed["counts"]["total"], 3)
+        self.assertEqual(parsed["median_days_to_reject"], 5.0)
+
+
+class TestRecordRejection(unittest.TestCase):
+    def _logged(self, tmp):
+        log = Path(tmp) / "log.jsonl"
+        add_application(log, "Northwind Analytics", "Data Analyst",
+                        today="2026-11-01")
+        add_application(log, "Harbour Analytics",
+                        "Business Intelligence Analyst", today="2026-11-01")
+        set_status(log, "APP-001", "rejected", today="2026-11-08")
+        return log
+
+    def test_record_stores_category_note_and_date(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            entry = record_rejection(
+                log, "APP-001",
+                validate_rejection("ghosted", "  No reply in three weeks.  "),
+                today="2026-11-08")
+            self.assertEqual(entry["rejection"],
+                             {"category": "ghosted",
+                              "note": "No reply in three weeks.",
+                              "recorded_at": "2026-11-08"})
+            self.assertEqual(read_log(log)[0]["rejection"],
+                             entry["rejection"])
+
+    def test_record_replaces_reason(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            record_rejection(log, "APP-001",
+                             validate_rejection("ghosted"),
+                             today="2026-11-08")
+            entry = record_rejection(
+                log, "APP-001",
+                validate_rejection("salary", "Band was below target."),
+                today="2026-11-09")
+            self.assertEqual(entry["rejection"]["category"], "salary")
+            self.assertEqual(entry["rejection"]["note"],
+                             "Band was below target.")
+            self.assertEqual(entry["rejection"]["recorded_at"], "2026-11-09")
+
+    def test_record_refuses_live_application(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            with self.assertRaises(TrackerError):
+                record_rejection(log, "APP-002",
+                                 validate_rejection("ghosted"))
+
+    def test_record_refuses_hired_and_withdrawn(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            set_status(log, "APP-002", "screening", today="2026-11-02")
+            set_status(log, "APP-002", "interview", today="2026-11-03")
+            set_status(log, "APP-002", "offer", today="2026-11-04")
+            set_status(log, "APP-002", "hired", today="2026-11-05")
+            with self.assertRaises(TrackerError):
+                record_rejection(log, "APP-002",
+                                 validate_rejection("ghosted"))
+            add_application(log, "Acme", "Analyst", today="2026-11-01")
+            set_status(log, "APP-003", "withdrawn", today="2026-11-02")
+            with self.assertRaises(TrackerError):
+                record_rejection(log, "APP-003",
+                                 validate_rejection("ghosted"))
+
+    def test_record_unknown_id(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            with self.assertRaises(TrackerError):
+                record_rejection(log, "APP-999",
+                                 validate_rejection("ghosted"))
+
+    def test_record_adds_no_history_event_and_no_timeline_line(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            before = read_log(log)[0]
+            history_before = copy.deepcopy(before["history"])
+            activity_before = last_activity(before)
+            timeline_before = collect_timeline(read_log(log), today=TODAY)
+            record_rejection(log, "APP-001",
+                             validate_rejection("salary"),
+                             today="2026-11-09")
+            after = read_log(log)[0]
+            self.assertEqual(after["history"], history_before)
+            self.assertEqual(last_activity(after), activity_before)
+            timeline_after = collect_timeline(read_log(log), today=TODAY)
+            self.assertEqual(len(timeline_after["events"]),
+                             len(timeline_before["events"]))
+
+
+class TestRejectionsCLI(unittest.TestCase):
+    def _run(self, argv):
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            code = main(argv)
+        return code, buf.getvalue()
+
+    def _logged(self, tmp):
+        log = Path(tmp) / "log.jsonl"
+        add_application(log, "Northwind Analytics", "Data Analyst",
+                        today="2026-11-01")
+        add_application(log, "Harbour Analytics",
+                        "Business Intelligence Analyst", today="2026-11-01")
+        set_status(log, "APP-001", "rejected", today="2026-11-08")
+        return log
+
+    def test_rejections_cli_record_then_list(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            code, out = self._run(["rejections", "--record", "--id",
+                                   "APP-001", "--log", str(log),
+                                   "--reason", "ghosted",
+                                   "--note", "No reply in three weeks.",
+                                   "--today", "2026-11-08"])
+            self.assertEqual(code, 0)
+            self.assertIn("recorded a rejection reason for APP-001", out)
+            code, out = self._run(["rejections", "--log", str(log),
+                                   "--today", "2026-11-08"])
+            self.assertEqual(code, 0)
+            self.assertIn("Northwind Analytics", out)
+            self.assertIn("1 rejected application", out)
+            self.assertIn("— ghosted", out)
+
+    def test_rejections_cli_record_refuses_live(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            code, _ = self._run(["rejections", "--record", "--id",
+                                 "APP-002", "--log", str(log),
+                                 "--reason", "ghosted",
+                                 "--today", "2026-11-08"])
+            self.assertEqual(code, 6)
+
+    def test_rejections_cli_record_bad_reason(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            code, _ = self._run(["rejections", "--record", "--id",
+                                 "APP-001", "--log", str(log),
+                                 "--reason", "nope",
+                                 "--today", "2026-11-08"])
+            self.assertEqual(code, 1)
+
+    def test_rejections_cli_record_without_id(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            code, _ = self._run(["rejections", "--record", "--log",
+                                 str(log), "--reason", "ghosted",
+                                 "--today", "2026-11-08"])
+            self.assertEqual(code, 1)
+
+    def test_rejections_cli_record_unknown_id(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            code, _ = self._run(["rejections", "--record", "--id",
+                                 "APP-999", "--log", str(log),
+                                 "--reason", "ghosted",
+                                 "--today", "2026-11-08"])
+            self.assertEqual(code, 6)
+
+    def test_rejections_cli_reason_filter(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            self._run(["rejections", "--record", "--id", "APP-001",
+                       "--log", str(log), "--reason", "salary",
+                       "--today", "2026-11-08"])
+            code, out = self._run(["rejections", "--log", str(log),
+                                   "--today", "2026-11-08",
+                                   "--reason", "ghosted"])
+            self.assertEqual(code, 0)
+            self.assertIn("0 rejected applications", out)
+            self.assertNotIn("Northwind", out)
+            code, out = self._run(["rejections", "--log", str(log),
+                                   "--today", "2026-11-08",
+                                   "--reason", "salary"])
+            self.assertEqual(code, 0)
+            self.assertIn("Northwind", out)
+
+    def test_rejections_cli_bad_reason_filter(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            code, _ = self._run(["rejections", "--log", str(log),
+                                 "--today", "2026-11-08",
+                                 "--reason", "nope"])
+            self.assertEqual(code, 1)
+
+    def test_rejections_cli_json_and_out(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            self._run(["rejections", "--record", "--id", "APP-001",
+                       "--log", str(log), "--reason", "salary",
+                       "--today", "2026-11-08"])
+            code, out = self._run(["rejections", "--log", str(log),
+                                   "--today", "2026-11-08", "--json"])
+            self.assertEqual(code, 0)
+            self.assertEqual(json.loads(out)["counts"]["total"], 1)
+            out_path = Path(tmp) / "rejections.md"
+            code, out = self._run(["rejections", "--log", str(log),
+                                   "--today", "2026-11-08",
+                                   "--out", str(out_path)])
+            self.assertEqual(code, 0)
+            self.assertIn(f"wrote {out_path}", out)
+            self.assertIn("Northwind",
+                          out_path.read_text(encoding="utf-8"))
+
+    def test_rejections_cli_empty_state(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = Path(tmp) / "log.jsonl"
+            add_application(log, "Northwind Analytics", "Data Analyst",
+                            today="2026-11-01")
+            code, out = self._run(["rejections", "--log", str(log),
+                                   "--today", "2026-11-08"])
+            self.assertEqual(code, 0)
+            self.assertIn("No rejected applications yet", out)
+
+    def test_rejections_cli_bad_today(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            code, _ = self._run(["rejections", "--log", str(log),
+                                 "--today", "not a date"])
+            self.assertEqual(code, 1)
 
 
 if __name__ == "__main__":

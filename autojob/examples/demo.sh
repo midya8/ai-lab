@@ -150,4 +150,29 @@ python3 -m autojob goals --log "$WORK/applications/applications.jsonl" \
 python3 -m autojob goals --log "$WORK/applications/applications.jsonl"
 python3 -m autojob goals --log "$WORK/applications/applications.jsonl" \
     --today "$FUTURE"
+# Rejections: the funnel ends somewhere — record why. Harbour reached
+# the interview stage and then said no over salary; Vector Labs never
+# got past the application, and the gap was the ML stack the profile
+# does not have (PyTorch, TensorFlow, Statistics, Machine Learning).
+# Both were applied to today and rejected today, so the report shows
+# 0 days to a decision for each, 8 days ago in demo time; the
+# missing-skills roll-up names what the rejected postings kept asking
+# for, and the --reason filter shows just the skills-gap row.
+python3 -m autojob apply --profile examples/profile.example.json \
+    --posting examples/job3.example.md --out-dir "$WORK/applications"
+python3 -m autojob status --log "$WORK/applications/applications.jsonl" \
+    --id APP-002 --to rejected
+python3 -m autojob status --log "$WORK/applications/applications.jsonl" \
+    --id APP-003 --to rejected
+python3 -m autojob rejections --log "$WORK/applications/applications.jsonl" \
+    --record --id APP-002 --reason salary \
+    --note "Their band topped out below the target range." --today "$FUTURE"
+python3 -m autojob rejections --log "$WORK/applications/applications.jsonl" \
+    --record --id APP-003 --reason skills-gap \
+    --note "Wanted PyTorch and TensorFlow; the profile has neither." \
+    --today "$FUTURE"
+python3 -m autojob rejections --log "$WORK/applications/applications.jsonl" \
+    --today "$FUTURE"
+python3 -m autojob rejections --log "$WORK/applications/applications.jsonl" \
+    --today "$FUTURE" --reason skills-gap
 echo "demo OK: packets in $WORK/applications (removed on exit)"

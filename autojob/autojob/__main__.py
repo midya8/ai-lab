@@ -40,11 +40,15 @@ Subcommands (all offline, stdlib only):
   deadlines --record --id APP-001 --date YYYY-MM-DD [--today YYYY-MM-DD]
   goals     [--log L] [--goals G] [--set-weekly N] [--weeks N] [--json] [--out F]
             [--today YYYY-MM-DD]
+  rejections [--log L] [--reason REASON] [--json] [--out F] [--today YYYY-MM-DD]
+  rejections --record --id APP-001 --reason ghosted [--note TEXT]
+            [--today YYYY-MM-DD]
 
 Exit codes: 0 ok · 1 usage error · 2 profile/posting load error ·
 3 match below --fail-under · 4 draft/apply refused below --min-coverage ·
 5 duplicate application · 6 illegal status transition, follow-up refused,
-offer refused, interview refused, contact refused, or deadline refused.
+offer refused, interview refused, contact refused, deadline refused,
+or rejection refused.
 
 autojob prepares application packets for a human to review and submit. It
 never submits anything and never invents experience: every fact in a draft
@@ -84,6 +88,9 @@ from .posting import parse_posting
 from .prep import build_prep, prep_json, render_prep_markdown
 from .profile import ProfileError, load_profile, skill_map
 from .rank import rank_json, rank_postings, render_rank_markdown
+from .rejections import (REJECTION_REASONS, RejectionError,
+                         collect_rejections, rejections_json,
+                         render_rejections_markdown, validate_rejection)
 from .report import match_json, match_report
 from .salary import (analyze_salaries, render_salary_markdown, salary_json,
                      target_from_profile)
@@ -93,7 +100,7 @@ from .timeline import (KINDS, collect_timeline, render_timeline_markdown,
 from .tracker import (TrackerError, add_application, find_application,
                       read_log, record_contact, record_deadline,
                       record_followup, record_interview, record_offer,
-                      set_status, slug)
+                      record_rejection, set_status, slug)
 
 DEFAULT_OUT_DIR = "applications"
 
@@ -863,6 +870,60 @@ def _cmd_goals(args):
     return 0
 
 
+def _cmd_rejections(args):
+    if args.today is not None:
+        try:
+            today = datetime.date.fromisoformat(args.today)
+        except ValueError:
+            print(f"error: --today must be YYYY-MM-DD, got {args.today!r}",
+                  file=sys.stderr)
+            return 1
+    else:
+        today = datetime.date.today()
+    if args.record:
+        if not args.id:
+            print("error: --record needs --id APP-001", file=sys.stderr)
+            return 1
+        try:
+            rejection = validate_rejection(args.reason, args.note)
+        except RejectionError as exc:
+            print(f"error: cannot record rejection reason: {exc}",
+                  file=sys.stderr)
+            return 1
+        try:
+            entry = record_rejection(args.log, args.id, rejection,
+                                     today=today.isoformat())
+        except TrackerError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 6
+        print(f"recorded a rejection reason for {entry['id']}: "
+              f"{entry['company']} — {entry['title']} "
+              f"({rejection['category']})")
+        return 0
+    if args.id or args.note:
+        print("error: --id and --note need --record", file=sys.stderr)
+        return 1
+    if args.reason is not None and args.reason not in REJECTION_REASONS:
+        print(f"error: --reason must be one of "
+              f"{', '.join(REJECTION_REASONS)}, got {args.reason!r}",
+              file=sys.stderr)
+        return 1
+    try:
+        entries = read_log(args.log)
+    except TrackerError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    data = collect_rejections(entries, today=today, reason=args.reason)
+    text = (rejections_json(data) if args.json
+            else render_rejections_markdown(data))
+    if args.out:
+        Path(args.out).write_text(text, encoding="utf-8")
+        print(f"wrote {args.out}")
+    else:
+        print(text, end="")
+    return 0
+
+
 def _cmd_calendar(args):
     if args.today is not None:
         try:
@@ -1262,6 +1323,27 @@ def build_parser():
     p.add_argument("--weeks", type=int, default=None,
                    help="how many weeks back the table runs (default 8)")
     p.set_defaults(func=_cmd_goals)
+
+    p = sub.add_parser("rejections", help="list rejected applications and "
+                                            "why, or record a reason with "
+                                            "--record")
+    p.add_argument("--log", default=f"{DEFAULT_OUT_DIR}/applications.jsonl")
+    p.add_argument("--json", action="store_true")
+    p.add_argument("--out", default=None,
+                   help="write the list to this file instead of stdout")
+    p.add_argument("--today", default=None,
+                   help="reference date YYYY-MM-DD (default: today)")
+    p.add_argument("--reason", default=None,
+                   help="only rejections with this reason (list mode), or "
+                        "the reason to record (with --record): "
+                        + ", ".join(REJECTION_REASONS))
+    p.add_argument("--record", action="store_true",
+                   help="record a rejection reason instead of listing")
+    p.add_argument("--id", default=None,
+                   help="with --record: the application to record for")
+    p.add_argument("--note", default=None,
+                   help="with --record: what you were told, in your own words")
+    p.set_defaults(func=_cmd_rejections)
 
     p = sub.add_parser("report", help="funnel analytics over logged applications")
     p.add_argument("--log", default=f"{DEFAULT_OUT_DIR}/applications.jsonl")
