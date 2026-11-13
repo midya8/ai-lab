@@ -3,13 +3,13 @@ Pits along the bottom edge are terminal (-1). Fixed in advance: eps=0.1, alpha=0
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 import numpy as np
-from rlgrid import GridWorld, q_learning, sarsa, greedy_policy
+from rlgrid import GridWorld, q_learning, sarsa, expected_sarsa, double_q, greedy_policy
 from rlgrid.env import CLIFF_MAP
 
 
 def run(episodes=500, seeds=10, eps=0.1):
     out = {}
-    for name, fn in [("Q-learning", q_learning), ("SARSA", sarsa)]:
+    for name, fn in [("Q-learning", q_learning), ("SARSA", sarsa), ("Expected SARSA", expected_sarsa), ("Double Q", double_q)]:
         online, falls, path = [], [], []
         for sd in range(seeds):
             env = GridWorld(CLIFF_MAP, seed=sd)

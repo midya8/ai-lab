@@ -280,6 +280,7 @@
 - vecdb: `HybridCollection.query_grouped` (fused BM25+vector search collapsed to top-k groups by metadata; 3 tests)
 - rlgrid v0.1: tabular RL (Q-learning, SARSA, Dyna-Q, value iteration), 7 tests
 - rlgrid: cliff-walking map + experiment reproducing the SARSA vs Q-learning safety gap (8 tests)
+- rlgrid: Expected SARSA and Double Q-learning added to the cliff experiment (Double Q 0.4% falls, Expected SARSA 1.9% vs SARSA 4.9%; 9 tests)
 
 
 ## Next

@@ -29,4 +29,13 @@ Dyna-Q's model-based replay roughly doubles early return; all three reach the go
 
 Q-learning learns the shorter edge-hugging route, but its epsilon-greedy exploration drops it into the pit more often while training; SARSA learns the longer, safer route and scores higher online. Greedy (no exploration) Q-learning's path is the shorter one.
 
+Added afterwards (same settings, no tuning; added after seeing the two rows above):
+
+| agent | online return | fell in pit | greedy path length |
+|---|---|---|---|
+| Expected SARSA | +0.799 | 1.9% | 15 |
+| Double Q-learning | +0.811 | 0.4% | 17 |
+
+Both beat SARSA online here. Double Q's low fall rate is plausibly from reduced maximisation bias, but I did not ablate that, so it is a hypothesis, not a finding.
+
 Toy environment only; no claim about deep RL.

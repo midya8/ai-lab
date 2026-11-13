@@ -58,3 +58,12 @@ def test_cliff_sarsa_falls_less_than_q_learning():
             f.append((r[-100:] < -0.5).mean())
         falls[name] = np.mean(f)
     assert falls["s"] < falls["q"]
+
+
+def test_expected_sarsa_and_double_q_reach_optimum_on_deterministic_map():
+    from rlgrid import expected_sarsa, double_q
+    env = GridWorld(slip=0.0)
+    opt = evaluate(env, greedy_policy(value_iteration(env)), 5)[0]
+    for fn in (expected_sarsa, double_q):
+        q, _ = fn(GridWorld(slip=0.0), episodes=600, seed=1)
+        assert evaluate(env, greedy_policy(q), 5)[0] >= opt - 1e-9

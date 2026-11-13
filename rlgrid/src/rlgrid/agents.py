@@ -23,6 +23,10 @@ def _run(env, episodes, alpha, gamma, eps, seed, max_steps, mode, planning=0):
             a2 = _eps_greedy(q, s2, eps, rng)
             if done:
                 target = r
+            elif mode == "esarsa":
+                greedy = (q[s2] == q[s2].max())
+                pi = np.full(q.shape[1], eps / q.shape[1]) + (1 - eps) * greedy / greedy.sum()
+                target = r + gamma * float(pi @ q[s2])
             elif mode == "sarsa":
                 target = r + gamma * q[s2, a2]
             else:
@@ -53,6 +57,36 @@ def sarsa(env, episodes=500, alpha=0.5, gamma=0.97, eps=0.1, seed=0, max_steps=2
 
 def dyna_q(env, episodes=500, alpha=0.5, gamma=0.97, eps=0.1, seed=0, max_steps=200, planning=10):
     return _run(env, episodes, alpha, gamma, eps, seed, max_steps, "q", planning)
+
+
+def expected_sarsa(env, episodes=500, alpha=0.5, gamma=0.97, eps=0.1, seed=0, max_steps=200):
+    """On-policy target = expectation over the eps-greedy policy (lower variance than SARSA)."""
+    return _run(env, episodes, alpha, gamma, eps, seed, max_steps, "esarsa")
+
+
+def double_q(env, episodes=500, alpha=0.5, gamma=0.97, eps=0.1, seed=0, max_steps=200):
+    """Double Q-learning (van Hasselt 2010). Returns (qA+qB)/2 and episode returns."""
+    rng = np.random.default_rng(seed)
+    qa = np.zeros((env.n_states, env.n_actions)); qb = qa.copy()
+    returns = []
+    for _ in range(episodes):
+        s = env.reset(); total = 0.0
+        for _ in range(max_steps):
+            a = _eps_greedy(qa + qb, s, eps, rng)
+            s2, r, done = env.step(a)
+            total += r
+            x, y = (qa, qb) if rng.random() < 0.5 else (qb, qa)
+            if done:
+                t = r
+            else:
+                best = int(rng.choice(np.flatnonzero(x[s2] == x[s2].max())))
+                t = r + gamma * y[s2, best]
+            x[s, a] += alpha * (t - x[s, a])
+            s = s2
+            if done:
+                break
+        returns.append(total)
+    return (qa + qb) / 2, np.array(returns)
 
 
 def value_iteration(env, gamma=0.97, tol=1e-10):
