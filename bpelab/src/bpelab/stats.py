@@ -151,3 +151,30 @@ def agreement_matrix(toks: dict, text: str) -> dict:
             f1 = segmentation_agreement(toks[a], toks[b], text)["f1"]
             out[a][b] = out[b][a] = f1
     return out
+
+
+def vocab_size_sweep(train_text: str, heldout_text: str, sizes, min_gain: float = 0.01) -> dict:
+    """Train BPE at each vocab size; report held-out bytes/token and fertility.
+
+    `marginal_gain` is the relative bytes/token improvement over the previous size.
+    `knee` is the first size after which the next step gains less than `min_gain`
+    (None if every step still gains at least that much). Heldout text is never trained on.
+    """
+    from .bpe import BPETokenizer
+
+    sizes = sorted(set(sizes))
+    if not sizes or sizes[0] < 256:
+        raise ValueError("sizes must be non-empty and >= 256")
+    rows, prev = [], None
+    for s in sizes:
+        st = token_stats(BPETokenizer.train(train_text, s), heldout_text)
+        bpt = st["bytes_per_token"]
+        gain = None if prev is None else (bpt - prev) / prev
+        rows.append({"vocab_size": s, "bytes_per_token": bpt, "fertility": st["fertility"], "marginal_gain": gain})
+        prev = bpt
+    knee = None
+    for a, b in zip(rows, rows[1:]):
+        if b["marginal_gain"] < min_gain:
+            knee = a["vocab_size"]
+            break
+    return {"rows": rows, "knee": knee}
