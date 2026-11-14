@@ -273,3 +273,23 @@ class JackknifePlus:
         hi = np.sort(P + self.R[:, None], axis=0)[k - 1]
         lo = -np.sort(-(P - self.R[:, None]), axis=0)[k - 1]
         return lo, hi
+
+
+def conformal_risk_control(loss_fn, lambdas, cal_data, alpha, B=1.0):
+    """Conformal risk control (Angelopoulos et al. 2022) for losses that are
+    non-increasing in lambda and bounded by B.
+
+    loss_fn(lam, item) -> loss in [0, B]; lambdas ascending grid.
+    Returns the smallest lambda with (n/(n+1)) * mean_loss + B/(n+1) <= alpha,
+    so E[loss at the chosen lambda on a fresh exchangeable point] <= alpha
+    (up to the grid). Returns the largest lambda if none qualifies, with
+    `ok=False` in the second return value."""
+    lambdas = list(lambdas)
+    n = len(cal_data)
+    if n == 0:
+        raise ValueError("empty calibration set")
+    for lam in lambdas:
+        risk = float(np.mean([loss_fn(lam, d) for d in cal_data]))
+        if n / (n + 1) * risk + B / (n + 1) <= alpha:
+            return lam, True
+    return lambdas[-1], False
