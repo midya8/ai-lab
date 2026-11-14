@@ -47,3 +47,15 @@ def dead_vocab(tok, text: str, top: int = 5) -> dict:
         "dead_fraction": len(dead) / tok.vocab_size,
         "top": counts.most_common(top),
     }
+
+
+def compare_tokenizers(toks: dict, text: str) -> list:
+    """Side-by-side `token_stats` for named tokenizers on the same text.
+
+    Returns rows sorted by fertility (fewest tokens per word first), each a
+    dict with a `name` key plus the token_stats fields.
+    """
+    if not toks:
+        raise ValueError("need at least one tokenizer")
+    rows = [dict(name=n, **token_stats(t, text)) for n, t in toks.items()]
+    return sorted(rows, key=lambda r: (r["fertility"], r["name"]))

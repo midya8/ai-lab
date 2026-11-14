@@ -67,3 +67,19 @@ def test_dead_vocab_empty_raises():
     from bpelab.stats import dead_vocab
     with pytest.raises(ValueError):
         dead_vocab(Fake.__mro__[0]() if False else type("E", (), {"vocab_size": 3, "encode": lambda s, t: []})(), "")
+
+
+def test_compare_tokenizers_sorted_and_named():
+    from bpelab.stats import compare_tokenizers
+    text = "the cat sat on the mat. the cat ran. " * 20
+    small = BPETokenizer.train(text, 260)
+    big = BPETokenizer.train(text, 300)
+    rows = compare_tokenizers({"small": small, "big": big}, text)
+    assert [r["name"] for r in rows][0] == "big"
+    assert rows[0]["fertility"] <= rows[1]["fertility"]
+
+
+def test_compare_tokenizers_empty_raises():
+    from bpelab.stats import compare_tokenizers
+    with pytest.raises(ValueError):
+        compare_tokenizers({}, "x y")
