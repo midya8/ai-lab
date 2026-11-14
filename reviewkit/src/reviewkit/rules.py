@@ -452,6 +452,11 @@ def ast_findings(ctx: FileContext, source: str, complexity_threshold: int = 10) 
                         f"Code after `{type(stmt).__name__.lower()}` on line {stmt.lineno} can never run.",
                         "Delete the dead statements or move the control-flow exit.")
                     break
+        if (isinstance(node, ast.Assert) and isinstance(node.test, ast.Constant)
+                and isinstance(node.test.value, (str, bytes)) and node.test.value):
+            add(node.lineno, "py-assert-constant-string", "medium",
+                "`assert \"message\"` tests a non-empty string literal, so it always passes.",
+                "Write `assert condition, \"message\"` (the message is the second argument).")
         if isinstance(node, ast.Lambda):
             for d in list(node.args.defaults) + [d for d in node.args.kw_defaults if d is not None]:
                 if _is_mutable_default(d):
@@ -708,6 +713,7 @@ RULE_TABLE.update({
     "py-type-compare": ("low", "`type(x) == T` instead of isinstance."),
     "py-compare-bool": ("low", "`== True` / `== False` instead of truthiness."),
     "py-unreachable-code": ("medium", "Statements after return/raise/continue/break."),
+    "py-assert-constant-string": ("medium", "assert on a non-empty string literal (always true)."),
     "py-duplicate-dict-key": ("medium", "Dict literal repeats a constant key."),
     "py-syntax-error": ("critical", "Changed Python file does not parse."),
     "py-taint-sql": ("high", "Untrusted input flows into SQL query text."),

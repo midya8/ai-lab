@@ -317,6 +317,7 @@
 - mctslab: `accuracy` exact optimal-move rate vs minimax (4 tests, 34 total)
 - mctslab: `value_error` UCT value estimate vs exact minimax by budget (3 tests, 37 total)
 - bpelab: `agreement_matrix` pairwise boundary-F1 across N tokenizers (2 tests, 46 total)
+- reviewkit: AST rule py-assert-constant-string (`assert "msg"` always passes; 131 tests)
 
 
 ## Next

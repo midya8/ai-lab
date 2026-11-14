@@ -425,3 +425,9 @@ def test_type_compare():
     assert rules("a.py", "if type(a) != type(b):\n    pass\n") == [(1, "py-type-compare")]
     assert rules("a.py", "if type(x) is int:\n    pass\n") == []
     assert rules("a.py", "if isinstance(x, int):\n    pass\n") == []
+
+
+def test_assert_constant_string():
+    assert rules("a.py", "assert 'x must be positive'\n") == [(1, "py-assert-constant-string")]
+    assert rules("a.py", "assert x > 0, 'x must be positive'\n") == []
+    assert rules("a.py", "assert ''\n") == []
