@@ -22,7 +22,10 @@ def test_tell_and_feasible_bookkeeping():
     bo.tell([[0.3, 0.3], [0.9, 0.9]], [f([.3, .3]), f([.9, .9])], [cons([.3, .3]), cons([.9, .9])])
     assert bo.feasible_mask().tolist() == [True, False]
     assert bo.best()[1] == pytest.approx(f([.3, .3]))
-    assert np.isnan(bo.trace()[1]) and bo.trace()[0] == pytest.approx(f([.3, .3]))
+    assert bo.trace().tolist() == pytest.approx([f([.3, .3])] * 2)
+    bo2 = ConstrainedBayesOpt([[0, 1], [0, 1]], 1)
+    bo2.tell([[0.9, 0.9]], [f([.9, .9])], [cons([.9, .9])])
+    assert np.isnan(bo2.trace()).all() and bo2.best() is None
 
 
 def test_finds_boundary_optimum_and_respects_constraint():
