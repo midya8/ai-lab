@@ -111,3 +111,7 @@ Null result: with reward clipping-free small rewards, step cost and a tiny state
 Pass `dueling=True` for a dueling network (`DuelQNet`: shared trunk, value and mean-centred advantage heads, Q = V + A - mean(A)); its hand-written backward pass is verified against finite differences. Reaches the goal on the 3x3 grid; no benchmark claim of improvement.
 
 Pass `prioritized=True` for proportional prioritized replay (`per_alpha=0.6`, `per_beta=0.4`, new transitions get max priority, importance-sampling weights normalised by their max; `QNet.step` now takes optional `weights` and returns the raw TD error). `python experiments/per_ablation.py` (5 seeds, 300 episodes): uniform and prioritized both reach 1.00 greedy success and +0.850 last-50 return. Honest null result: the tiny deterministic grid is too easy for prioritisation to matter; alpha/beta are the paper defaults, untuned. Tests cover the weighting maths and determinism.
+
+## Exact policy evaluation and regret
+
+`policy_evaluation(env, policy)` computes V^pi exactly from the known model, and `policy_regret(env, policy)` returns per-state regret V* - V^pi and its mean. Unlike `evaluate()`, there is no sampling noise, so two learned policies can be compared without rollouts. Tests check zero regret for the optimal policy and positive regret for an all-up policy on a slippery map.

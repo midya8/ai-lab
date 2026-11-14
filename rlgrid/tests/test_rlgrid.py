@@ -179,3 +179,21 @@ def test_actor_critic_custom_feature_matrix():
     phi = np.eye(env.n_states)
     _, w, rets, _ = actor_critic(env, episodes=5, features=phi, seed=0)
     assert w.shape == (env.n_states,) and len(rets) == 5
+
+
+def test_policy_evaluation_matches_vstar_for_optimal_policy():
+    env = GridWorld(slip=0.2)
+    q = value_iteration(env)
+    v = policy_evaluation(env, greedy_policy(q))
+    free = [env.sid(p) for p in env.free_cells() if not env.terminal(p)]
+    assert np.allclose(v[free], q.max(axis=1)[free], atol=1e-8)
+
+
+def test_policy_regret_zero_for_optimal_positive_for_bad():
+    env = GridWorld(slip=0.2)
+    q = value_iteration(env)
+    reg, mean = policy_regret(env, greedy_policy(q))
+    assert abs(mean) < 1e-8
+    bad = np.zeros(env.n_states, dtype=int)
+    reg2, mean2 = policy_regret(env, bad)
+    assert mean2 > 0.05 and (reg2 >= -1e-9).all()

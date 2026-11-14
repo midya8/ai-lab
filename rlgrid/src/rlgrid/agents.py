@@ -355,3 +355,32 @@ def actor_critic(env, episodes=500, alpha_pi=0.1, alpha_v=0.1, gamma=0.97, seed=
 
 def ac_policy(theta, phi):
     return (phi @ theta).argmax(axis=1)
+
+
+def policy_evaluation(env, policy, gamma=0.97, tol=1e-10):
+    """Exact V^pi of a fixed deterministic policy from the known model."""
+    v = np.zeros(env.n_states)
+    cells = [(r, c) for r in range(env.h) for c in range(env.w)
+             if (r, c) not in env.walls and not env.terminal((r, c))]
+    while True:
+        delta = 0.0
+        for pos in cells:
+            s = env.sid(pos)
+            new = 0.0
+            for p, n in env.transitions(pos, int(policy[s])):
+                fut = 0.0 if env.terminal(n) else v[env.sid(n)]
+                new += p * (env.reward(n) + gamma * fut)
+            delta = max(delta, abs(new - v[s]))
+            v[s] = new
+        if delta < tol:
+            return v
+
+
+def policy_regret(env, policy, gamma=0.97):
+    """Exact per-state regret V* - V^pi (>= 0) over non-terminal free cells,
+    plus its mean; no sampling noise, unlike evaluate()."""
+    vstar = value_iteration(env, gamma).max(axis=1)
+    vpi = policy_evaluation(env, policy, gamma)
+    states = [env.sid(p) for p in env.free_cells() if not env.terminal(p)]
+    reg = np.array([vstar[s] - vpi[s] for s in states])
+    return reg, float(reg.mean())
