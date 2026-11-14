@@ -45,6 +45,25 @@ def viterbi(word: bytes, logp: dict, max_len: int):
     return out[::-1], best[n]
 
 
+def nbest(word: bytes, logp: dict, max_len: int, n: int = 3):
+    """Top-n segmentations of `word` by total log-prob (exact k-best DP).
+    Returns [(pieces, score)] sorted best first."""
+    import heapq
+    L = len(word)
+    beams = [[] for _ in range(L + 1)]  # (score, tuple_of_pieces)
+    beams[0] = [(0.0, ())]
+    for j in range(1, L + 1):
+        cands = []
+        for i in range(max(0, j - max_len), j):
+            lp = logp.get(word[i:j])
+            if lp is None:
+                continue
+            for sc, seg in beams[i]:
+                cands.append((sc + lp, seg + (word[i:j],)))
+        beams[j] = heapq.nlargest(n, cands, key=lambda c: c[0])
+    return [(list(seg), sc) for sc, seg in beams[L]]
+
+
 def _em_counts(words, logp, max_len):
     """Expected piece counts and total log-likelihood via forward-backward."""
     exp, ll = Counter(), 0.0
@@ -123,6 +142,11 @@ class UnigramTokenizer:
             got = [self.ids[p] for p in viterbi(w, self.logp, self.max_len)[0]]
             self._cache[w] = got
         return got
+
+    def nbest(self, word: str, n: int = 3):
+        """Top-n segmentations of one word as ([token ids], log-prob)."""
+        w = word.encode("utf-8")
+        return [([self.ids[p] for p in seg], sc) for seg, sc in nbest(w, self.logp, self.max_len, n)]
 
     def _sample_word(self, w: bytes, alpha, rng):
         """Forward-filtering backward-sampling over the lattice (Kudo 2018,

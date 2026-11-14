@@ -43,3 +43,7 @@ Mixed: unigram is slightly worse at small vocabs and better at 768. Pruning uses
 ## Unigram sampling (subword regularisation)
 
 `UnigramTokenizer.encode(text, sample_alpha=0.5, rng=random.Random(0))` draws a random segmentation by forward-filtering backward-sampling, with probability proportional to p(seg)^alpha. alpha=1 is the LM posterior; large alpha approaches Viterbi. A test verifies the empirical frequencies against the exact posterior on a toy vocabulary.
+
+## N-best segmentations
+
+`UnigramTokenizer.nbest("word", n=3)` returns the top-n segmentations with log-probs via an exact k-best lattice DP (first entry equals Viterbi). Tests compare against brute-force enumeration.
