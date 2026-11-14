@@ -323,6 +323,7 @@
 - rlgrid: `outcome_probabilities` exact P(goal)/P(pit) per policy from expected visits, cross-checked with Monte Carlo (2 tests, 48 total)
 - rlgrid: `return_variance` exact variance of discounted return via second-moment Bellman equation, cross-checked with Monte Carlo (2 tests, 50 total)
 - interplab v0.1: NEW PROJECT — mechanistic interpretability on a microgrid transformer (hooked NumPy forward verified against microgrid, head ablation, exactly-additive logit attribution, activation patching, composition scores, causal copy test); finding: no textbook induction head, lookup lives in layer 0 + MLPs (20 tests)
+- diffusionlab v0.1: NEW PROJECT — DDPM/DDIM/classifier-free guidance from scratch in NumPy (hand-written backprop, gradient-checked) on Gaussian-mixture data with exact noised scores, so the net's excess error vs the Bayes-optimal eps* and sampler discretisation error (oracle sampler) are measured separately; guidance trades diversity for accuracy and the net stops tracking the oracle at scale >= 4 (23 tests)
 
 
 ## Next
@@ -350,3 +351,4 @@
 21. mctslab follow-ups: (done transposition table, null result) (done Connect-Four ladder) (done PUCT with heuristic value) (done AlphaZero-lite in numpy, tic-tac-toe) (done optimal-move-rate accuracy metric) (done value-estimate error curve) -> next: Connect-Four/gravity support and a conv net on microgrid; old: PUCT with a learned policy/value net (AlphaZero-lite on microgrid), Connect-Four benchmarks, parallel root search
 22. bpelab follow-ups: (done compression curve) (done BPE-dropout) (done unigram-LM) (done unigram sampling) (done n-best) (done token_stats: fertility, Renyi efficiency, 4 tests) (done dead_vocab held-out check, 3 tests) (done compare_tokenizers, 2 tests) (done transfer_matrix, 2 tests) wire into tiny-transformer/microgrid, unigram-LM tokenizer comparison
 23. interplab follow-ups: MLP neuron ablation/patching, sparse autoencoder on the residual stream, attention-only variant to force a classic induction circuit, longer/wider models, path patching
+24. diffusionlab follow-ups: non-analytic data (spiral/pinwheel) judged by sliced-W1/MMD only, DPM-Solver/higher-order samplers vs the oracle error floor, v-prediction and SNR-weighted losses, learned vs fixed posterior variance, a score-matching (continuous-time SDE / probability-flow ODE) variant, train-set size vs memorisation
