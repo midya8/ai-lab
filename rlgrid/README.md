@@ -96,3 +96,5 @@ Findings: linear coordinates fail completely (a walled maze is not linearly sepa
 | neither | 0.60 | -0.289 |
 
 Findings, honestly: removing *either* stabiliser alone does nothing measurable on this tiny deterministic grid; only removing both hurts. Hyperparameters (lr 0.2, eps decay 0.99, hidden 64, 200-step cap) were chosen after a small search on seeds 0-2, which overlap the evaluation seeds, so treat the absolute numbers as optimistic. The first attempt (lr 0.05, decay 0.97, 100-step cap) never reached the goal: exploration collapsed before the sparse reward was found. Coordinate features (`features="coords"`) did not work with the small MLP here (0/5 success at default settings); one-hot is the default, which makes the net tabular-equivalent, so this shows the training loop is correct rather than any generalisation.
+
+Pass `double=True` to `dqn()` for Double DQN: the online net chooses the next action and the target net scores it (`double_q_target`), which curbs max-operator overestimation. Tested for the target identity and for reaching the goal on a 3x3 grid; no benchmark claim is made that it beats vanilla here.

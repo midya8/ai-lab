@@ -302,6 +302,7 @@
 - bpelab v0.2: unigram-LM tokenizer (EM + pruning + Viterbi), mixed result vs BPE (19 tests)
 - bpelab: unigram subword-regularisation sampling `encode(sample_alpha=, rng=)` via forward-filtering backward-sampling; test checks the sampled distribution against the exact LM posterior (22 tests)
 - bpelab: unigram `nbest` exact k-best segmentations, brute-force verified (25 tests)
+- rlgrid: Double DQN option `double=True` (2 tests, 32 total)
 
 
 ## Next

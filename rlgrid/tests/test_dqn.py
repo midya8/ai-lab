@@ -36,3 +36,22 @@ def test_deterministic_given_seed():
     env1, env2 = GridWorld(layout=["S.G"], seed=0), GridWorld(layout=["S.G"], seed=0)
     r1 = dqn(env1, episodes=20, seed=3)[2]; r2 = dqn(env2, episodes=20, seed=3)[2]
     assert np.array_equal(r1, r2)
+
+
+def test_double_q_target_uses_online_argmax_and_never_exceeds_max():
+    from rlgrid.dqn import double_q_target
+    rng = np.random.default_rng(5)
+    on, tg = QNet(4, 3, 8, rng), QNet(4, 3, 8, rng)
+    x = rng.normal(size=(6, 4))
+    d = double_q_target(on, tg, x)
+    a = on.forward(x)[1].argmax(1)
+    assert np.allclose(d, tg.forward(x)[1][np.arange(6), a])
+    assert np.all(d <= tg.forward(x)[1].max(1) + 1e-12)
+    same = double_q_target(tg, tg, x)
+    assert np.allclose(same, tg.forward(x)[1].max(1))
+
+
+def test_double_dqn_reaches_goal():
+    env = GridWorld(layout=["S..", "...", "..G"], seed=0)
+    net, phi, _ = dqn(env, episodes=250, seed=0, double=True)
+    assert evaluate(env, dqn_policy(net, phi), episodes=5)[1] == 1.0

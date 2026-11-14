@@ -39,9 +39,15 @@ class QNet:
         self.W1 -= lr * x.T @ dh; self.b1 -= lr * dh.sum(0)
 
 
+def double_q_target(online, target, x):
+    """Double DQN: the online net picks the action, the target net scores it."""
+    a = online.forward(x)[1].argmax(1)
+    return target.forward(x)[1][np.arange(len(x)), a]
+
+
 def dqn(env, episodes=300, gamma=0.97, lr=0.2, eps_start=1.0, eps_end=0.05, eps_decay=0.99,
         batch=32, buffer=5000, target_every=50, hidden=64, seed=0, max_steps=200,
-        use_target=True, use_replay=True, features="onehot"):
+        use_target=True, use_replay=True, features="onehot", double=False):
     """Returns (net, phi, returns). Greedy policy: argmax over net.forward(phi)[1]."""
     rng = np.random.default_rng(seed)
     phi = coord_features(env) if features == "coords" else onehot_features(env)
@@ -65,7 +71,7 @@ def dqn(env, episodes=300, gamma=0.97, lr=0.2, eps_start=1.0, eps_end=0.05, eps_
             batch_tr = [buf[i] for i in rng.integers(len(buf), size=batch)] if use_replay and len(buf) >= batch else [tr]
             S, A, R, S2, D = (np.array(z) for z in zip(*batch_tr))
             ref = tgt if use_target else net
-            nxt = ref.forward(phi[S2])[1].max(1)
+            nxt = double_q_target(net, ref, phi[S2]) if double else ref.forward(phi[S2])[1].max(1)
             net.step(phi[S], A, R + gamma * nxt * (~D.astype(bool)), lr)
             steps += 1
             if use_target and steps % target_every == 0:
