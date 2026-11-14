@@ -303,7 +303,7 @@
 - bpelab: unigram subword-regularisation sampling `encode(sample_alpha=, rng=)` via forward-filtering backward-sampling; test checks the sampled distribution against the exact LM posterior (22 tests)
 - bpelab: unigram `nbest` exact k-best segmentations, brute-force verified (25 tests)
 - rlgrid: Double DQN option `double=True` (2 tests, 32 total)
-- rlgrid: prioritized replay `prioritized=True` with IS weights (2 tests, 34 total; null result on the easy grid)
+- rlgrid: prioritized replay `prioritized=True` with IS weights (2 tests, 32 total; null result on the easy grid)
 
 
 ## Next
