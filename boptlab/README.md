@@ -25,7 +25,7 @@ X = bo.ask(q=4); bo.tell(X, [my_expensive_function(x) for x in X])
 | module | contents |
 |---|---|
 | `gp.py` | ARD RBF and Matern-5/2 `Kernel` (with analytic d/dlog-lengthscale gradients, no 1/r singularity), `GP` (Cholesky, posterior mean/cov, joint samples, `condition` for fantasised points), `log_marginal_likelihood` with gradient, `fit_gp` (multi-start Adam in log-space, box-bounded, warm-startable) |
-| `acquisition.py` | closed-form `expected_improvement` (with xi, exact zero-variance limit), `probability_of_improvement`, `confidence_bound`, Monte-Carlo EI and q-EI for checking |
+| `acquisition.py` | closed-form `expected_improvement` (with xi, exact zero-variance limit), `log_expected_improvement` (stable in the far tail; `acquisition='logei'`), `probability_of_improvement`, `confidence_bound`, Monte-Carlo EI and q-EI for checking |
 | `optimizer.py` | `BayesOpt` (ask/tell/run; Halton initial design; EI/PI/UCB/TS; constant-liar batches; noise-aware incumbent), acquisition maximiser (random + Halton + near-incumbent candidates, then shrinking-radius local search), `halton`, `random_search` baselines |
 | `benchmarks.py` | Branin, Hartmann-3/6, Ackley, Levy, Rosenbrock with known minimisers, plus a `noisy` wrapper |
 

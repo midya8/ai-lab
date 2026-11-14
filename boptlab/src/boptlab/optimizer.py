@@ -59,13 +59,13 @@ def optimize_acquisition(score, d, rng, anchors=None, n_random=2000, n_refine=4,
 
 
 class BayesOpt:
-    """GP-based Bayesian optimiser. acquisition in {'ei','pi','ucb','ts'}; set noisy=True for noisy objectives
+    """GP-based Bayesian optimiser. acquisition in {'ei','logei','pi','ucb','ts'}; set noisy=True for noisy objectives
     (incumbent becomes the best *posterior mean* at observed points instead of the best raw observation)."""
 
     def __init__(self, bounds, acquisition="ei", kernel="matern52", n_init=None, noisy=False, beta=2.0, xi=0.0,
                  rng=None, refit_every=1, fit_kwargs=None):
-        if acquisition not in ("ei", "pi", "ucb", "ts"):
-            raise ValueError("acquisition must be one of ei, pi, ucb, ts")
+        if acquisition not in ("ei", "logei", "pi", "ucb", "ts"):
+            raise ValueError("acquisition must be one of ei, logei, pi, ucb, ts")
         self.bounds = np.asarray(bounds, float)
         self.d = len(self.bounds)
         self.acq, self.kernel_kind, self.noisy, self.beta, self.xi = acquisition, kernel, noisy, beta, xi
@@ -131,6 +131,8 @@ class BayesOpt:
                 g = cur
                 def score(C, g=g):
                     mu, sd = g.predict(C)
+                    if self.acq == "logei":
+                        return A.log_expected_improvement(mu, sd, best, self.xi)
                     if self.acq == "ei":
                         return A.expected_improvement(mu, sd, best, self.xi)
                     if self.acq == "pi":

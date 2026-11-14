@@ -72,3 +72,37 @@ def test_batch_ei_is_at_least_single_ei_and_monotone_in_batch():
     q3 = mc_batch_expected_improvement(S, 0.0)
     assert q3 > q1
     assert q1 == pytest.approx(expected_improvement(0.0, 1.0, 0.0), abs=0.01)
+
+
+def test_log_ei_matches_log_of_ei_where_representable():
+    from boptlab import log_expected_improvement
+    mu = np.linspace(-3, 3, 41); sd = np.full(41, 0.7)
+    assert np.allclose(log_expected_improvement(mu, sd, 0.2), np.log(expected_improvement(mu, sd, 0.2)), atol=1e-8)
+
+
+def test_log_ei_finite_and_monotone_in_deep_tail_and_continuous_at_switch():
+    from boptlab import log_expected_improvement
+    z = np.linspace(-60, -5, 400)
+    v = log_expected_improvement(-z, np.ones_like(z), 0.0)  # imp = z, sigma = 1
+    assert np.all(np.isfinite(v)) and np.all(np.diff(v) > 0)
+    assert expected_improvement(60.0, 1.0, 0.0) == 0.0  # plain EI has underflowed
+    a = log_expected_improvement(10.0 - 1e-9, 1.0, 0.0); b = log_expected_improvement(10.0 + 1e-9, 1.0, 0.0)
+    assert abs(a - b) < 1e-6
+
+
+def test_log_ei_tail_matches_high_precision_reference():
+    mpmath = pytest.importorskip("mpmath")
+    from boptlab import log_expected_improvement
+    mpmath.mp.dps = 60
+    for z in [-3.0, -9.9, -10.1, -20.0, -37.5, -80.0]:
+        ref = mpmath.log(mpmath.npdf(z) + z * mpmath.ncdf(z))
+        got = float(log_expected_improvement(-z, 1.0, 0.0))
+        assert got == pytest.approx(float(ref), rel=1e-9, abs=1e-9)
+
+
+def test_logei_optimizer_runs_and_beats_random():
+    from boptlab import BayesOpt, BENCHMARKS
+    b = BENCHMARKS["branin"] if isinstance(BENCHMARKS, dict) else BENCHMARKS[0]
+    o = BayesOpt(b.bounds, acquisition="logei", rng=np.random.default_rng(0))
+    o.run(b.f, 20)
+    assert o.y.min() - b.optimum < 1.0
