@@ -81,16 +81,42 @@ def aps_sets(P, q, u):
     return S
 
 
+def _raps_penalty(K, lam, k_reg):
+    """Penalty for the label at 1-indexed rank j: lam * max(0, j - k_reg)."""
+    return lam * np.maximum(0, np.arange(1, K + 1) - k_reg)
+
+
+def raps_scores(P, y, u, lam=0.01, k_reg=1):
+    """Regularised APS (Angelopoulos et al. 2021): randomised APS plus a rank penalty that discourages
+    large sets built from many tiny-probability labels. lam=0 recovers aps_scores."""
+    order = np.argsort(-P, axis=1)
+    rank = np.argmax(order == np.asarray(y, int)[:, None], axis=1)
+    return aps_scores(P, y, u) + _raps_penalty(P.shape[1], lam, k_reg)[rank]
+
+
+def raps_sets(P, q, u, lam=0.01, k_reg=1):
+    order = np.argsort(-P, axis=1)
+    sp = np.take_along_axis(P, order, 1)
+    cum = np.cumsum(sp, 1)
+    sc = cum - sp + u[:, None] * sp + _raps_penalty(P.shape[1], lam, k_reg)[None, :]
+    S = np.zeros(sc.shape, bool)
+    np.put_along_axis(S, order, sc <= q, 1)
+    return S
+
+
 class ConformalClassifier:
     """Split-conformal prediction sets from a probability function.
 
-    method: "lac" | "aps".   mondrian=True calibrates one threshold per true class, which buys
+    method: "lac" | "aps" | "raps" (raps: lam, k_reg; not combined with mondrian).   mondrian=True calibrates one threshold per true class, which buys
     class-conditional (not just marginal) coverage at the price of fewer calibration points per class.
     """
 
-    def __init__(self, proba_fn, alpha=0.1, method="lac", mondrian=False, seed=0):
-        if method not in ("lac", "aps"):
+    def __init__(self, proba_fn, alpha=0.1, method="lac", mondrian=False, seed=0, lam=0.01, k_reg=1):
+        if method not in ("lac", "aps", "raps"):
             raise ValueError(method)
+        if method == "raps" and mondrian:
+            raise ValueError("raps does not support mondrian")
+        self.lam, self.k_reg = lam, k_reg
         self.proba_fn, self.alpha, self.method, self.mondrian = proba_fn, alpha, method, mondrian
         self.rng = np.random.default_rng(seed)
         self.q = None
@@ -98,7 +124,10 @@ class ConformalClassifier:
     def _scores(self, P, y):
         if self.method == "lac":
             return lac_scores(P, y)
-        return aps_scores(P, y, self.rng.uniform(size=len(P)))
+        u = self.rng.uniform(size=len(P))
+        if self.method == "raps":
+            return raps_scores(P, y, u, self.lam, self.k_reg)
+        return aps_scores(P, y, u)
 
     def calibrate(self, X, y):
         P, y = self.proba_fn(X), np.asarray(y, int)
@@ -124,6 +153,8 @@ class ConformalClassifier:
             S = np.zeros(P.shape, bool)
             np.put_along_axis(S, order, sc_sorted <= self.q[order], 1)
             return S
+        if self.method == "raps":
+            return raps_sets(P, self.q, self.rng.uniform(size=len(P)), self.lam, self.k_reg)
         return aps_sets(P, self.q, self.rng.uniform(size=len(P)))
 
 

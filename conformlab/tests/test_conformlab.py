@@ -193,3 +193,34 @@ def test_weighted_conformal_covers_under_shift():
     m = WeightedSplitConformal(mean_fn, lambda X: np.exp(-0.5 * ((X[:, 0] - 1.5) / 0.7) ** 2), None, 0.1).calibrate(Xc, yc)
     l, h = m.predict(x[:, None])
     assert abs(((yt >= l) & (yt <= h)).mean() - 0.9) < 0.02
+
+
+def test_raps_lam0_equals_aps_and_penalty_monotone():
+    rng = np.random.default_rng(1)
+    P = rng.dirichlet(np.ones(6), 50)
+    y = rng.integers(0, 6, 50)
+    u = rng.uniform(size=50)
+    assert np.allclose(raps_scores(P, y, u, lam=0.0), aps_scores(P, y, u))
+    assert (raps_scores(P, y, u, lam=0.1, k_reg=2) >= aps_scores(P, y, u) - 1e-12).all()
+    # sets are nested as q grows, and contain the label iff score <= q
+    q = 0.7
+    S = raps_sets(P, q, u, 0.1, 2)
+    assert (S[np.arange(50), y] == (raps_scores(P, y, u, 0.1, 2) <= q)).all()
+    assert (raps_sets(P, 0.9, u, 0.1, 2) >= S).all()
+
+
+def test_raps_coverage_and_not_larger_than_aps_on_hard_classes():
+    rng = np.random.default_rng(2)
+    Xtr, ytr = gaussian_classes(3000, rng)
+    Xc, yc = gaussian_classes(3000, rng)
+    Xt, yt = gaussian_classes(20000, rng)
+    clf = SoftmaxRegressor(6, steps=300).fit(Xtr, ytr)
+    sizes = {}
+    for m in ("aps", "raps"):
+        cc = ConformalClassifier(clf.predict_proba, 0.1, m, seed=0, lam=0.05, k_reg=2).calibrate(Xc, yc)
+        S = cc.predict_sets(Xt)
+        assert abs(set_coverage(S, yt) - 0.9) < 0.02
+        sizes[m] = mean_set_size(S)
+    assert sizes["raps"] <= sizes["aps"] + 0.05
+    with pytest.raises(ValueError):
+        ConformalClassifier(clf.predict_proba, 0.1, "raps", mondrian=True)

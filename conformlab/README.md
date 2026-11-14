@@ -70,3 +70,20 @@ In this setup the shift moves test points into a *quieter* region, so ignoring i
 - Test-set coverage is itself random: with a 1000-point calibration set the coverage of one fitted interval varies around 0.90 with std ~0.01 (the Beta law the tests check).
 - Hyperparameters (RFF width 120, lengthscale 0.7, ridge/steps) were fixed before looking at coverage; the sigma-hat model is a ridge fit to absolute training residuals, a crude choice that still worked.
 - All data are synthetic; no real-dataset claim is made.
+
+
+## RAPS (regularised APS)
+
+`ConformalClassifier(..., method="raps", lam=0.05, k_reg=2)` adds a rank penalty `lam * max(0, rank - k_reg)` to the randomised APS score, discouraging large sets padded with tiny-probability labels. `lam=0` is exactly APS (tested); coverage stays valid for any fixed `lam`/`k_reg`.
+
+Single-seed check on the Gaussian-classes data (30k test points, alpha=0.1; settings tried by hand, not tuned on held-out data, so treat as indicative only):
+
+| method | coverage | mean set size |
+|---|---|---|
+| LAC | 0.900 | 1.694 |
+| APS | 0.892 | 1.904 |
+| RAPS lam=0.02,k=1 | 0.891 | 1.845 |
+| RAPS lam=0.05,k=2 | 0.893 | 1.850 |
+| RAPS lam=0.2,k=2 | 0.893 | 1.793 |
+
+RAPS shrinks APS sets modestly here but stays above LAC in size; the effect is expected to be larger with many classes (this data has 6).
