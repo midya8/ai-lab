@@ -399,3 +399,29 @@ def regret_curve(env, algo, checkpoints=(25, 50, 100, 200, 400), seeds=(0, 1, 2)
             vals.append(policy_regret(env, greedy_policy(q), gamma)[1])
         out[int(n)] = (float(np.mean(vals)), float(np.std(vals)))
     return out
+
+
+def policy_iteration(env, gamma=0.97, tol=1e-10, max_iters=100):
+    """Howard's policy iteration from the known model.
+    Evaluates exactly, then improves greedily (ties keep the current action so
+    it terminates). Returns (policy, V, n_iterations). Converges in a handful
+    of sweeps, far fewer than value iteration's Bellman backups."""
+    policy = np.zeros(env.n_states, dtype=int)
+    free = [p for p in env.free_cells() if not env.terminal(p)]
+    for it in range(1, max_iters + 1):
+        v = policy_evaluation(env, policy, gamma, tol)
+        stable = True
+        for pos in free:
+            s = env.sid(pos)
+            qs = np.zeros(4)
+            for a in range(4):
+                for p, n in env.transitions(pos, a):
+                    fut = 0.0 if env.terminal(n) else v[env.sid(n)]
+                    qs[a] += p * (env.reward(n) + gamma * fut)
+            best = int(policy[s])
+            if qs.max() > qs[best] + 1e-9:
+                policy[s] = int(qs.argmax())
+                stable = False
+        if stable:
+            return policy, v, it
+    return policy, v, max_iters

@@ -214,3 +214,21 @@ def test_regret_curve_deterministic():
     a = regret_curve(env, q_learning, checkpoints=(20,), seeds=(0,))
     b = regret_curve(env, q_learning, checkpoints=(20,), seeds=(0,))
     assert a == b
+
+
+def test_policy_iteration_matches_value_iteration():
+    for slip in (0.0, 0.2):
+        env = GridWorld(slip=slip)
+        pol, v, iters = policy_iteration(env)
+        vstar = value_iteration(env).max(axis=1)
+        free = [env.sid(p) for p in env.free_cells() if not env.terminal(p)]
+        assert np.allclose(v[free], vstar[free], atol=1e-6)
+        assert policy_regret(env, pol)[1] < 1e-6
+        assert 1 <= iters < 30
+
+
+def test_policy_iteration_stable_on_rerun():
+    env = GridWorld(slip=0.1)
+    pol, _, _ = policy_iteration(env)
+    q = value_iteration(env)
+    assert policy_regret(env, pol)[1] < 1e-6 and policy_regret(env, greedy_policy(q))[1] < 1e-6

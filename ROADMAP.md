@@ -312,6 +312,7 @@
 - bpelab: `transfer_matrix` cross-domain bytes/token table (2 tests, 39 total)
 - rlgrid: exact `policy_evaluation` + `policy_regret` (2 tests, 40 total)
 - bpelab: `BPETokenizer.explain` merge-by-merge encoding trace (2 tests, 41 total)
+- rlgrid: exact `policy_iteration` (Howard), cross-checked against value iteration (2 tests, 44 total)
 
 
 ## Next
