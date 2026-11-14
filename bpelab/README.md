@@ -58,6 +58,8 @@ Mixed: unigram is slightly worse at small vocabs and better at 768. Pruning uses
 
 `bpelab.segmentation_agreement(tok_a, tok_b, text)` compares how two tokenizers split the same words: the fraction of words segmented identically plus boundary precision/recall/F1 of `tok_b` against `tok_a`. Exact for ASCII words (non-ASCII is approximate). 3 tests.
 
+`bpelab.agreement_matrix({name: tok}, text)` returns the symmetric pairwise boundary-F1 matrix across any number of tokenizers. 2 tests.
+
 ## Comparing tokenizers
 
 `bpelab.compare_tokenizers({"bpe-300": bpe, "unigram": uni}, text)` runs `token_stats` for each named tokenizer on the same text and returns rows sorted by fertility. 2 tests.

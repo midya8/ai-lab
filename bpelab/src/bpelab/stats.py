@@ -136,3 +136,18 @@ def segmentation_agreement(tok_a, tok_b, text: str) -> dict:
     f1 = 2 * p * r / (p + r) if p + r else 0.0
     return {"words": len(words), "identical": same / len(words),
             "precision": p, "recall": r, "f1": f1}
+
+
+def agreement_matrix(toks: dict, text: str) -> dict:
+    """Pairwise boundary-F1 between every pair of named tokenizers.
+
+    F1 is symmetric, so the matrix is too; the diagonal is 1.0.
+    """
+    names = list(toks)
+    out = {a: {} for a in names}
+    for i, a in enumerate(names):
+        out[a][a] = 1.0
+        for b in names[i + 1:]:
+            f1 = segmentation_agreement(toks[a], toks[b], text)["f1"]
+            out[a][b] = out[b][a] = f1
+    return out

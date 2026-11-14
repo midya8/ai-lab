@@ -316,6 +316,7 @@
 - bpelab: `segmentation_agreement` boundary-F1 between tokenizers (3 tests, 44 total)
 - mctslab: `accuracy` exact optimal-move rate vs minimax (4 tests, 34 total)
 - mctslab: `value_error` UCT value estimate vs exact minimax by budget (3 tests, 37 total)
+- bpelab: `agreement_matrix` pairwise boundary-F1 across N tokenizers (2 tests, 46 total)
 
 
 ## Next
