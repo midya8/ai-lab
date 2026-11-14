@@ -197,3 +197,20 @@ def test_policy_regret_zero_for_optimal_positive_for_bad():
     bad = np.zeros(env.n_states, dtype=int)
     reg2, mean2 = policy_regret(env, bad)
     assert mean2 > 0.05 and (reg2 >= -1e-9).all()
+
+
+def test_regret_curve_shape_and_improvement():
+    from rlgrid import regret_curve
+    env = GridWorld(slip=0.1)
+    c = regret_curve(env, q_learning, checkpoints=(2, 300), seeds=(0, 1))
+    assert set(c) == {2, 300}
+    assert all(m >= -1e-9 and s >= 0 for m, s in c.values())
+    assert c[300][0] < c[2][0]
+
+
+def test_regret_curve_deterministic():
+    from rlgrid import regret_curve
+    env = GridWorld()
+    a = regret_curve(env, q_learning, checkpoints=(20,), seeds=(0,))
+    b = regret_curve(env, q_learning, checkpoints=(20,), seeds=(0,))
+    assert a == b

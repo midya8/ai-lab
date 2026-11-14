@@ -384,3 +384,18 @@ def policy_regret(env, policy, gamma=0.97):
     states = [env.sid(p) for p in env.free_cells() if not env.terminal(p)]
     reg = np.array([vstar[s] - vpi[s] for s in states])
     return reg, float(reg.mean())
+
+
+def regret_curve(env, algo, checkpoints=(25, 50, 100, 200, 400), seeds=(0, 1, 2), gamma=0.97, **kw):
+    """Sample-efficiency curve: exact mean policy regret of the greedy policy
+    after training `algo` (a q_learning-style fn returning (q, returns)) for
+    each episode budget. Returns {budget: (mean over seeds, std over seeds)}.
+    Each (budget, seed) is an independent run, so budgets are not nested."""
+    out = {}
+    for n in checkpoints:
+        vals = []
+        for sd in seeds:
+            q = algo(env, episodes=n, seed=sd, gamma=gamma, **kw)[0]
+            vals.append(policy_regret(env, greedy_policy(q), gamma)[1])
+        out[int(n)] = (float(np.mean(vals)), float(np.std(vals)))
+    return out

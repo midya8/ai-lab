@@ -115,3 +115,16 @@ Pass `prioritized=True` for proportional prioritized replay (`per_alpha=0.6`, `p
 ## Exact policy evaluation and regret
 
 `policy_evaluation(env, policy)` computes V^pi exactly from the known model, and `policy_regret(env, policy)` returns per-state regret V* - V^pi and its mean. Unlike `evaluate()`, there is no sampling noise, so two learned policies can be compared without rollouts. Tests check zero regret for the optimal policy and positive regret for an all-up policy on a slippery map.
+
+## Regret curves
+
+`regret_curve(env, algo, checkpoints, seeds)` trains each learner for several episode budgets (independent runs) and reports the exact mean policy regret of the greedy policy, mean±std over seeds. `python experiments/regret_curves.py` (slip 0.1, 5 seeds, default hyperparameters, untuned):
+
+| algo | 10 | 25 | 50 | 100 | 200 | 400 |
+|---|---|---|---|---|---|---|
+| q_learning | 0.526±0.047 | 0.209±0.023 | 0.144±0.027 | 0.145±0.012 | 0.121±0.020 | 0.131±0.031 |
+| sarsa | 0.511±0.042 | 0.172±0.028 | 0.196±0.068 | 0.245±0.153 | 0.124±0.039 | 0.091±0.043 |
+| expected_sarsa | 0.497±0.039 | 0.199±0.020 | 0.141±0.020 | 0.143±0.044 | 0.141±0.014 | 0.138±0.018 |
+| dyna_q(10) | 0.055±0.048 | 0.033±0.035 | 0.026±0.015 | 0.031±0.020 | 0.036±0.043 | 0.056±0.032 |
+
+Findings: Dyna-Q's planning gives ~10x lower regret at small budgets. The model-free learners plateau near 0.13 because constant epsilon=0.1 and alpha=0.5 keep the greedy policy noisy; they do not converge to zero regret within 400 episodes. Dyna-Q's regret also drifts up slightly at 400, within seed noise.
