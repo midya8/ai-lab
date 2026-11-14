@@ -164,3 +164,19 @@ def dqn(env, episodes=300, gamma=0.97, lr=0.2, eps_start=1.0, eps_end=0.05, eps_
 
 def dqn_policy(net, phi):
     return net.forward(phi)[1].argmax(1)
+
+
+def q_bias(env, net, phi, qstar):
+    """Compare a DQN's Q-values with exact Q* (value iteration) on non-terminal free cells.
+
+    Returns (mean signed error, RMSE, greedy-action agreement). A positive mean signed
+    error is overestimation; the greedy agreement counts a state as right when the
+    network's argmax action has Q* within 1e-9 of the optimum (ties are not penalised).
+    """
+    states = np.array([env.sid(p) for p in env.free_cells()])
+    q = net.forward(phi[states])[1]
+    qs = qstar[states]
+    err = q - qs
+    pick = qs[np.arange(len(states)), q.argmax(1)]
+    agree = float(np.mean(pick >= qs.max(1) - 1e-9))
+    return float(err.mean()), float(np.sqrt((err ** 2).mean())), agree

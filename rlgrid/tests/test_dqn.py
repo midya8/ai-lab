@@ -127,3 +127,28 @@ def test_nstep1_matches_default_and_nstep3_reaches_goal():
     env = GridWorld(layout=["S..", "...", "..G"], seed=0)
     net, phi, _ = dqn(env, episodes=250, seed=0, n_step=3)
     env.reset(); assert evaluate(env, dqn_policy(net, phi)) is not None
+
+
+def test_q_bias_zero_for_exact_and_detects_offset():
+    from rlgrid import value_iteration
+    from rlgrid.dqn import q_bias, onehot_features
+    env = GridWorld(layout=["S..", "...", "..G"], seed=0)
+    qs = value_iteration(env)
+    phi = onehot_features(env)
+
+    class Fake:
+        def __init__(self, off): self.off = off
+        def forward(self, x): return None, qs[x.argmax(1)] + self.off
+    m, rmse, agree = q_bias(env, Fake(0.0), phi, qs)
+    assert abs(m) < 1e-12 and rmse < 1e-12 and agree == 1.0
+    m, rmse, agree = q_bias(env, Fake(0.3), phi, qs)
+    assert abs(m - 0.3) < 1e-9 and abs(rmse - 0.3) < 1e-9 and agree == 1.0
+
+
+def test_q_bias_on_trained_net_is_finite_and_mostly_greedy_correct():
+    from rlgrid import value_iteration
+    from rlgrid.dqn import q_bias
+    env = GridWorld(layout=["S..", "...", "..G"], seed=0)
+    net, phi, _ = dqn(env, episodes=250, seed=0)
+    m, rmse, agree = q_bias(env, net, phi, value_iteration(env))
+    assert np.isfinite(m) and rmse < 0.5 and agree >= 0.8

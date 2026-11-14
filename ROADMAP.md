@@ -306,6 +306,7 @@
 - rlgrid: prioritized replay `prioritized=True` with IS weights (2 tests, 32 total; null result on the easy grid)
 - rlgrid: dueling network option `dueling=True` (`DuelQNet`, finite-difference gradient check, 34 tests total)
 - rlgrid: n-step returns for DQN `n_step=k` (tail flush, gamma^k bootstrap; 36 tests total)
+- rlgrid: `q_bias` Q-vs-Q* diagnostic + experiment (null result: no overestimation to fix; 38 tests total)
 
 
 ## Next

@@ -99,6 +99,15 @@ Findings, honestly: removing *either* stabiliser alone does nothing measurable o
 
 Pass `double=True` to `dqn()` for Double DQN: the online net chooses the next action and the target net scores it (`double_q_target`), which curbs max-operator overestimation. Tested for the target identity and for reaching the goal on a 3x3 grid; no benchmark claim is made that it beats vanilla here.
 
+`q_bias(env, net, phi, qstar)` measures a network's mean signed error, RMSE and greedy agreement against exact Q* from value iteration. `python experiments/q_bias.py` (4x4 grid with walls, slip 0.2, 5 seeds, 300 episodes):
+
+| variant | mean signed err | RMSE | greedy agreement |
+|---|---|---|---|
+| vanilla | -0.004 | 0.008 | 0.94 |
+| double | -0.003 | 0.007 | 0.88 |
+
+Null result: with reward clipping-free small rewards, step cost and a tiny state space, neither variant overestimates measurably, so Double DQN has no bias to fix here; the agreement gap is within what 5 seeds can resolve.
+
 Pass `dueling=True` for a dueling network (`DuelQNet`: shared trunk, value and mean-centred advantage heads, Q = V + A - mean(A)); its hand-written backward pass is verified against finite differences. Reaches the goal on the 3x3 grid; no benchmark claim of improvement.
 
 Pass `prioritized=True` for proportional prioritized replay (`per_alpha=0.6`, `per_beta=0.4`, new transitions get max priority, importance-sampling weights normalised by their max; `QNet.step` now takes optional `weights` and returns the raw TD error). `python experiments/per_ablation.py` (5 seeds, 300 episodes): uniform and prioritized both reach 1.00 greedy success and +0.850 last-50 return. Honest null result: the tiny deterministic grid is too easy for prioritisation to matter; alpha/beta are the paper defaults, untuned. Tests cover the weighting maths and determinism.
