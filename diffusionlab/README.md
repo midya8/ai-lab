@@ -88,3 +88,7 @@ Reading: unguided class-conditional accuracy 0.963 matches the exact model's 0.9
 - The oracle in table 3 uses a single seed's samples (the oracle has no training seed; only the sampling noise varies).
 - The training schedule (steps, lr, EMA decay 0.995) was set once from a 3000-step smoke run and then fixed; no per-result tuning.
 - float64 NumPy, small MLP: fast enough for 4000 steps in ~15 s, not a framework.
+
+## Spiral study (non-analytic data, v0.2)
+
+`shapes.spiral` is a two-arm spiral with no closed-form score, so only sample metrics apply (`experiments/spiral.py`, output in `experiments/spiral_results.txt`; single seed, 4000 steps). Floor between two exact sets: sliced-W1 0.0162 +- 0.0027; pure noise: 0.1563. Deterministic DDIM (eta=0) beat ancestral (eta=1) at every step count: sliced-W1 0.2160 / 0.0933 / 0.0436 / 0.0288 / 0.0247 at 5 / 10 / 25 / 50 / 100 steps. Even at 100 steps the net stays above the floor. Single seed, so differences of a few thousandths are not established.

@@ -1,0 +1,12 @@
+finite-sample floor sliced-W1: 0.0162 +- 0.0027
+pure noise sliced-W1: 0.1563
+steps=  5 eta=0 sW1=0.2160 mmd=0.17549
+steps=  5 eta=1 sW1=0.2480 mmd=0.21601
+steps= 10 eta=0 sW1=0.0933 mmd=0.03005
+steps= 10 eta=1 sW1=0.1380 mmd=0.05965
+steps= 25 eta=0 sW1=0.0436 mmd=0.00642
+steps= 25 eta=1 sW1=0.0594 mmd=0.01137
+steps= 50 eta=0 sW1=0.0288 mmd=0.00253
+steps= 50 eta=1 sW1=0.0367 mmd=0.00433
+steps=100 eta=0 sW1=0.0247 mmd=0.00146
+steps=100 eta=1 sW1=0.0318 mmd=0.00246
