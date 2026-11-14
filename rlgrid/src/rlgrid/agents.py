@@ -425,3 +425,43 @@ def policy_iteration(env, gamma=0.97, tol=1e-10, max_iters=100):
         if stable:
             return policy, v, it
     return policy, v, max_iters
+
+
+def expected_visits(env, policy):
+    """Exact expected number of visits to every state per episode (start counts
+    as one visit) under a fixed deterministic policy, from the known model.
+    Solves (I - P^T) n = e_start over non-terminal states. Returns None when the
+    policy never terminates from the start with probability 1 (it can loop)."""
+    seen, stack = {env.start}, [env.start]  # only states reachable under the policy
+    while stack:
+        pos = stack.pop()
+        for _, nxt in env.transitions(pos, int(policy[env.sid(pos)])):
+            if not env.terminal(nxt) and nxt not in seen:
+                seen.add(nxt)
+                stack.append(nxt)
+    cells = sorted(seen)
+    idx = {env.sid(p): i for i, p in enumerate(cells)}
+    n = len(cells)
+    P = np.zeros((n, n))
+    for pos in cells:
+        for pr, nxt in env.transitions(pos, int(policy[env.sid(pos)])):
+            if not env.terminal(nxt):
+                P[idx[env.sid(pos)], idx[env.sid(nxt)]] += pr
+    e = np.zeros(n)
+    e[idx[env.sid(env.start)]] = 1.0
+    try:
+        sol = np.linalg.solve(np.eye(n) - P.T, e)
+    except np.linalg.LinAlgError:
+        return None
+    if (sol < -1e-9).any() or not np.isfinite(sol).all():
+        return None
+    out = np.zeros(env.n_states)
+    for s, i in idx.items():
+        out[s] = sol[i]
+    return out
+
+
+def expected_episode_length(env, policy):
+    """Exact expected steps to termination (None if the policy can loop forever)."""
+    v = expected_visits(env, policy)
+    return None if v is None else float(v.sum())

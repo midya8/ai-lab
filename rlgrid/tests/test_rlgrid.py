@@ -232,3 +232,32 @@ def test_policy_iteration_stable_on_rerun():
     pol, _, _ = policy_iteration(env)
     q = value_iteration(env)
     assert policy_regret(env, pol)[1] < 1e-6 and policy_regret(env, greedy_policy(q))[1] < 1e-6
+
+
+def test_expected_episode_length_matches_monte_carlo():
+    from rlgrid import expected_episode_length, expected_visits
+    env = GridWorld(slip=0.2, seed=1)
+    pol, _, _ = policy_iteration(env)
+    exact = expected_episode_length(env, pol)
+    assert exact is not None and exact > 0
+    lens = []
+    for _ in range(3000):
+        s, n = env.reset(), 0
+        done = False
+        while not done and n < 500:
+            s, _, done = env.step(int(pol[s]))
+            n += 1
+        lens.append(n)
+    assert abs(np.mean(lens) - exact) < 0.5
+    assert expected_visits(env, pol)[env.sid(env.start)] >= 1.0
+
+
+def test_expected_visits_deterministic_path_and_loop():
+    from rlgrid import expected_visits, expected_episode_length
+    env = GridWorld()
+    pol, _, _ = policy_iteration(env)
+    v = expected_visits(env, pol)
+    assert np.isclose(v.sum(), expected_episode_length(env, pol))
+    assert np.allclose(v[v > 1e-9], np.round(v[v > 1e-9]))  # each cell visited once
+    loop = np.zeros(env.n_states, dtype=int)  # always "up": never terminates
+    assert expected_visits(env, loop) is None
