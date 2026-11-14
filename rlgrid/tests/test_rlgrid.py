@@ -261,3 +261,25 @@ def test_expected_visits_deterministic_path_and_loop():
     assert np.allclose(v[v > 1e-9], np.round(v[v > 1e-9]))  # each cell visited once
     loop = np.zeros(env.n_states, dtype=int)  # always "up": never terminates
     assert expected_visits(env, loop) is None
+
+
+def test_outcome_probabilities_sum_to_one_and_match_mc():
+    env = GridWorld(slip=0.2, seed=3)
+    pol = greedy_policy(value_iteration(env))
+    out = outcome_probabilities(env, pol)
+    assert abs(out["goal"] + out["pit"] - 1.0) < 1e-9
+    wins = 0
+    n = 3000
+    for _ in range(n):
+        s, done, t = env.reset(), False, 0
+        while not done and t < 500:
+            s, r, done = env.step(int(pol[s]))
+            t += 1
+        wins += r > 0
+    assert abs(wins / n - out["goal"]) < 0.03
+
+
+def test_outcome_probabilities_deterministic_goal():
+    env = GridWorld()
+    out = outcome_probabilities(env, greedy_policy(value_iteration(env)))
+    assert abs(out["goal"] - 1.0) < 1e-9

@@ -465,3 +465,25 @@ def expected_episode_length(env, policy):
     """Exact expected steps to termination (None if the policy can loop forever)."""
     v = expected_visits(env, policy)
     return None if v is None else float(v.sum())
+
+
+def outcome_probabilities(env, policy):
+    """Exact probability an episode ends in a goal vs a pit under a fixed policy:
+    sum over visited non-terminal cells of expected_visits * P(step -> terminal).
+    Returns {"goal": p, "pit": q} (they sum to 1), or None if the policy can loop."""
+    v = expected_visits(env, policy)
+    if v is None:
+        return None
+    goal = pit = 0.0
+    for r in range(env.h):
+        for c in range(env.w):
+            pos = (r, c)
+            n = v[env.sid(pos)]
+            if n <= 0 or env.terminal(pos) or pos in env.walls:
+                continue
+            for pr, nxt in env.transitions(pos, int(policy[env.sid(pos)])):
+                if nxt in env.goals:
+                    goal += n * pr
+                elif nxt in env.pits:
+                    pit += n * pr
+    return {"goal": float(goal), "pit": float(pit)}
