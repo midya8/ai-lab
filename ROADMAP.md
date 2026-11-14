@@ -326,6 +326,7 @@
 - diffusionlab v0.1: NEW PROJECT — DDPM/DDIM/classifier-free guidance from scratch in NumPy (hand-written backprop, gradient-checked) on Gaussian-mixture data with exact noised scores, so the net's excess error vs the Bayes-optimal eps* and sampler discretisation error (oracle sampler) are measured separately; guidance trades diversity for accuracy and the net stops tracking the oracle at scale >= 4 (23 tests)
 - conformlab v0.1: NEW PROJECT — split-conformal regression (constant/normalised/CQR), classification (LAC, randomised APS, Mondrian), adaptive conformal inference; exact Beta coverage law tested; marginal-vs-conditional coverage and shift studies (13 tests)
 - conformlab: `conformal_risk_control` (CRC for monotone bounded losses; tested on multilabel FNR control over 40 seeds, reduces to the split-conformal rule for 0/1 loss, flags infeasible; 3 tests, 27 total)
+- conformlab: `outlier` module: conformal p-values (super-uniform, tie-safe) + Benjamini-Hochberg for FDR-controlled outlier flagging; tested vs brute-force BH and FDR/power over 400 trials (4 tests, 31 total)
 
 
 ## Next
