@@ -1,5 +1,6 @@
 from .conformal import (SplitConformal, CQR, ConformalClassifier, conformal_quantile, min_calibration_size,
-                        lac_scores, aps_scores, aps_sets, aci)
+                        lac_scores, aps_scores, aps_sets, aci,
+                        weighted_conformal_quantile, WeightedSplitConformal, logistic_density_ratio)
 from .data import hetero_regression, gaussian_classes, sigma_true, mean_true
 from .models import RFF, RidgeRegressor, QuantileRegressor, SoftmaxRegressor
 from .metrics import (interval_coverage, mean_width, binned_coverage, set_coverage,

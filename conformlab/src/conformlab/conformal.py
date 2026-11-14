@@ -148,3 +148,58 @@ def aci(scores_fn, stream_len, alpha=0.1, gamma=0.02, window=None):
         miss[t] = s > q
         a_t = a_t + gamma * (alpha - float(miss[t]))
     return miss, traj
+
+
+# ------------------------------------------------------------------ covariate shift
+def weighted_conformal_quantile(scores, weights, w_test, alpha):
+    """Tibshirani et al. (2019) weighted quantile for ONE test point: the (1-alpha)-quantile of
+    sum_i p_i delta(s_i) + p_test delta(+inf), with p_i = w_i / (sum w + w_test).
+    Returns +inf when the calibration mass cannot reach 1-alpha."""
+    s = np.asarray(scores, float)
+    w = np.asarray(weights, float)
+    o = np.argsort(s)
+    cum = np.cumsum(w[o]) / (w.sum() + w_test)
+    j = np.searchsorted(cum, 1 - alpha - 1e-12)
+    return np.inf if j >= len(s) else float(s[o][j])
+
+
+class WeightedSplitConformal(SplitConformal):
+    """SplitConformal under covariate shift. `weight_fn(X)` is the density ratio p_test(x)/p_cal(x)
+    (known, or estimated e.g. by `logistic_density_ratio`); the interval width then depends on x."""
+
+    def __init__(self, mean_fn, weight_fn, scale_fn=None, alpha=0.1):
+        super().__init__(mean_fn, scale_fn, alpha)
+        self.weight_fn = weight_fn
+
+    def calibrate(self, X, y):
+        self.cal_scores = np.abs(np.asarray(y) - self.mean_fn(X)) / self._scale(X)
+        self.cal_w = np.asarray(self.weight_fn(X), float)
+        return self
+
+    def predict(self, X):
+        wt = np.asarray(self.weight_fn(X), float)
+        q = np.array([weighted_conformal_quantile(self.cal_scores, self.cal_w, w, self.alpha) for w in wt])
+        m, h = self.mean_fn(X), q * self._scale(X)
+        return m - h, m + h
+
+
+def logistic_density_ratio(X_cal, X_test, degree=2, steps=400, lr=0.5, l2=1e-3):
+    """Estimate p_test/p_cal with a polynomial logistic domain classifier (Newton-free GD):
+    w(x) = (n_cal/n_test) * p(test|x) / p(cal|x). Returns a callable on X of shape (n, 1)."""
+    def feats(X):
+        x = np.asarray(X, float).reshape(len(X), -1)[:, :1]
+        return np.hstack([x ** d for d in range(1, degree + 1)])
+    F = np.vstack([feats(X_cal), feats(X_test)])
+    mu, sd = F.mean(0), F.std(0) + 1e-9
+    Z = np.hstack([np.ones((len(F), 1)), (F - mu) / sd])
+    t = np.r_[np.zeros(len(X_cal)), np.ones(len(X_test))]
+    b = np.zeros(Z.shape[1])
+    for _ in range(steps):
+        p = 1 / (1 + np.exp(-Z @ b))
+        b -= lr * (Z.T @ (p - t) / len(t) + l2 * b)
+    ratio = len(X_cal) / len(X_test)
+
+    def w(X):
+        Zx = np.hstack([np.ones((len(X), 1)), (feats(X) - mu) / sd])
+        return ratio * np.exp(np.clip(Zx @ b, -30, 30))
+    return w

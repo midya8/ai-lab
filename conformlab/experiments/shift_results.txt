@@ -1,0 +1,5 @@
+# shift study (alpha=0.1, cal n=1000, test n=20000, mean over 5 seeds)
+method                         coverage   width inf-frac
+unweighted (ignores shift)        0.936    1.18    0.000
+weighted, exact ratio             0.901    0.99    0.000
+weighted, logistic-estimated      0.910    1.03    0.000

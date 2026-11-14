@@ -147,3 +147,49 @@ def test_aci_long_run_guarantee_bound():
     new = np.abs(rng.standard_cauchy(T))
     miss, _ = aci(lambda t: (cal, new[t]), T, alpha, gamma)
     assert abs(miss.mean() - alpha) <= (max(alpha, 1 - alpha) + gamma) / (gamma * T) + 1e-12
+
+
+def test_weighted_quantile_reduces_to_split_with_equal_weights():
+    from conformlab import weighted_conformal_quantile
+    rng = np.random.default_rng(1)
+    s = rng.normal(size=50)
+    for a in (0.1, 0.3):
+        assert weighted_conformal_quantile(s, np.ones(50), 1.0, a) == conformal_quantile(s, a)
+
+
+def test_weighted_quantile_inf_and_heavy_test_weight():
+    from conformlab import weighted_conformal_quantile
+    s = np.arange(1.0, 11)
+    assert weighted_conformal_quantile(s, np.ones(10), 1.0, 0.05) == np.inf
+    assert weighted_conformal_quantile(s, np.ones(10), 1000.0, 0.5) == np.inf   # test point dominates
+
+
+def test_weighted_quantile_follows_weights():
+    from conformlab import weighted_conformal_quantile
+    s = np.array([1.0, 2.0, 3.0, 4.0])
+    w = np.array([0.01, 0.01, 0.01, 10.0])
+    assert weighted_conformal_quantile(s, w, 0.01, 0.5) == 4.0                  # mass sits on the largest score
+    w2 = np.array([10.0, 0.01, 0.01, 0.01])
+    assert weighted_conformal_quantile(s, w2, 0.01, 0.5) == 1.0
+
+
+def test_logistic_density_ratio_recovers_gaussian_ratio():
+    from conformlab import logistic_density_ratio
+    rng = np.random.default_rng(0)
+    Xc = rng.normal(0, 1, (4000, 1)); Xt = rng.normal(1, 1, (4000, 1))
+    w = logistic_density_ratio(Xc, Xt)
+    x = np.linspace(-1, 2, 7)[:, None]
+    true = np.exp(x[:, 0] - 0.5)                   # N(1,1)/N(0,1)
+    assert np.all(np.abs(np.log(w(x)) - np.log(true)) < 0.35)
+
+
+def test_weighted_conformal_covers_under_shift():
+    from conformlab import WeightedSplitConformal
+    rng = np.random.default_rng(3)
+    mean_fn = lambda X: mean_true(X[:, 0])
+    Xc, yc = hetero_regression(1500, rng)
+    x = rng.normal(1.5, 0.7, 40000); x = x[np.abs(x) <= 3][:10000]
+    yt = mean_true(x) + sigma_true(x) * rng.normal(size=len(x))
+    m = WeightedSplitConformal(mean_fn, lambda X: np.exp(-0.5 * ((X[:, 0] - 1.5) / 0.7) ** 2), None, 0.1).calibrate(Xc, yc)
+    l, h = m.predict(x[:, None])
+    assert abs(((yt >= l) & (yt <= h)).mean() - 0.9) < 0.02

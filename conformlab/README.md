@@ -54,6 +54,16 @@ Marginal 90% is met by all, but plain LAC gives the hard classes ~74%. Mondrian 
 
 **Online shift** (residual scale doubles at the midpoint, T = 6000): static split conformal misses 39.9% after the shift. ACI brings the long-run miss rate to 0.100-0.103 for gamma in {0.005, 0.02, 0.05}. The cost is visible in `alpha_t`: it falls to ~0.004, i.e. the method is using near-maximal quantiles (and, at times, infinite intervals) of a 500-point calibration set, because a 2x scale shift can't be matched by a quantile of unshifted scores at a normal level. Coverage is restored by sometimes being uninformative.
 
+**Covariate shift** (`experiments/shift_study.py`; train/calibrate on x~U[-3,3], test on x~N(1.5, 0.7) truncated, 5 seeds): weighted conformal (Tibshirani et al. 2019, `WeightedSplitConformal`) with the density ratio known or estimated by a logistic domain classifier (`logistic_density_ratio`).
+
+| method | coverage | width |
+|---|---|---|
+| unweighted (ignores shift) | 0.936 | 1.18 |
+| weighted, exact ratio | 0.901 | 0.99 |
+| weighted, logistic-estimated | 0.910 | 1.03 |
+
+In this setup the shift moves test points into a *quieter* region, so ignoring it over-covers (wastefully wide) rather than under-covers; weighting restores ~0.90 and gives 16% narrower intervals. I did not construct a harmful-direction shift here; the guarantee is the same either way. The estimated ratio is slightly conservative (0.910).
+
 ## Caveats
 
 - Marginal guarantees assume exchangeability; the shift experiment is exactly where that fails, and ACI only guarantees the *average* miss rate, not per-window coverage.
