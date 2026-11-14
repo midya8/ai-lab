@@ -47,3 +47,7 @@ Mixed: unigram is slightly worse at small vocabs and better at 768. Pruning uses
 ## N-best segmentations
 
 `UnigramTokenizer.nbest("word", n=3)` returns the top-n segmentations with log-probs via an exact k-best lattice DP (first entry equals Viterbi). Tests compare against brute-force enumeration.
+
+## Tokenizer statistics
+
+`bpelab.token_stats(tok, text)` works with any tokenizer exposing `encode` and `vocab_size` and returns fertility (tokens per word), bytes per token, vocabulary utilisation and Renyi (alpha=2.5) efficiency. 4 tests.
