@@ -56,6 +56,8 @@ Mixed: unigram is slightly worse at small vocabs and better at 768. Pruning uses
 
 `bpelab.dead_vocab(tok, held_out_text)` lists token ids that never occur in the given text, the dead fraction, and the most frequent ids. Useful for spotting a vocab that is over-sized for its domain. 3 tests.
 
+`bpelab.segmentation_agreement(tok_a, tok_b, text)` compares how two tokenizers split the same words: the fraction of words segmented identically plus boundary precision/recall/F1 of `tok_b` against `tok_a`. Exact for ASCII words (non-ASCII is approximate). 3 tests.
+
 ## Comparing tokenizers
 
 `bpelab.compare_tokenizers({"bpe-300": bpe, "unigram": uni}, text)` runs `token_stats` for each named tokenizer on the same text and returns rows sorted by fertility. 2 tests.

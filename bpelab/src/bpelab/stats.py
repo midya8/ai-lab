@@ -97,3 +97,42 @@ def transfer_matrix(toks: dict, corpora: dict) -> dict:
             row[cn] = len(text.encode("utf-8")) / n if n else 0.0
         out[tn] = row
     return out
+
+
+def _boundaries(tok, word: str) -> set:
+    """Internal split offsets (in bytes) of `word` under `tok`, via per-id decode.
+
+    Exact for ASCII words; a token that ends mid-character decodes with a
+    replacement char, so non-ASCII words are only approximate.
+    """
+    pos, cuts = 0, set()
+    ids = tok.encode(word)
+    for i in ids[:-1]:
+        pos += len(tok.decode([i]).encode("utf-8"))
+        cuts.add(pos)
+    return cuts
+
+
+def segmentation_agreement(tok_a, tok_b, text: str) -> dict:
+    """How similarly two tokenizers split the same words.
+
+    Returns `identical` (fraction of distinct words segmented identically,
+    weighted by occurrence), and boundary precision/recall/F1 of `tok_b`'s
+    internal split points against `tok_a`'s (words with no boundary in either
+    contribute nothing to the boundary counts).
+    """
+    words = _WORD.findall(text)
+    if not words:
+        raise ValueError("text must contain at least one word")
+    same = tp = fp = fn = 0
+    for w in words:
+        a, b = _boundaries(tok_a, w), _boundaries(tok_b, w)
+        same += a == b
+        tp += len(a & b)
+        fp += len(b - a)
+        fn += len(a - b)
+    p = tp / (tp + fp) if tp + fp else 1.0
+    r = tp / (tp + fn) if tp + fn else 1.0
+    f1 = 2 * p * r / (p + r) if p + r else 0.0
+    return {"words": len(words), "identical": same / len(words),
+            "precision": p, "recall": r, "f1": f1}
