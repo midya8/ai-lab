@@ -55,3 +55,22 @@ def test_double_dqn_reaches_goal():
     env = GridWorld(layout=["S..", "...", "..G"], seed=0)
     net, phi, _ = dqn(env, episodes=250, seed=0, double=True)
     assert evaluate(env, dqn_policy(net, phi), episodes=5)[1] == 1.0
+
+
+def test_step_weights_scale_update_and_return_td_error():
+    x = np.array([[0.2, 0.5, 1.0]])
+    n1, n2 = QNet(3, 4, 8, np.random.default_rng(0)), QNet(3, 4, 8, np.random.default_rng(0))
+    td = n1.step(x, np.array([1]), np.array([0.3]), 0.1)
+    n2.step(x, np.array([1]), np.array([0.3]), 0.1, weights=np.array([0.0]))
+    assert td.shape == (1,)
+    assert np.allclose(n2.W2, QNet(3, 4, 8, np.random.default_rng(0)).W2)  # zero weight: no update
+    assert not np.allclose(n1.W2, n2.W2)
+
+
+def test_prioritized_replay_reaches_goal_and_is_deterministic():
+    env = GridWorld(layout=["S..", "...", "..G"], seed=0)
+    n1, phi, r1 = dqn(env, episodes=250, seed=0, prioritized=True)
+    env = GridWorld(layout=["S..", "...", "..G"], seed=0)
+    n2, _, r2 = dqn(env, episodes=250, seed=0, prioritized=True)
+    assert np.array_equal(r1, r2)
+    assert evaluate(env, dqn_policy(n1, phi), episodes=5)[1] == 1.0

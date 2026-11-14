@@ -303,6 +303,7 @@
 - bpelab: unigram subword-regularisation sampling `encode(sample_alpha=, rng=)` via forward-filtering backward-sampling; test checks the sampled distribution against the exact LM posterior (22 tests)
 - bpelab: unigram `nbest` exact k-best segmentations, brute-force verified (25 tests)
 - rlgrid: Double DQN option `double=True` (2 tests, 32 total)
+- rlgrid: prioritized replay `prioritized=True` with IS weights (2 tests, 34 total; null result on the easy grid)
 
 
 ## Next
@@ -326,6 +327,6 @@
 17. microgrid follow-ups: (done conv2d/pooling) (done iterative backward) (done transformer blocks) (done char-LM training + generation on the corpus, memorisation disclosed) (done AdamW/clip/cosine schedule) (done parity vs tiny-transformer) (done leak-free stdlib-source corpus run) (done KV-cache generation) (done 3-seed + wd ablation) (done int8 KV cache + top-k/top-p sampling) (done int8-KV perplexity) (done weight-only quantisation) (done GPTQ-style rounding vs RTN) (done group-wise scales: helps at <=3 bits only) (done sequential Hessian re-collection: helps most at 2-3 bits) -> next: a new project
 18. specdec follow-ups: (done peaky target re-test) (done adaptive k) (done multi-draft recursive rejection at one position) (done m-ary tree along accepted path) (done microgrid real draft/target pair, v0.7: c=0.49 limits gain) (done backoff lookup draft: ties best fixed n, no gain) (done batched verification API, v0.9: exact, no wall-clock win without KV cache) (done CLI: calibrate+benchmark on any file) full branching-tree verification, KV-cached verification
 19. voicekit follow-ups: CNN word classifier on microgrid, (done per-word thresholds from validation data, 84 tests) (done benchmark vs global threshold: null result, F1 0.953/0.957/0.955) (done WakeGate event gating) (done WakeGate max_session_s cap, 2 tests) (done `smooth_events` posterior smoothing, 3 tests) better VAD below 5 dB, a real-speech benchmark from a download-free source
-20. rlgrid follow-ups: (done cliff-walking safety gap) (done REINFORCE) (done eligibility traces / n-step) (done actor-critic with linear/RBF features, 4 tests) (done numpy DQN + replay/target ablation, 4 tests) -> next: a new project (RL or other)
+20. rlgrid follow-ups: (done cliff-walking safety gap) (done REINFORCE) (done eligibility traces / n-step) (done actor-critic with linear/RBF features, 4 tests) (done numpy DQN + replay/target ablation, 4 tests) (done Double DQN) (done prioritized replay) -> next: a new project (RL or other)
 21. mctslab follow-ups: (done transposition table, null result) (done Connect-Four ladder) (done PUCT with heuristic value) (done AlphaZero-lite in numpy, tic-tac-toe) -> next: Connect-Four/gravity support and a conv net on microgrid; old: PUCT with a learned policy/value net (AlphaZero-lite on microgrid), Connect-Four benchmarks, parallel root search
 22. bpelab follow-ups: (done compression curve) (done BPE-dropout) (done unigram-LM) (done unigram sampling) (done n-best) wire into tiny-transformer/microgrid, unigram-LM tokenizer comparison

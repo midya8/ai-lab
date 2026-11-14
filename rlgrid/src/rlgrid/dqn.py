@@ -28,15 +28,19 @@ class QNet:
     def copy_from(self, o):
         self.W1, self.b1, self.W2, self.b2 = (o.W1.copy(), o.b1.copy(), o.W2.copy(), o.b2.copy())
 
-    def step(self, x, a, target, lr):
+    def step(self, x, a, target, lr, weights=None):
         """One SGD step on 0.5*(Q(x,a)-target)^2 (Huber-clipped gradient), batch mean."""
         h, q = self.forward(x)
         n = len(x)
-        err = np.clip(q[np.arange(n), a] - target, -1.0, 1.0)
+        raw = q[np.arange(n), a] - target
+        err = np.clip(raw, -1.0, 1.0)
+        if weights is not None:
+            err = err * weights
         dq = np.zeros_like(q); dq[np.arange(n), a] = err / n
         dh = (dq @ self.W2.T) * (h > 0)
         self.W2 -= lr * h.T @ dq; self.b2 -= lr * dq.sum(0)
         self.W1 -= lr * x.T @ dh; self.b1 -= lr * dh.sum(0)
+        return raw
 
 
 def double_q_target(online, target, x):
@@ -47,13 +51,14 @@ def double_q_target(online, target, x):
 
 def dqn(env, episodes=300, gamma=0.97, lr=0.2, eps_start=1.0, eps_end=0.05, eps_decay=0.99,
         batch=32, buffer=5000, target_every=50, hidden=64, seed=0, max_steps=200,
-        use_target=True, use_replay=True, features="onehot", double=False):
+        use_target=True, use_replay=True, features="onehot", double=False,
+        prioritized=False, per_alpha=0.6, per_beta=0.4, per_eps=1e-3):
     """Returns (net, phi, returns). Greedy policy: argmax over net.forward(phi)[1]."""
     rng = np.random.default_rng(seed)
     phi = coord_features(env) if features == "coords" else onehot_features(env)
     net, tgt = QNet(phi.shape[1], env.n_actions, hidden, rng), QNet(phi.shape[1], env.n_actions, hidden, rng)
     tgt.copy_from(net)
-    buf, steps, rets = [], 0, []
+    buf, prio, steps, rets = [], [], 0, []
     eps = eps_start
     for _ in range(episodes):
         s, tot = env.reset(), 0.0
@@ -66,13 +71,27 @@ def dqn(env, episodes=300, gamma=0.97, lr=0.2, eps_start=1.0, eps_end=0.05, eps_
             tot += r
             tr = (s, a, r, s2, done)
             buf.append(tr)
+            prio.append(max(prio, default=1.0))  # new transitions get max priority
             if len(buf) > buffer:
-                buf.pop(0)
-            batch_tr = [buf[i] for i in rng.integers(len(buf), size=batch)] if use_replay and len(buf) >= batch else [tr]
+                buf.pop(0); prio.pop(0)
+            idx, w = None, None
+            if use_replay and len(buf) >= batch:
+                if prioritized:
+                    p = np.asarray(prio) ** per_alpha; p /= p.sum()
+                    idx = rng.choice(len(buf), size=batch, p=p)
+                    w = (len(buf) * p[idx]) ** (-per_beta); w /= w.max()
+                else:
+                    idx = rng.integers(len(buf), size=batch)
+                batch_tr = [buf[i] for i in idx]
+            else:
+                batch_tr = [tr]
             S, A, R, S2, D = (np.array(z) for z in zip(*batch_tr))
             ref = tgt if use_target else net
             nxt = double_q_target(net, ref, phi[S2]) if double else ref.forward(phi[S2])[1].max(1)
-            net.step(phi[S], A, R + gamma * nxt * (~D.astype(bool)), lr)
+            td = net.step(phi[S], A, R + gamma * nxt * (~D.astype(bool)), lr, w)
+            if prioritized and idx is not None:
+                for i, e in zip(idx, td):
+                    prio[i] = abs(float(e)) + per_eps
             steps += 1
             if use_target and steps % target_every == 0:
                 tgt.copy_from(net)
