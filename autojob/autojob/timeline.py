@@ -2,7 +2,7 @@
 
 ``autojob timeline`` reads the history every other command already
 records — applications, status moves, follow-ups, interviews, contacts,
-offers — and lays them out as a single chronological feed across all
+offers, debriefs — and lays them out as a single chronological feed across all
 applications, instead of making you open each one to see what happened
 when.
 
@@ -19,7 +19,8 @@ The honest rules, carried over from the modules that write the history:
 - Events are matched to their records, not assumed. An interview event
   carries its date and round label, so it is paired with the first
   still-unpaired round with that date and label; a contact event the
-  same way by date and name. An offer event carries no figures of its
+  same way by date and name, and a debrief event the same way as an
+  interview, by date and round label. An offer event carries no figures of its
   own, so the n-th offer event on an application is the n-th offer in
   its offers list — they are appended in the same order by
   ``tracker.record_offer``, and the pairing is only ever used to
@@ -42,7 +43,8 @@ from __future__ import annotations
 import datetime
 import json
 
-KINDS = ("applied", "status", "followup", "interview", "contact", "offer")
+KINDS = ("applied", "status", "followup", "interview", "contact", "offer",
+         "debrief")
 
 
 class TimelineError(ValueError):
@@ -159,17 +161,44 @@ def _summary_offer(record):
     return text
 
 
+def _summary_debrief(round_label, record):
+    label = round_label or (record or {}).get("round")
+    text = f"Debrief: {label}" if label else "Debrief"
+    if not record:
+        return text
+    rating = record.get("rating")
+    if isinstance(rating, int) and not isinstance(rating, bool):
+        text += f" — rated {rating}/5"
+    questions = record.get("questions")
+    if isinstance(questions, list) and questions:
+        count = sum(1 for q in questions if isinstance(q, str))
+        if count == 1:
+            text += ", 1 question asked"
+        elif count > 1:
+            text += f", {count} questions asked"
+    return text
+
+
 def _note_of(kind, event, record):
     """A stored note worth showing under the line, or None.
 
     Follow-up notes live on the event itself; interview and contact
     notes live on the record. Offer notes are left out — an offer
-    line already carries its figures.
+    line already carries its figures. A debrief shows what went well
+    first, falling back to what to improve.
     """
     if kind == "followup":
         note = event.get("note")
     elif kind in ("interview", "contact") and record:
         note = record.get("note") or record.get("notes")
+    elif kind == "debrief" and record:
+        went_well = record.get("went_well")
+        improve = record.get("improve")
+        if isinstance(went_well, str) and went_well.strip():
+            return f"went well: {went_well.strip()}"
+        if isinstance(improve, str) and improve.strip():
+            return f"to improve: {improve.strip()}"
+        return None
     else:
         return None
     if isinstance(note, str) and note.strip():
@@ -177,15 +206,17 @@ def _note_of(kind, event, record):
     return None
 
 
-def _resolve(entry, event, used_interviews, used_contacts, offer_index):
+def _resolve(entry, event, used_interviews, used_contacts, used_debriefs,
+             offer_index):
     """Turn one history event into a timeline row, or None to skip it.
 
-    ``used_interviews`` / ``used_contacts`` are sets of record indexes
-    already paired, so two rounds with the same date and label — or
-    two touches with the same person on the same day — pair in log
-    order instead of both pointing at the first record. ``offer_index``
-    counts the offer events seen so far on this entry; the n-th offer
-    event pairs with the n-th offer in the entry's offers list.
+    ``used_interviews`` / ``used_contacts`` / ``used_debriefs`` are
+    sets of record indexes already paired, so two rounds with the same
+    date and label — or two touches with the same person on the same
+    day — pair in log order instead of both pointing at the first
+    record. ``offer_index`` counts the offer events seen so far on
+    this entry; the n-th offer event pairs with the n-th offer in the
+    entry's offers list.
     """
     when = _parse_date(event.get("at"))
     if when is None:
@@ -222,6 +253,16 @@ def _resolve(entry, event, used_interviews, used_contacts, offer_index):
         if 0 <= offer_index < len(offers) and isinstance(
                 offers[offer_index], dict):
             record = offers[offer_index]
+    elif kind == "debrief":
+        debriefs = entry.get("debriefs") or []
+        for i, candidate in enumerate(debriefs):
+            if i in used_debriefs or not isinstance(candidate, dict):
+                continue
+            if (candidate.get("date") == event.get("at")
+                    and candidate.get("round") == event.get("round")):
+                record = candidate
+                used_debriefs.add(i)
+                break
 
     if kind == "applied":
         summary = _summary_applied(entry)
@@ -233,6 +274,8 @@ def _resolve(entry, event, used_interviews, used_contacts, offer_index):
         summary = _summary_interview(event.get("round"), record)
     elif kind == "contact":
         summary = _summary_contact(event.get("name"), record)
+    elif kind == "debrief":
+        summary = _summary_debrief(event.get("round"), record)
     else:  # offer
         summary = _summary_offer(record)
 
@@ -276,12 +319,13 @@ def collect_timeline(entries, today=None, since=None, until=None,
             continue
         used_interviews = set()
         used_contacts = set()
+        used_debriefs = set()
         offer_index = 0
         for event in history:
             if not isinstance(event, dict):
                 continue
             resolved = _resolve(entry, event, used_interviews,
-                                used_contacts, offer_index)
+                                used_contacts, used_debriefs, offer_index)
             if resolved is None:
                 continue
             row, when = resolved

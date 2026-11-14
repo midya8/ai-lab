@@ -2,7 +2,7 @@
 
 A job-application assistant that prepares applications from your own
 profile — and refuses to invent anything about you. Pure standard-library
-Python, 508 tests, no API keys, fully offline.
+Python, 642 tests, no API keys, fully offline.
 
 Built in November 2026 as a portfolio project. It is not client work, it is
 not affiliated with any employer, and the example profile and posting in
@@ -266,8 +266,8 @@ it builds is a draft for a human to review and send.
 18. **Timeline** (`autojob/timeline.py`, v0.14) — `timeline` lays out
     everything the other commands already recorded as one feed across
     all applications, newest first: applications (with the match score),
-    status moves, follow-ups, interviews, contacts, and offers, grouped
-    by day. An interview line names the round, the interviewer, the
+    status moves, follow-ups, interviews, contacts, offers, and debriefs
+    (v0.22), grouped by day. An interview line names the round, the interviewer, the
     mode, the duration, and the start time exactly as recorded; an
     offer line states the base, bonus, and equity exactly as recorded.
     The details are paired to their records, not assumed: an interview
@@ -406,6 +406,106 @@ it builds is a draft for a human to review and send.
     when you only want one sort of work, `--wait-days`,
     `--quiet-days`, and `--stale-days` move the bars the checks use,
     and `--json` / `--out` / `--today` work as elsewhere.
+24. **Batch apply** (`autojob/batch.py`, v0.20) — `batch` is `rank`
+    plus `apply` in one pass: it scores every posting in a folder,
+    best first, and builds a full packet for each one that clears the
+    bar — cover letter, match report, review notes, interview prep,
+    tailored resume — logging each to the tracker as it goes. It is
+    still drafts only; nothing is submitted, and every packet is for
+    a human to review before sending. A posting is skipped, with the
+    reason printed, when it cannot be read, when it has no
+    recognisable skills (unmeasurable, never scored as zero), when it
+    falls below `--min-score`, when it is already in the log, or when
+    `--limit` has been reached — so a batch that applies nothing
+    still tells you why. Two files for the same company and title in
+    one folder apply once; the second is skipped as already applied.
+    A bad `--source` / `--referrer` is refused before anything is
+    written, and if a tracker write fails halfway through, the batch
+    stops with the error reported and the packets already written
+    staying logged. `--dry-run` prints the same plan and writes
+    nothing, `--json` / `--out` / `--today` work as elsewhere.
+25. **Data export** (`autojob/export.py`, v0.21) — `export` gets your
+    data out of the log: one row per application, newest applied
+    first, as CSV for a spreadsheet or JSON for another tool. Each
+    row carries the company, title, status, applied date, days since
+    applying, days in the current stage, match score, the skills the
+    posting asked for and which ones you had, source and referrer,
+    closing date, rejection reason, the latest offer's base, currency
+    and first-year total, and counts of interviews, contacts, and
+    follow-ups sent. A missing value stays missing — an application
+    with no offer has empty offer columns, a skill list the log never
+    recorded is an empty cell, and an entry with no parseable applied
+    date sorts last with no day counts. Days in the current stage run
+    from the last recorded status change, so a follow-up sent
+    mid-stage does not make the stage look shorter than it is.
+    `--status` and `--source` narrow the rows; a filter value that is
+    not a real status or channel is refused, not silently matched to
+    nothing. The export reads the log only and records nothing.
+26. **Interview debriefs** (`autojob/debrief.py`, v0.22) — `debrief
+    --record --id APP-001 --date 2026-11-12 --round "Hiring manager"
+    --rating 4 --went-well TEXT --improve TEXT --question TEXT` writes
+    up one interview round while it is still fresh: a rating from 1 to
+    5, what went well, what to improve, and the questions they actually
+    asked (repeat `--question` for each one). The date is the date of
+    the round and can never be in the future — a debrief is written
+    after the round happened, not before. Re-recording the same date
+    and round replaces the earlier write-up instead of adding a second
+    rating for one round. `debrief` on its own lists the write-ups,
+    newest first, with the interviewer from the round they pair with;
+    a write-up for a round that was never recorded as an interview is
+    listed and flagged as unmatched, not hidden. Below the list it
+    names the past rounds with no write-up yet — a round dated today
+    already counts — and the questions asked more than once across
+    interviews, with how many times and at which companies. Recording
+    a debrief is refused on a terminal application and does not move
+    the application's status; it counts as activity for follow-ups and
+    the stale check, never splits a stage stay, and appears in the
+    timeline feed. `--id APP-001` shows one application's write-ups
+    only, `--json` prints the list as JSON, `--out` writes it,
+    `--today` pins the reference date.
+27. **Interview question bank** (`autojob/questions.py`, v0.23) —
+    `questions` reads the questions out of every debrief in the log
+    and groups them — the same question asked by two companies is one
+    row — most-asked first, so the question that keeps coming up is
+    the one you prepare for next. `questions --record --question TEXT
+    --answer TEXT` stores a prepared answer in your own words for one
+    question; re-recording it replaces the earlier one, and
+    `questions --clear-answer` removes it. An answer can be stored
+    before anyone has asked the question — it shows up as not asked
+    yet, not hidden — and a question asked by a company that has since
+    rejected you still counts, because the bank is about the
+    questions, not the live pipeline. Answers live in a small
+    `questions.json` beside the log (`--answers` points somewhere
+    else), the same pattern as the weekly target: a setting, not an
+    event, so recording one never touches the log, appears in no
+    history, and resets no clock. `--unanswered` shows only the
+    questions with no prepared answer yet, and `--question TEXT`
+    narrows the list to questions containing it. `--json` prints the
+    bank as JSON, `--out` writes it, `--today` pins the date an
+    answer was updated.
+28. **Backup and restore** (`autojob/backup.py`, v0.24) — `backup`
+    packs the whole search into one zip: the application log plus
+    the two sidecar settings files (`goals.json` and
+    `questions.json`), with a manifest that records how many
+    applications are inside and when it was made. The application
+    packets are not included — the log records where each one was
+    written, and a packet can be rebuilt with `apply` or `batch` —
+    and the manifest says so. `backup --check FILE` reads a backup
+    back and reports what it holds without writing anything, and
+    `restore --in FILE --out-dir D` unpacks one into a fresh
+    directory. A backup is a copy, never a move: creating one never
+    touches the log or the sidecars, and restoring never touches the
+    backup file. Restore refuses to overwrite — if the target
+    directory already holds a log or a sidecar the backup would
+    write, it stops unless `--force` is given — and a backup is
+    fully validated before the first file is written: the manifest's
+    format and version must match, the application count must match
+    the lines in the log, and every log line must parse as one JSON
+    object. A backup that fails any of that is reported, not
+    unpacked. `--out` names the zip (default:
+    `autojob-backup-YYYY-MM-DD.zip` beside the log), `--goals` and
+    `--answers` point at sidecars kept elsewhere, `--json` prints
+    the summary as JSON, `--today` pins the date in the manifest.
 
 ## Quick start
 
@@ -501,6 +601,17 @@ python -m autojob rejections --reason skills-gap --json
 # stale applications, rejections missing a reason
 python -m autojob next
 python -m autojob next --kind deadline --kind offer --json
+
+# get the whole log out: one row per application, CSV for a
+# spreadsheet or JSON for another tool
+python -m autojob export --out applications.csv
+python -m autojob export --format json --status rejected
+
+# the questions interviews keep asking, most-asked first — and a
+# prepared answer for one of them
+python -m autojob questions
+python -m autojob questions --record --question "Walk me through your most recent project." --answer "Most recent role first."
+python -m autojob questions --unanswered
 ```
 
 ## Demo numbers
@@ -559,6 +670,8 @@ to decide on their 14-day deadlines. The demo closes with an interview
 schedule for the Harbour application, 8 days on: a recruiter screen
 the day before (phone, 30 minutes) and a hiring-manager round two days
 ahead (video, 45 minutes, with Priya Nair) — 1 upcoming, 1 past.
+The demo closes with a debrief of that recruiter screen, 8 days on: rated 4 of 5, the dashboard story went well, the stakeholder answer needs tightening, and two questions recorded — the hiring-manager round is still two days out, so there is nothing to write up yet; 8 days further on, that round is 6 days past with no write-up, so the list flags it as missing.
+The demo closes with a question bank 8 days on: two distinct questions from that debrief, neither with a prepared answer yet; one gets stored for the walk-through question ("Most recent role first"), and the `--unanswered` view names just the stakeholder one.
 The demo closes with a calendar export 8 days on: 4 events in the next
 14 days — the hiring-manager round at 14:30 for 45 minutes, the Northwind
 posting closing date 2 days out, and both offer deadlines 6 days out;
@@ -569,10 +682,10 @@ since last spoke — quiet at `--quiet-days 7`, not at the default 14).
 The demo closes with two closing dates 8 days on: the Northwind posting
 closes in 2 days and the Harbour posting in 22 days, nothing overdue;
 the Harbour listing is then updated to close in 17 days.
-The demo closes with a timeline 8 days on: 12 events, newest first,
+The demo closes with a timeline 8 days on: 13 events, newest first,
 from the day both applications were filed to the hiring-manager round
 two days out — 2 applied, 3 status moves, 1 follow-up, 2 offers,
-2 interviews, 2 contacts; the filtered `--kind interview --kind offer
+2 interviews, 2 contacts, 1 debrief; the filtered `--kind interview --kind offer
 --oldest` view shows just those 4 events, chronologically.
 The demo closes with a weekly goal of 2 applications: both were filed
 this week, so the target is met and the streak is 1 week; 8 days on,
@@ -590,14 +703,17 @@ stack — PyTorch, TensorFlow, Statistics, Machine Learning — on the
 Vector Labs one; the `--reason skills-gap` filter shows just the
 Vector Labs row.
 The demo closes with one prioritised list of what to do. Eight days on, `next` shows two actions: the Northwind posting closes in 2 days and its offer decision is due in 6. Eight days further on, the same list shows three — the closing date is 6 days overdue, the offer decision 2 days overdue, and the Northwind application has gone 8 days without a word, past the 7-day screening wait, so a follow-up is due too (a second nudge, one already sent). At a 7-day quiet bar Sam Chen joins the list as a fourth action, 8 days since the last word; `--kind deadline --kind offer` narrows it back to the two dated actions. The two rejected applications never appear — Harbour and Vector Labs both have their reasons recorded — and nothing is stale, because the last activity was 8 days ago against a 14-day bar.
+The demo finishes with a batch run over the three example postings against a fresh log: Northwind and Harbour get packets and Vector Labs is skipped below the 0.5 bar; run again and all three are skipped, the two as already applied; with `--limit 1` only Northwind lands and Harbour is skipped as beyond the limit; a dry run prints the same plan and writes nothing. The demo closes with an export of the main log, eight days on: three rows, newest applied first, with the Northwind offer's first-year total of 145,000 and the two rejection reasons; the rejected-only JSON view holds just Harbour and Vector Labs. The demo finishes with a backup of that log, eight days on: 3 applications with the goals and question-bank settings inside, checked back as valid, then restored into a fresh directory whose log lists the same three applications.
 
 ## Exit codes
 
 0 ok · 1 usage error · 2 profile/posting load error · 3 match below
 `--fail-under` · 4 draft/apply refused below `--min-coverage` ·
-5 duplicate application · 6 illegal status transition, follow-up refused,
+5 duplicate application, or batch stopped on a tracker write ·
+6 illegal status transition, follow-up refused,
 offer refused, interview refused, contact refused, deadline refused,
-or rejection refused.
+rejection refused, source refused, debrief refused, or restore refused
+(target files already exist).
 
 ## What it will not do
 

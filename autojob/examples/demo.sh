@@ -102,6 +102,33 @@ python3 -m autojob interview --log "$WORK/applications/applications.jsonl" \
     --time 14:30 --note "Bring the dashboard story." --today "$FUTURE"
 python3 -m autojob interview --log "$WORK/applications/applications.jsonl" \
     --today "$FUTURE"
+# Debriefs: write up a round while it is fresh — what went well, what to
+# improve, and the questions they actually asked. The recruiter screen
+# was yesterday, so it gets a debrief (rated 4 of 5); the hiring-manager
+# round is still two days out, so there is nothing to write up yet.
+python3 -m autojob debrief --log "$WORK/applications/applications.jsonl" \
+    --record --id APP-002 --date "$PAST_DAY" --round "Recruiter screen" \
+    --rating 4 --went-well "Dashboard story landed; SQL answers were quick." \
+    --improve "Tighter answer on stakeholder pushback." \
+    --question "Walk me through your most recent project." \
+    --question "How do you handle a stakeholder who disagrees with the numbers?" \
+    --today "$FUTURE"
+python3 -m autojob debrief --log "$WORK/applications/applications.jsonl" \
+    --today "$FUTURE"
+# Question bank: the questions the debriefs recorded, most-asked first.
+# Eight days on there are two, neither with a prepared answer yet; store
+# one for the walk-through question and the --unanswered view names just
+# the stakeholder one.
+python3 -m autojob questions --log "$WORK/applications/applications.jsonl" \
+    --today "$FUTURE"
+python3 -m autojob questions --log "$WORK/applications/applications.jsonl" \
+    --record --question "Walk me through your most recent project." \
+    --answer "Most recent role first: the Data Analyst work, then the reporting work before it." \
+    --today "$FUTURE"
+python3 -m autojob questions --log "$WORK/applications/applications.jsonl" \
+    --today "$FUTURE"
+python3 -m autojob questions --log "$WORK/applications/applications.jsonl" \
+    --today "$FUTURE" --unanswered
 # Calendar: export the next 14 days as .ics — the hiring-manager round
 # (timed, 14:30 for 45 minutes), the Northwind posting closing date
 # (10 days out, inside the window), and both offer deadlines (14 days
@@ -147,6 +174,10 @@ python3 -m autojob timeline --log "$WORK/applications/applications.jsonl" \
     --today "$FUTURE"
 python3 -m autojob timeline --log "$WORK/applications/applications.jsonl" \
     --today "$FUTURE" --kind interview --kind offer --oldest
+# Debriefs, 8 days further on: the hiring-manager round is 6 days past
+# with no write-up, so the list flags it as missing.
+python3 -m autojob debrief --log "$WORK/applications/applications.jsonl" \
+    --today "$(date -d '+16 days' +%F)"
 # Goals: set a weekly target of 2 applications. Both were filed this
 # week, so the target is met and the streak is 1. Eight days on, the
 # new week has none yet, so the week shows 0 of 2 with 2 to go — but
@@ -205,4 +236,43 @@ python3 -m autojob next --log "$WORK/applications/applications.jsonl" \
     --today "$LATER" --quiet-days 7
 python3 -m autojob next --log "$WORK/applications/applications.jsonl" \
     --today "$LATER" --kind deadline --kind offer
+# Batch: apply to a whole folder at once, best fit first. With a fresh
+# log and a 0.5 bar, Northwind (0.625) and Harbour (0.562) get packets
+# and Vector Labs (0.150) is skipped with the reason. Run it again and
+# all three are skipped — the two as already applied, Vector Labs still
+# below the bar. With --limit 1 on another fresh log, only Northwind
+# lands and Harbour is skipped as beyond the limit. A dry run reports
+# the same plan and writes nothing.
+python3 -m autojob batch --profile examples/profile.example.json \
+    --postings-dir examples --min-score 0.5 \
+    --out-dir "$WORK/batch" --today "$(date +%F)"
+python3 -m autojob batch --profile examples/profile.example.json \
+    --postings-dir examples --min-score 0.5 \
+    --out-dir "$WORK/batch" --today "$(date +%F)"
+python3 -m autojob batch --profile examples/profile.example.json \
+    --postings-dir examples --min-score 0.5 --limit 1 \
+    --out-dir "$WORK/batch-limited" --today "$(date +%F)"
+python3 -m autojob batch --profile examples/profile.example.json \
+    --postings-dir examples --min-score 0.5 \
+    --out-dir "$WORK/batch-dry" --dry-run
+# Export: the whole log as one row per application — CSV for a
+# spreadsheet, JSON for another tool. Eight days on, all three
+# applications are in the file with their scores, sources, and latest
+# offers; the rejected-only view holds just Harbour and Vector Labs.
+python3 -m autojob export --log "$WORK/applications/applications.jsonl" \
+    --today "$FUTURE"
+python3 -m autojob export --log "$WORK/applications/applications.jsonl" \
+    --today "$FUTURE" --format json --status rejected
+python3 -m autojob export --log "$WORK/applications/applications.jsonl" \
+    --today "$FUTURE" --out "$WORK/export.csv"
+# Backup: the whole search in one zip — the log plus the goals and
+# question-bank settings. Eight days on, the backup holds 3
+# applications with both sidecars; check it, restore it into a fresh
+# directory, and the restored log lists the same three applications.
+python3 -m autojob backup --log "$WORK/applications/applications.jsonl" \
+    --out "$WORK/search-backup.zip" --today "$FUTURE"
+python3 -m autojob backup --check "$WORK/search-backup.zip"
+python3 -m autojob restore --in "$WORK/search-backup.zip" \
+    --out-dir "$WORK/restored"
+python3 -m autojob list --log "$WORK/restored/applications.jsonl"
 echo "demo OK: packets in $WORK/applications (removed on exit)"

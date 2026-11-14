@@ -292,6 +292,58 @@ def record_contact(log_path, app_id, contact, today=None):
     raise TrackerError(f"no application with id {app_id!r}")
 
 
+def record_debrief(log_path, app_id, debrief, today=None):
+    """Record a debrief (a write-up of one interview round).
+
+    Appends the (already validated) debrief dict to the entry's
+    ``debriefs`` list and a ``{"kind": "debrief", "at": date,
+    "round": label}`` event to its history. A debrief is a write-up
+    of one round, so re-recording the same (date, round) replaces the
+    earlier write-up — and its history event — instead of adding a
+    second rating for the same round. Refuses terminal applications:
+    there is no round left to write up once an application is hired,
+    rejected, or withdrawn. Recording a debrief does not move the
+    application's status — that stays explicit through
+    ``set_status``, the same rule as offers, interviews, and
+    contacts. ``today`` defaults to the real current date; pass an
+    explicit date in tests.
+    """
+    if today is None:
+        today = datetime.date.today().isoformat()
+    entries = read_log(log_path)
+    for entry in entries:
+        if entry["id"] == app_id:
+            if entry.get("status") in TERMINAL:
+                raise TrackerError(
+                    f"cannot record a debrief for {app_id}: status is "
+                    f"{entry['status']!r} (terminal)"
+                )
+            _ensure_history(entry)
+            debriefs = entry.get("debriefs")
+            if not isinstance(debriefs, list):
+                debriefs = []
+                entry["debriefs"] = debriefs
+            key = (debrief.get("date"), debrief.get("round"))
+            debriefs[:] = [d for d in debriefs
+                           if not (isinstance(d, dict)
+                                   and (d.get("date"), d.get("round"))
+                                   == key)]
+            debriefs.append(debrief)
+            entry["history"][:] = [
+                event for event in entry["history"]
+                if not (isinstance(event, dict)
+                        and event.get("kind") == "debrief"
+                        and (event.get("at"), event.get("round")) == key)]
+            entry["history"].append({
+                "kind": "debrief",
+                "at": debrief["date"],
+                "round": debrief.get("round"),
+            })
+            _write_log(log_path, entries)
+            return entry
+    raise TrackerError(f"no application with id {app_id!r}")
+
+
 def record_deadline(log_path, app_id, deadline, today=None):
     """Set (or move) the posting closing date on an application.
 

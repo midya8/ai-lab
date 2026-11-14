@@ -7,6 +7,9 @@ Subcommands (all offline, stdlib only):
   match     --profile P --posting J [--fail-under X] [--json]
   draft     --profile P --posting J [--min-coverage X] [--out F] [--dry-run]
   apply     --profile P --posting J [--min-coverage X] [--out-dir D] [--log L] [--dry-run]
+  batch     --profile P --postings-dir D [--min-score X] [--limit N]
+            [--out-dir D] [--log L] [--source S] [--referrer R] [--dry-run]
+            [--json] [--out F] [--today YYYY-MM-DD]
   list      [--log L] [--status S]
   status    --log L --id APP-001 --to interview
   report    [--log L] [--json] [--stale-days N] [--today YYYY-MM-DD]
@@ -48,12 +51,30 @@ Subcommands (all offline, stdlib only):
   next      [--log L] [--days N] [--kind KIND ...] [--wait-days N]
             [--quiet-days N] [--stale-days N] [--json] [--out F]
             [--today YYYY-MM-DD]
+  export    [--log L] [--format csv|json] [--status S] [--source CHANNEL]
+            [--out F] [--today YYYY-MM-DD]
+  debrief   [--log L] [--id APP-001] [--json] [--out F] [--today YYYY-MM-DD]
+  debrief   --record --id APP-001 --date YYYY-MM-DD --round LABEL
+            [--rating 1-5] [--went-well TEXT] [--improve TEXT]
+            [--question TEXT ...] [--today YYYY-MM-DD]
+  questions [--log L] [--answers A] [--unanswered] [--question TEXT]
+            [--json] [--out F] [--today YYYY-MM-DD]
+  questions --record --question TEXT --answer TEXT [--answers A]
+            [--today YYYY-MM-DD]
+  questions --clear-answer --question TEXT [--answers A]
+            [--today YYYY-MM-DD]
+  backup    [--log L] [--out F] [--goals G] [--answers A] [--json]
+            [--today YYYY-MM-DD]
+  backup    --check FILE [--json]
+  restore   --in FILE --out-dir D [--force] [--json]
 
 Exit codes: 0 ok · 1 usage error · 2 profile/posting load error ·
 3 match below --fail-under · 4 draft/apply refused below --min-coverage ·
-5 duplicate application · 6 illegal status transition, follow-up refused,
+5 duplicate application, or batch stopped on a tracker write ·
+6 illegal status transition, follow-up refused,
 offer refused, interview refused, contact refused, deadline refused,
-rejection refused, or source refused.
+rejection refused, source refused, debrief refused, or restore refused
+(target files already exist).
 
 autojob prepares application packets for a human to review and submit. It
 never submits anything and never invents experience: every fact in a draft
@@ -70,13 +91,23 @@ from pathlib import Path
 
 from . import __version__
 from .analytics import analytics_json, analytics_report, compute_analytics
+from .backup import (BackupError, backup_json, create_backup,
+                     default_backup_path, inspect_backup,
+                     render_backup_markdown, restore_backup)
+from .batch import (BatchError, batch_apply, batch_json, build_packet_files,
+                    packet_dir_for, render_batch_markdown)
 from .calendar import build_calendar, calendar_json, render_ics
 from .contacts import (ContactError, collect_contacts, contacts_for,
                        contacts_json, render_contacts_markdown,
                        validate_contact)
 from .deadlines import (DeadlineError, collect_deadlines, deadlines_json,
                         render_deadlines_markdown, validate_deadline)
+from .debrief import (DebriefError, collect_debriefs, debrief_json,
+                      debriefs_for, render_debrief_markdown,
+                      validate_debrief)
 from .digest import build_digest, digest_json, render_digest_markdown
+from .export import (EXPORT_FORMATS, ExportError, collect_export, export_csv,
+                     export_json)
 from .followup import due_followups, followup_json, followup_report
 from .goals import (GoalsError, collect_goals, default_goals_path,
                     goals_json, load_goals, render_goals_markdown,
@@ -84,7 +115,7 @@ from .goals import (GoalsError, collect_goals, default_goals_path,
 from .interview import (InterviewError, collect_interviews,
                         interview_json, interviews_for,
                         render_interview_markdown, validate_interview)
-from .letter import draft_letter, review_notes
+from .letter import draft_letter
 from .match import match_profile
 from .next import (NEXT_KINDS, NextError, collect_next, next_json,
                    render_next_markdown)
@@ -94,6 +125,10 @@ from .plan import build_plan, plan_json, render_plan_markdown
 from .posting import parse_posting
 from .prep import build_prep, prep_json, render_prep_markdown
 from .profile import ProfileError, load_profile, skill_map
+from .questions import (QuestionsError, clear_answer, collect_questions,
+                        default_questions_path, load_answers,
+                        questions_json, record_answer,
+                        render_questions_markdown, validate_answer)
 from .rank import rank_json, rank_postings, render_rank_markdown
 from .rejections import (REJECTION_REASONS, RejectionError,
                          collect_rejections, rejections_json,
@@ -107,10 +142,11 @@ from .sources import (SOURCE_CHOICES, SourceError, collect_sources,
 from .tailor import build_tailor, render_tailor_markdown, tailor_json
 from .timeline import (KINDS, collect_timeline, render_timeline_markdown,
                        timeline_json)
-from .tracker import (TrackerError, add_application, find_application,
-                      read_log, record_contact, record_deadline,
-                      record_followup, record_interview, record_offer,
-                      record_rejection, record_source, set_status, slug)
+from .tracker import (STATUSES, TrackerError, add_application,
+                      find_application, read_log, record_contact,
+                      record_deadline, record_debrief, record_followup,
+                      record_interview, record_offer, record_rejection,
+                      record_source, set_status)
 
 DEFAULT_OUT_DIR = "applications"
 
@@ -201,18 +237,8 @@ def _cmd_draft(args):
 
 
 def _build_packet(profile, posting, match, out_dir):
-    packet = Path(out_dir) / f"{slug(posting.get('company'))}-{slug(posting.get('title'))}"
-    letter = draft_letter(profile, posting, match)
-    notes = review_notes(profile, posting, match)
-    prep = render_prep_markdown(build_prep(profile, posting, match))
-    tailor = render_tailor_markdown(build_tailor(profile, posting, match))
-    return packet, {
-        "cover-letter.md": letter,
-        "match.json": match_json(posting, match),
-        "review-notes.md": notes,
-        "interview-prep.md": prep,
-        "tailored-resume.md": tailor,
-    }
+    packet = packet_dir_for(out_dir, posting)
+    return packet, build_packet_files(profile, posting, match)
 
 
 def _cmd_apply(args):
@@ -283,6 +309,44 @@ def _cmd_apply(args):
     print(f"packet written to {packet}/")
     print(f"logged as {entry['id']} (status: applied)")
     print("Review the letter before submitting — autojob does not submit applications.")
+    return 0
+
+
+def _cmd_batch(args):
+    profile = _load_profile(args.profile)
+    if profile is None:
+        return 2
+    if args.today is not None:
+        try:
+            datetime.date.fromisoformat(args.today)
+        except ValueError:
+            print(f"error: --today must be YYYY-MM-DD, got {args.today}",
+                  file=sys.stderr)
+            return 1
+    log_path = args.log or str(Path(args.out_dir) / "applications.jsonl")
+    try:
+        result = batch_apply(
+            profile, args.postings_dir, args.out_dir, log_path,
+            min_score=args.min_score, limit=args.limit,
+            source=args.source, referrer=args.referrer,
+            dry_run=args.dry_run, today=args.today,
+        )
+    except BatchError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    except (ValueError, TrackerError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    text = batch_json(result) if args.json else render_batch_markdown(result)
+    if args.out:
+        Path(args.out).write_text(text, encoding="utf-8")
+        print(f"wrote {args.out}")
+    else:
+        print(text, end="")
+    if result["error"]:
+        print(f"error: batch stopped early: {result['error']}",
+              file=sys.stderr)
+        return 5
     return 0
 
 
@@ -733,6 +797,206 @@ def _cmd_contacts(args):
     return 0
 
 
+def _cmd_debrief(args):
+    if args.today is not None:
+        try:
+            today = datetime.date.fromisoformat(args.today)
+        except ValueError:
+            print(f"error: --today must be YYYY-MM-DD, got {args.today!r}",
+                  file=sys.stderr)
+            return 1
+    else:
+        today = datetime.date.today()
+    record_only = [args.date, args.round, args.rating, args.went_well,
+                   args.improve, args.question]
+    if args.record:
+        if not args.id:
+            print("error: --record needs --id APP-001", file=sys.stderr)
+            return 1
+        try:
+            debrief = validate_debrief({
+                "date": args.date,
+                "round": args.round,
+                "rating": args.rating,
+                "went_well": args.went_well,
+                "improve": args.improve,
+                "questions": args.question,
+            }, today=today.isoformat())
+        except DebriefError as exc:
+            print(f"error: cannot record debrief: {exc}", file=sys.stderr)
+            return 1
+        try:
+            entry = record_debrief(args.log, args.id, debrief,
+                                   today=today.isoformat())
+        except TrackerError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 6
+        print(f"recorded a debrief for {entry['id']}: {entry['company']} — "
+              f"{entry['title']} ({debrief['round']} on {debrief['date']})")
+        return 0
+    if any(value is not None for value in record_only):
+        print("error: --date, --round, --rating, --went-well, --improve "
+              "and --question need --record", file=sys.stderr)
+        return 1
+    try:
+        entries = read_log(args.log)
+    except TrackerError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    if args.id:
+        entry, rows, missing = debriefs_for(entries, args.id, today=today)
+        if entry is None:
+            print(f"error: no application with id {args.id!r}", file=sys.stderr)
+            return 1
+        data = collect_debriefs([entry], today=today)
+        data = {"debriefs": rows, "missing": missing,
+                "summary": data["summary"]}
+    else:
+        data = collect_debriefs(entries, today=today)
+    text = debrief_json(data) if args.json else render_debrief_markdown(data)
+    if args.out:
+        Path(args.out).write_text(text, encoding="utf-8")
+        print(f"wrote {args.out}")
+    else:
+        print(text, end="")
+    return 0
+
+
+def _cmd_questions(args):
+    if args.today is not None:
+        try:
+            today = datetime.date.fromisoformat(args.today)
+        except ValueError:
+            print(f"error: --today must be YYYY-MM-DD, got {args.today!r}",
+                  file=sys.stderr)
+            return 1
+    else:
+        today = datetime.date.today()
+    answers_path = args.answers or default_questions_path(args.log)
+    if args.record and args.clear_answer:
+        print("error: --record and --clear-answer cannot be combined",
+              file=sys.stderr)
+        return 1
+    if args.record:
+        if not args.question or not args.answer:
+            print("error: --record needs --question TEXT and --answer TEXT",
+                  file=sys.stderr)
+            return 1
+        try:
+            validate_answer(args.question, args.answer)
+        except QuestionsError as exc:
+            print(f"error: cannot record answer: {exc}", file=sys.stderr)
+            return 1
+        try:
+            record, replaced = record_answer(
+                answers_path, args.question, args.answer,
+                today=today.isoformat())
+        except QuestionsError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+        verb = "updated" if replaced else "recorded"
+        print(f"{verb} a prepared answer for {record['question']!r}")
+        return 0
+    if args.clear_answer:
+        if not args.question:
+            print("error: --clear-answer needs --question TEXT",
+                  file=sys.stderr)
+            return 1
+        try:
+            removed = clear_answer(answers_path, args.question)
+        except QuestionsError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+        if removed:
+            print(f"cleared the prepared answer for "
+                  f"{args.question.strip()!r}")
+        else:
+            print(f"no prepared answer stored for "
+                  f"{args.question.strip()!r}")
+        return 0
+    if args.answer is not None:
+        print("error: --answer needs --record", file=sys.stderr)
+        return 1
+    try:
+        entries = read_log(args.log)
+    except TrackerError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    try:
+        answers = load_answers(answers_path)
+    except QuestionsError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    data = collect_questions(entries, answers=answers,
+                             only_unanswered=args.unanswered,
+                             contains=args.question)
+    text = (questions_json(data) if args.json
+            else render_questions_markdown(data))
+    if args.out:
+        Path(args.out).write_text(text, encoding="utf-8")
+        print(f"wrote {args.out}")
+    else:
+        print(text, end="")
+    return 0
+
+
+def _cmd_backup(args):
+    if args.check:
+        try:
+            data = inspect_backup(args.check)
+        except BackupError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+        if args.json:
+            print(backup_json(data), end="")
+        else:
+            print(render_backup_markdown(data), end="")
+        return 0
+    if args.today is not None:
+        try:
+            datetime.date.fromisoformat(args.today)
+        except ValueError:
+            print(f"error: --today must be YYYY-MM-DD, got {args.today!r}",
+                  file=sys.stderr)
+            return 1
+    out_path = args.out or default_backup_path(
+        args.log, today=args.today)
+    try:
+        data = create_backup(args.log, out_path, goals_path=args.goals,
+                             answers_path=args.answers, today=args.today)
+    except BackupError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    if args.json:
+        print(backup_json(data), end="")
+    else:
+        print(render_backup_markdown(data), end="")
+    return 0
+
+
+def _cmd_restore(args):
+    if not args.in_file:
+        print("error: --in FILE is required", file=sys.stderr)
+        return 1
+    if not args.out_dir:
+        print("error: --out-dir D is required", file=sys.stderr)
+        return 1
+    try:
+        data = restore_backup(args.in_file, args.out_dir,
+                              force=args.force)
+    except BackupError as exc:
+        message = str(exc)
+        print(f"error: {message}", file=sys.stderr)
+        if message.startswith("refusing to restore"):
+            return 6
+        return 2
+    if args.json:
+        print(backup_json(data), end="")
+    else:
+        print(render_backup_markdown(data), end="")
+    return 0
+
+
 def _cmd_timeline(args):
     if args.today is not None:
         try:
@@ -1044,6 +1308,51 @@ def _cmd_next(args):
     return 0
 
 
+def _cmd_export(args):
+    if args.today is not None:
+        try:
+            today = datetime.date.fromisoformat(args.today)
+        except ValueError:
+            print(f"error: --today must be YYYY-MM-DD, got {args.today!r}",
+                  file=sys.stderr)
+            return 1
+    else:
+        today = datetime.date.today()
+    if args.format not in EXPORT_FORMATS:
+        print(f"error: --format must be one of "
+              f"{', '.join(EXPORT_FORMATS)}, got {args.format!r}",
+              file=sys.stderr)
+        return 1
+    if args.status is not None and args.status not in STATUSES:
+        print(f"error: --status must be one of "
+              f"{', '.join(STATUSES)}, got {args.status!r}",
+              file=sys.stderr)
+        return 1
+    if args.source is not None and args.source not in SOURCE_CHOICES:
+        print(f"error: --source must be one of "
+              f"{', '.join(SOURCE_CHOICES)}, got {args.source!r}",
+              file=sys.stderr)
+        return 1
+    try:
+        entries = read_log(args.log)
+    except TrackerError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    try:
+        data = collect_export(entries, today=today, status=args.status,
+                              source=args.source)
+    except ExportError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    text = export_json(data) if args.format == "json" else export_csv(data)
+    if args.out:
+        Path(args.out).write_text(text, encoding="utf-8")
+        print(f"wrote {args.out}")
+    else:
+        print(text, end="")
+    return 0
+
+
 def _cmd_calendar(args):
     if args.today is not None:
         try:
@@ -1152,6 +1461,31 @@ def build_parser():
                         "on the application")
     p.add_argument("--dry-run", action="store_true")
     p.set_defaults(func=_cmd_apply)
+
+    p = sub.add_parser("batch", help="apply to a folder of postings, best "
+                                     "fit first, with a full packet each")
+    p.add_argument("--profile", required=True)
+    p.add_argument("--postings-dir", required=True,
+                   help="directory of .md / .txt postings to apply to")
+    p.add_argument("--min-score", type=float, default=0.0,
+                   help="skip postings scoring below this (0-1)")
+    p.add_argument("--limit", type=int, default=None,
+                   help="apply to at most this many postings, best first")
+    p.add_argument("--out-dir", default=DEFAULT_OUT_DIR)
+    p.add_argument("--log")
+    p.add_argument("--source")
+    p.add_argument("--referrer", default=None,
+                   help="with --source referral: who referred you; with "
+                        "any other source: the recruiter or person who "
+                        "brought the role, if any")
+    p.add_argument("--dry-run", action="store_true")
+    p.add_argument("--json", action="store_true")
+    p.add_argument("--out", default=None,
+                   help="write the batch summary to this file instead of stdout")
+    p.add_argument("--today", default=None,
+                   help="date to log applications under, YYYY-MM-DD "
+                        "(default: today)")
+    p.set_defaults(func=_cmd_batch)
 
     p = sub.add_parser("list", help="list logged applications")
     p.add_argument("--log", default=f"{DEFAULT_OUT_DIR}/applications.jsonl")
@@ -1390,7 +1724,7 @@ def build_parser():
                                           "everything recorded — "
                                           "applications, status moves, "
                                           "follow-ups, interviews, contacts, "
-                                          "offers — newest first")
+                                          "offers, and debriefs — newest first")
     p.add_argument("--log", default=f"{DEFAULT_OUT_DIR}/applications.jsonl")
     p.add_argument("--json", action="store_true")
     p.add_argument("--out", default=None,
@@ -1516,6 +1850,117 @@ def build_parser():
                    help="days without movement before an application "
                         "counts as stale (default 14)")
     p.set_defaults(func=_cmd_next)
+
+    p = sub.add_parser("export", help="the whole application log as one "
+                                        "row per application: CSV for a "
+                                        "spreadsheet, JSON for another tool")
+    p.add_argument("--log", default=f"{DEFAULT_OUT_DIR}/applications.jsonl")
+    p.add_argument("--format", default="csv",
+                   help="csv (default) or json")
+    p.add_argument("--out", default=None,
+                   help="write the export to this file instead of stdout")
+    p.add_argument("--today", default=None,
+                   help="reference date YYYY-MM-DD (default: today)")
+    p.add_argument("--status", default=None,
+                   help="only applications in this status: "
+                        + ", ".join(STATUSES))
+    p.add_argument("--source", default=None,
+                   help="only applications from this channel: "
+                        + ", ".join(SOURCE_CHOICES))
+    p.set_defaults(func=_cmd_export)
+
+    p = sub.add_parser("debrief", help="write up an interview round while "
+                                       "it is fresh, or list the write-ups: "
+                                       "rating, what went well, what to "
+                                       "improve, and the questions asked")
+    p.add_argument("--log", default=f"{DEFAULT_OUT_DIR}/applications.jsonl")
+    p.add_argument("--json", action="store_true")
+    p.add_argument("--out", default=None,
+                   help="write the debrief list to this file instead of stdout")
+    p.add_argument("--today", default=None,
+                   help="reference date YYYY-MM-DD (default: today)")
+    p.add_argument("--record", action="store_true",
+                   help="record a debrief instead of listing")
+    p.add_argument("--id", default=None,
+                   help="with --record: the application to record for; "
+                        "without it: show only this application's debriefs")
+    p.add_argument("--date", default=None,
+                   help="with --record: date of the round (YYYY-MM-DD, "
+                        "required, never in the future)")
+    p.add_argument("--round", default=None,
+                   help="with --record: the round label, e.g. "
+                        "'Hiring manager' (required)")
+    p.add_argument("--rating", type=int, default=None,
+                   help="with --record: how it went, 1 to 5")
+    p.add_argument("--went-well", default=None,
+                   help="with --record: what went well")
+    p.add_argument("--improve", default=None,
+                   help="with --record: what to improve next time")
+    p.add_argument("--question", default=None, action="append",
+                   help="with --record: a question they actually asked "
+                        "(repeatable)")
+    p.set_defaults(func=_cmd_debrief)
+
+    p = sub.add_parser("questions", help="the interview question bank: "
+                                          "the questions debriefs recorded, "
+                                          "most-asked first, with the "
+                                          "prepared answers you stored")
+    p.add_argument("--log", default=f"{DEFAULT_OUT_DIR}/applications.jsonl")
+    p.add_argument("--answers", default=None,
+                   help="prepared answers file (default: questions.json "
+                        "beside the log)")
+    p.add_argument("--json", action="store_true")
+    p.add_argument("--out", default=None,
+                   help="write the question bank to this file instead of "
+                        "stdout")
+    p.add_argument("--today", default=None,
+                   help="reference date YYYY-MM-DD (default: today)")
+    p.add_argument("--record", action="store_true",
+                   help="record a prepared answer instead of listing")
+    p.add_argument("--clear-answer", action="store_true",
+                   help="remove a prepared answer instead of listing")
+    p.add_argument("--question", default=None,
+                   help="with --record or --clear-answer: the question; "
+                        "without them: only questions containing this text")
+    p.add_argument("--answer", default=None,
+                   help="with --record: your prepared answer, in your own "
+                        "words")
+    p.add_argument("--unanswered", action="store_true",
+                   help="list only questions with no prepared answer yet")
+    p.set_defaults(func=_cmd_questions)
+
+    p = sub.add_parser("backup", help="pack the application log and the "
+                                       "goals/questions settings into one "
+                                       "zip file, or check one with --check")
+    p.add_argument("--log", default=f"{DEFAULT_OUT_DIR}/applications.jsonl")
+    p.add_argument("--out", default=None,
+                   help="backup file to write (default: "
+                        "autojob-backup-YYYY-MM-DD.zip beside the log)")
+    p.add_argument("--goals", default=None,
+                   help="goals file to include (default: goals.json "
+                        "beside the log)")
+    p.add_argument("--answers", default=None,
+                   help="prepared answers file to include (default: "
+                        "questions.json beside the log)")
+    p.add_argument("--json", action="store_true")
+    p.add_argument("--today", default=None,
+                   help="date recorded in the manifest, YYYY-MM-DD "
+                        "(default: today)")
+    p.add_argument("--check", default=None,
+                   help="inspect this backup file instead of creating one")
+    p.set_defaults(func=_cmd_backup)
+
+    p = sub.add_parser("restore", help="unpack a backup into a directory; "
+                                        "refuses to overwrite files already "
+                                        "there unless --force is given")
+    p.add_argument("--in", dest="in_file", required=True,
+                   help="backup file to restore from")
+    p.add_argument("--out-dir", required=True,
+                   help="directory to restore the log and settings into")
+    p.add_argument("--force", action="store_true",
+                   help="overwrite files already in the target directory")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=_cmd_restore)
 
     p = sub.add_parser("report", help="funnel analytics over logged applications")
     p.add_argument("--log", default=f"{DEFAULT_OUT_DIR}/applications.jsonl")
