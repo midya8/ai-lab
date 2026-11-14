@@ -35,3 +35,4 @@ from .wasserstein import wasserstein1, wasserstein_drift  # noqa: F401
 from .mmd import mmd_drift  # noqa: F401
 from .driftreport import drift_report  # noqa: F401
 from .labelshift import bbse_weights  # noqa: F401
+from .covweights import covariate_shift_weights  # noqa: F401
