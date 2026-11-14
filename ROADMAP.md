@@ -307,6 +307,7 @@
 - rlgrid: dueling network option `dueling=True` (`DuelQNet`, finite-difference gradient check, 34 tests total)
 - rlgrid: n-step returns for DQN `n_step=k` (tail flush, gamma^k bootstrap; 36 tests total)
 - rlgrid: `q_bias` Q-vs-Q* diagnostic + experiment (null result: no overestimation to fix; 38 tests total)
+- datadoctor: `drift_report` one-call triage (none/marginal/joint-only/both; 3 tests, 133 total)
 
 
 ## Next

@@ -33,4 +33,5 @@ from .adversarial import adversarial_validation, auc  # noqa: F401
 from .catdrift import categorical_drift  # noqa: F401
 from .wasserstein import wasserstein1, wasserstein_drift  # noqa: F401
 from .mmd import mmd_drift  # noqa: F401
+from .driftreport import drift_report  # noqa: F401
 from .labelshift import bbse_weights  # noqa: F401
