@@ -38,3 +38,32 @@ def test_real_bpe_fertility_drops_with_vocab():
 def test_empty_raises():
     with pytest.raises(ValueError):
         token_stats(Fake(), "   ")
+
+
+def test_dead_vocab_counts_and_top():
+    from bpelab.stats import dead_vocab
+
+    class T:
+        vocab_size = 5
+
+        def encode(self, text):
+            return [0, 0, 0, 2]
+    d = dead_vocab(T(), "x")
+    assert d["dead_ids"] == [1, 3, 4]
+    assert math.isclose(d["dead_fraction"], 0.6)
+    assert d["top"][0] == (0, 3)
+
+
+def test_dead_vocab_heldout_bpe_has_dead_tokens():
+    from bpelab.stats import dead_vocab
+    train = "the quick brown fox jumps over the lazy dog. " * 30 + "zebra quartz " * 20
+    tok = BPETokenizer.train(train, 330)
+    d = dead_vocab(tok, "the dog. the fox. " * 5)
+    assert d["dead_fraction"] > 0.5
+    assert dead_vocab(tok, train)["dead_fraction"] < d["dead_fraction"]
+
+
+def test_dead_vocab_empty_raises():
+    from bpelab.stats import dead_vocab
+    with pytest.raises(ValueError):
+        dead_vocab(Fake.__mro__[0]() if False else type("E", (), {"vocab_size": 3, "encode": lambda s, t: []})(), "")

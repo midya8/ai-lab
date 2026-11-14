@@ -51,3 +51,7 @@ Mixed: unigram is slightly worse at small vocabs and better at 768. Pruning uses
 ## Tokenizer statistics
 
 `bpelab.token_stats(tok, text)` works with any tokenizer exposing `encode` and `vocab_size` and returns fertility (tokens per word), bytes per token, vocabulary utilisation and Renyi (alpha=2.5) efficiency. 4 tests.
+
+## Dead-vocabulary check
+
+`bpelab.dead_vocab(tok, held_out_text)` lists token ids that never occur in the given text, the dead fraction, and the most frequent ids. Useful for spotting a vocab that is over-sized for its domain. 3 tests.

@@ -28,3 +28,22 @@ def token_stats(tok, text: str) -> dict:
         "vocab_utilisation": len(counts) / tok.vocab_size,
         "renyi_efficiency": renyi / math.log(tok.vocab_size),
     }
+
+
+def dead_vocab(tok, text: str, top: int = 5) -> dict:
+    """Which token ids never occur in `text` (e.g. held-out data).
+
+    Returns the dead ids, the dead fraction, and the `top` most frequent ids.
+    A high dead fraction on held-out text suggests the vocab is over-sized for
+    the domain (or the training corpus was unrepresentative).
+    """
+    ids = tok.encode(text)
+    if not ids:
+        raise ValueError("text produced no tokens")
+    counts = Counter(ids)
+    dead = [i for i in range(tok.vocab_size) if i not in counts]
+    return {
+        "dead_ids": dead,
+        "dead_fraction": len(dead) / tok.vocab_size,
+        "top": counts.most_common(top),
+    }
