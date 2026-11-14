@@ -87,3 +87,8 @@ Single-seed check on the Gaussian-classes data (30k test points, alpha=0.1; sett
 | RAPS lam=0.2,k=2 | 0.893 | 1.793 |
 
 RAPS shrinks APS sets modestly here but stays above LAC in size; the effect is expected to be larger with many classes (this data has 6).
+
+
+## Jackknife+ / CV+
+
+`JackknifePlus(fit_fn, alpha, folds=None)` uses every point for training and calibration (no held-out split). `fit_fn(X, y)` returns a predict callable; `folds=None` is leave-one-out, `folds=K` is CV+. Guarantee is coverage >= 1-2*alpha; tests check it against a brute-force implementation of the formula and empirically (about 0.9 at alpha=0.1 on a linear-Gaussian toy, which is a synthetic check, not a benchmark).

@@ -234,3 +234,42 @@ def logistic_density_ratio(X_cal, X_test, degree=2, steps=400, lr=0.5, l2=1e-3):
         Zx = np.hstack([np.ones((len(X), 1)), (feats(X) - mu) / sd])
         return ratio * np.exp(np.clip(Zx @ b, -30, 30))
     return w
+
+
+# ------------------------------------------------------------- jackknife+ / CV+ (no held-out split)
+class JackknifePlus:
+    """Jackknife+ / CV+ (Barber et al. 2021). fit_fn(X, y) -> predict callable.
+
+    folds=None is leave-one-out (jackknife+); folds=K is K-fold CV+. Every point is used for both
+    training and calibration; guaranteed coverage is >= 1 - 2*alpha (typically ~ 1 - alpha).
+    Interval at x: [ q-_alpha{mu_{-i}(x) - R_i}, q+_alpha{mu_{-i}(x) + R_i} ], R_i the held-out residual
+    of the model that did not see point i."""
+
+    def __init__(self, fit_fn, alpha=0.1, folds=None, seed=0):
+        self.fit_fn, self.alpha, self.folds, self.seed = fit_fn, alpha, folds, seed
+
+    def fit(self, X, y):
+        X, y = np.asarray(X), np.asarray(y, float)
+        n = len(y)
+        K = n if self.folds is None else self.folds
+        fold = (np.arange(n) if self.folds is None
+                else np.random.default_rng(self.seed).permutation(n) % K)
+        self.models, self.fold_of = [], fold
+        self.R = np.empty(n)
+        for k in range(K):
+            te = fold == k
+            m = self.fit_fn(X[~te], y[~te])
+            self.models.append(m)
+            self.R[te] = np.abs(y[te] - m(X[te]))
+        return self
+
+    def predict(self, X):
+        n = len(self.R)
+        P = np.stack([m(X) for m in self.models])[self.fold_of]       # (n, len(X)): mu_{-k(i)}(x)
+        k = math.ceil((n + 1) * (1 - self.alpha))
+        if k > n:
+            inf = np.full(P.shape[1], np.inf)
+            return -inf, inf
+        hi = np.sort(P + self.R[:, None], axis=0)[k - 1]
+        lo = -np.sort(-(P - self.R[:, None]), axis=0)[k - 1]
+        return lo, hi

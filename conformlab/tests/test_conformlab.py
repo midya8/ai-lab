@@ -224,3 +224,43 @@ def test_raps_coverage_and_not_larger_than_aps_on_hard_classes():
     assert sizes["raps"] <= sizes["aps"] + 0.05
     with pytest.raises(ValueError):
         ConformalClassifier(clf.predict_proba, 0.1, "raps", mondrian=True)
+
+
+def _ridge_fit(X, y):
+    A = np.c_[X, np.ones(len(X))]
+    w = np.linalg.solve(A.T @ A + 1e-3 * np.eye(A.shape[1]), A.T @ y)
+    return lambda Z: np.c_[Z, np.ones(len(Z))] @ w
+
+
+def test_jackknife_plus_matches_bruteforce_formula():
+    rng = np.random.default_rng(1)
+    X = rng.normal(size=(12, 1)); y = 2 * X[:, 0] + rng.normal(size=12)
+    Xt = rng.normal(size=(5, 1))
+    lo, hi = JackknifePlus(_ridge_fit, alpha=0.2).fit(X, y).predict(Xt)
+    n, k = 12, math.ceil(13 * 0.8)
+    for j in range(5):
+        up, dn = [], []
+        for i in range(n):
+            m = _ridge_fit(np.delete(X, i, 0), np.delete(y, i))
+            r = abs(y[i] - m(X[i:i + 1])[0]); mu = m(Xt[j:j + 1])[0]
+            up.append(mu + r); dn.append(mu - r)
+        assert hi[j] == pytest.approx(np.sort(up)[k - 1])
+        assert lo[j] == pytest.approx(-np.sort(-np.array(dn))[k - 1])
+
+
+@pytest.mark.parametrize("folds", [None, 5])
+def test_jackknife_plus_coverage(folds):
+    rng = np.random.default_rng(2)
+    cov = []
+    for _ in range(40):
+        X = rng.normal(size=(60, 2)); y = X @ [1.0, -2.0] + rng.normal(size=60)
+        Xt = rng.normal(size=(400, 2)); yt = Xt @ [1.0, -2.0] + rng.normal(size=400)
+        lo, hi = JackknifePlus(_ridge_fit, alpha=0.1, folds=folds).fit(X, y).predict(Xt)
+        cov.append(np.mean((yt >= lo) & (yt <= hi)))
+    assert 0.86 < np.mean(cov) < 0.97       # theory floor is 0.8; in practice ~0.9
+
+
+def test_jackknife_plus_too_small_gives_inf():
+    X = np.arange(5.0)[:, None]; y = X[:, 0]
+    lo, hi = JackknifePlus(_ridge_fit, alpha=0.05).fit(X, y).predict(X)
+    assert np.all(np.isinf(hi)) and np.all(np.isinf(lo))
