@@ -67,3 +67,18 @@ blunder list. UCT (c=1.4, seed 0) on a seeded sample of 300 positions, one seed,
 | 50 | 0.970 |
 | 200 | 0.987 |
 | 1000 | 0.997 |
+
+## Value-estimation error
+
+`mctslab.value_error` checks the *value* UCT reports, not just the move: `estimate_value` reads the
+most-visited child's mean reward (mapped to [-1, 1]) and `value_error_curve` compares it with exact
+minimax over reachable tic-tac-toe positions (150 sampled non-terminal states, forced-move states skipped).
+
+| iterations | MAE vs exact | within 1/3 of exact |
+|---|---|---|
+| 25 | 0.170 | 79% |
+| 100 | 0.122 | 86% |
+| 400 | 0.084 | 91% |
+| 1600 | 0.047 | 97% |
+
+Error falls steadily with budget; single seed per state, so treat the digits as approximate.

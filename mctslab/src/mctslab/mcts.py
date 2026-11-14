@@ -21,7 +21,7 @@ def _rollout(game, state, rng):
     return game.winner(state)  # +1/-1/0 absolute
 
 
-def uct_search(game, state, iterations=500, c=1.4, rng=None):
+def uct_search(game, state, iterations=500, c=1.4, rng=None, return_root=False):
     """Return (best_move, visit_counts dict). Move chosen by most visits."""
     rng = rng or random.Random(0)
     moves = game.legal_moves(state)
@@ -49,6 +49,8 @@ def uct_search(game, state, iterations=500, c=1.4, rng=None):
             node = node.parent
     counts = {ch.move: ch.n for ch in root.children}
     best = max(counts, key=lambda m: (counts[m], -m))
+    if return_root:
+        return best, counts, root
     return best, counts
 
 
