@@ -54,3 +54,16 @@ temperature sampling plus 25% random moves). `net.prior_fn` / `net.value_fn` plu
 With only 30 training rounds it *lost* to UCT (12/4/24), so the learning is real but needs enough
 self-play. Caveats: tic-tac-toe only, single seed, tiny sample; the 2 losses to a perfect player show
 it is not solved. Gravity (Connect-Four) boards are unsupported since moves must equal cell indices.
+
+## Move accuracy vs minimax (`mctslab.accuracy`)
+
+`reachable_states(game, limit, seed)` enumerates non-terminal positions (4,520 in tic-tac-toe);
+`optimal_move_rate(game, choose, states)` scores a player's move against exact minimax and returns the
+blunder list. UCT (c=1.4, seed 0) on a seeded sample of 300 positions, one seed, so ±~1.5 pts noise:
+
+| iterations | optimal-move rate |
+|---|---|
+| 10 | 0.870 |
+| 50 | 0.970 |
+| 200 | 0.987 |
+| 1000 | 0.997 |
