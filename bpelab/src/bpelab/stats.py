@@ -79,3 +79,21 @@ def worst_words(tok, text: str, top: int = 5) -> list:
         if w not in seen:
             seen[w] = len(tok.encode(w))
     return sorted(seen.items(), key=lambda kv: (-kv[1], kv[0]))[:top]
+
+
+def transfer_matrix(toks: dict, corpora: dict) -> dict:
+    """Domain-transfer table: bytes/token of each tokenizer on each corpus.
+
+    Returns {tokenizer_name: {corpus_name: bytes_per_token}}. A tokenizer trained
+    on one domain usually compresses others worse; the gap (row max - diagonal) shows it.
+    """
+    if not toks or not corpora:
+        raise ValueError("need at least one tokenizer and one corpus")
+    out = {}
+    for tn, t in toks.items():
+        row = {}
+        for cn, text in corpora.items():
+            n = len(t.encode(text))
+            row[cn] = len(text.encode("utf-8")) / n if n else 0.0
+        out[tn] = row
+    return out

@@ -83,3 +83,19 @@ def test_compare_tokenizers_empty_raises():
     from bpelab.stats import compare_tokenizers
     with pytest.raises(ValueError):
         compare_tokenizers({}, "x y")
+
+
+def test_transfer_matrix_in_domain_beats_out_of_domain():
+    from bpelab import transfer_matrix
+    a = "the cat sat on the mat and the cat ran " * 30
+    b = "xyzzy quux plugh frobnicate zork wibble " * 30
+    ta, tb = BPETokenizer.train(a, 300), BPETokenizer.train(b, 300)
+    m = transfer_matrix({"A": ta, "B": tb}, {"a": a, "b": b})
+    assert m["A"]["a"] > m["A"]["b"]
+    assert m["B"]["b"] > m["B"]["a"]
+
+
+def test_transfer_matrix_validates():
+    from bpelab import transfer_matrix
+    with pytest.raises(ValueError):
+        transfer_matrix({}, {"a": "x"})
