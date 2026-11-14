@@ -328,6 +328,8 @@
 - conformlab: `conformal_risk_control` (CRC for monotone bounded losses; tested on multilabel FNR control over 40 seeds, reduces to the split-conformal rule for 0/1 loss, flags infeasible; 3 tests, 27 total)
 - conformlab: `outlier` module: conformal p-values (super-uniform, tie-safe) + Benjamini-Hochberg for FDR-controlled outlier flagging; tested vs brute-force BH and FDR/power over 400 trials (4 tests, 31 total)
 
+- boptlab v0.1: NEW PROJECT — Bayesian optimisation from scratch in NumPy (ARD RBF/Matern-5/2 GP, analytic marginal-likelihood gradients checked against finite differences, EI/PI/UCB/Thompson, constant-liar batches, noise-aware incumbent, 6 benchmarks); EI/UCB/TS beat random and Halton on every function, no acquisition function wins everywhere, Matern > RBF on 3 of 4, batch q=8 costs visibly (41 tests)
+
 
 ## Next
 
@@ -356,3 +358,4 @@
 23. interplab follow-ups: MLP neuron ablation/patching, sparse autoencoder on the residual stream, attention-only variant to force a classic induction circuit, longer/wider models, path patching
 24. diffusionlab follow-ups: (done spiral dataset + sliced-W1/MMD step study, 2 tests) pinwheel, DPM-Solver/higher-order samplers vs the oracle error floor, v-prediction and SNR-weighted losses, learned vs fixed posterior variance, a score-matching (continuous-time SDE / probability-flow ODE) variant, train-set size vs memorisation
 25. conformlab follow-ups: (done jackknife+/CV+, 3 tests) (done conformal risk control, 3 tests) (done weighted conformal for covariate shift, 5 tests) (done RAPS regularised sets, 2 tests) conformal prediction on top of docqa/ticket-triage confidences
+26. boptlab follow-ups: gradient-based acquisition optimisation (analytic EI gradient), log-EI / numerically stable EI for tiny improvements, MCMC-marginalised hyperparameters, trust-region BO (TuRBO) for >10 dims, multi-fidelity / cost-aware EI, constrained BO, hyperparameter-tune a real model from this repo (lora-lab/rlgrid), more seeds on the acquisition comparison
