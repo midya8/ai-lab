@@ -1,0 +1,99 @@
+=== seed 0
+model: nll 0.131, accuracy 0.992 on predictable positions
+
+copy test: model follows an edit to the true source token in 99% of cases (n=256); edit to a different position: 17%
+uniform-attention baseline for the induction score: 0.096
+
+head   prev-token  induction  d_nll(zero)  acc(zero)  d_nll(mean)  patch-recovery  copy-follow(zero)
+L0H0       0.105      0.222        3.042      0.439        1.981            0.80               0.40
+L0H1       0.101      0.215        3.587      0.433        2.002            0.71               0.31
+L1H0       0.309      0.010        0.422      0.877        0.456            0.53               0.91
+L1H1       0.238      0.016        0.773      0.797        0.770            0.65               0.75
+
+direct logit attribution (correct-token logit, centred; total 13.71):
+  L1.mlp                          6.54
+  L1H1                            3.16
+  L1H0                            2.48
+  L0.mlp                          1.18
+  L0H0                            0.18
+  L0H1                            0.16
+  embed                           0.00
+  L1.attn_bias                    0.00
+  L0.attn_bias                   -0.00
+  final_ln_bias+unembed_bias     -0.00
+
+attention by offset from the previous occurrence of the current token (key = t-p+o), o = -3..+3:
+  L0H0  0.07 0.12 0.15 0.06 0.22 0.15 0.09
+  L0H1  0.07 0.13 0.15 0.06 0.22 0.15 0.08
+  L1H0  0.03 0.03 0.06 0.03 0.01 0.10 0.18
+  L1H1  0.03 0.03 0.10 0.05 0.02 0.09 0.11
+
+K-composition L0 head (row) -> L1 head (col), random-matrix reference 0.177:
+  L0H0  0.175  0.185
+  L0H1  0.184  0.186
+=== seed 1
+model: nll 0.138, accuracy 0.986 on predictable positions
+
+copy test: model follows an edit to the true source token in 99% of cases (n=256); edit to a different position: 20%
+uniform-attention baseline for the induction score: 0.096
+
+head   prev-token  induction  d_nll(zero)  acc(zero)  d_nll(mean)  patch-recovery  copy-follow(zero)
+L0H0       0.097      0.226        4.922      0.314        3.238            0.54               0.33
+L0H1       0.073      0.264        6.002      0.337        4.492            0.71               0.19
+L1H0       0.215      0.009        0.451      0.868        0.483            0.57               0.86
+L1H1       0.338      0.009        0.502      0.854        0.603            0.47               0.86
+
+direct logit attribution (correct-token logit, centred; total 12.96):
+  L1.mlp                          6.89
+  L1H0                            2.40
+  L1H1                            2.05
+  L0.mlp                          1.32
+  L0H0                            0.17
+  L0H1                            0.11
+  embed                           0.01
+  L0.attn_bias                   -0.00
+  final_ln_bias+unembed_bias      0.00
+  L1.attn_bias                   -0.00
+
+attention by offset from the previous occurrence of the current token (key = t-p+o), o = -3..+3:
+  L0H0  0.15 0.22 0.19 0.04 0.23 0.07 0.01
+  L0H1  0.02 0.06 0.15 0.07 0.26 0.19 0.12
+  L1H0  0.04 0.03 0.10 0.03 0.01 0.04 0.12
+  L1H1  0.01 0.02 0.06 0.00 0.01 0.09 0.25
+
+K-composition L0 head (row) -> L1 head (col), random-matrix reference 0.177:
+  L0H0  0.182  0.190
+  L0H1  0.195  0.170
+=== seed 2
+model: nll 0.159, accuracy 0.981 on predictable positions
+
+copy test: model follows an edit to the true source token in 96% of cases (n=256); edit to a different position: 17%
+uniform-attention baseline for the induction score: 0.096
+
+head   prev-token  induction  d_nll(zero)  acc(zero)  d_nll(mean)  patch-recovery  copy-follow(zero)
+L0H0       0.109      0.271        5.079      0.223        3.174            0.51               0.18
+L0H1       0.115      0.232        6.639      0.243        3.814            0.54               0.18
+L1H0       0.347      0.069        0.445      0.849        0.151            0.12               0.70
+L1H1       0.368      0.031        0.109      0.946        0.080            0.14               0.94
+
+direct logit attribution (correct-token logit, centred; total 11.50):
+  L1.mlp                          6.00
+  L0.mlp                          3.84
+  L1H1                            0.66
+  L1H0                            0.53
+  L0H0                            0.34
+  L0H1                            0.14
+  embed                          -0.00
+  L0.attn_bias                    0.00
+  final_ln_bias+unembed_bias     -0.00
+  L1.attn_bias                   -0.00
+
+attention by offset from the previous occurrence of the current token (key = t-p+o), o = -3..+3:
+  L0H0  0.10 0.17 0.23 0.06 0.27 0.07 0.06
+  L0H1  0.07 0.09 0.17 0.08 0.23 0.17 0.11
+  L1H0  0.02 0.01 0.02 0.05 0.07 0.08 0.14
+  L1H1  0.01 0.01 0.01 0.02 0.03 0.05 0.13
+
+K-composition L0 head (row) -> L1 head (col), random-matrix reference 0.177:
+  L0H0  0.169  0.168
+  L0H1  0.205  0.202

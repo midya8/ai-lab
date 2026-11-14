@@ -322,6 +322,7 @@
 - rlgrid: `expected_visits` / `expected_episode_length` exact via linear solve, cross-checked with Monte Carlo (2 tests, 46 total)
 - rlgrid: `outcome_probabilities` exact P(goal)/P(pit) per policy from expected visits, cross-checked with Monte Carlo (2 tests, 48 total)
 - rlgrid: `return_variance` exact variance of discounted return via second-moment Bellman equation, cross-checked with Monte Carlo (2 tests, 50 total)
+- interplab v0.1: NEW PROJECT — mechanistic interpretability on a microgrid transformer (hooked NumPy forward verified against microgrid, head ablation, exactly-additive logit attribution, activation patching, composition scores, causal copy test); finding: no textbook induction head, lookup lives in layer 0 + MLPs (20 tests)
 
 
 ## Next
@@ -348,3 +349,4 @@
 20. rlgrid follow-ups: (done cliff-walking safety gap) (done REINFORCE) (done eligibility traces / n-step) (done actor-critic with linear/RBF features, 4 tests) (done numpy DQN + replay/target ablation, 4 tests) (done Double DQN) (done prioritized replay) (done regret_curve + sample-efficiency table, 2 tests) (done exact expected visits/episode length) -> next: a new project (RL or other)
 21. mctslab follow-ups: (done transposition table, null result) (done Connect-Four ladder) (done PUCT with heuristic value) (done AlphaZero-lite in numpy, tic-tac-toe) (done optimal-move-rate accuracy metric) (done value-estimate error curve) -> next: Connect-Four/gravity support and a conv net on microgrid; old: PUCT with a learned policy/value net (AlphaZero-lite on microgrid), Connect-Four benchmarks, parallel root search
 22. bpelab follow-ups: (done compression curve) (done BPE-dropout) (done unigram-LM) (done unigram sampling) (done n-best) (done token_stats: fertility, Renyi efficiency, 4 tests) (done dead_vocab held-out check, 3 tests) (done compare_tokenizers, 2 tests) (done transfer_matrix, 2 tests) wire into tiny-transformer/microgrid, unigram-LM tokenizer comparison
+23. interplab follow-ups: MLP neuron ablation/patching, sparse autoencoder on the residual stream, attention-only variant to force a classic induction circuit, longer/wider models, path patching
