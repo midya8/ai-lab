@@ -264,3 +264,31 @@ def test_jackknife_plus_too_small_gives_inf():
     X = np.arange(5.0)[:, None]; y = X[:, 0]
     lo, hi = JackknifePlus(_ridge_fit, alpha=0.05).fit(X, y).predict(X)
     assert np.all(np.isinf(hi)) and np.all(np.isinf(lo))
+
+
+def test_mondrian_regression_group_conditional_coverage():
+    rng = np.random.default_rng(7)
+    Xtr, ytr = hetero_regression(1500, rng)
+    Xc, yc = hetero_regression(4000, rng)
+    Xt, yt = hetero_regression(30000, rng)
+    mean = RidgeRegressor(RFF(1, 120, 0.7, seed=0), 0.1).fit(Xtr, ytr)
+    gf = lambda X: np.digitize(X[:, 0], np.quantile(Xc[:, 0], [0.2, 0.4, 0.6, 0.8]))
+    plain = SplitConformal(mean.predict, alpha=0.1).calibrate(Xc, yc)
+    mond = MondrianSplitConformal(mean.predict, gf, alpha=0.1).calibrate(Xc, yc)
+    g = gf(Xt)
+    def per_group(model):
+        lo, hi = model.predict(Xt)
+        c = (yt >= lo) & (yt <= hi)
+        return np.array([c[g == k].mean() for k in range(5)])
+    assert per_group(mond).min() > 0.87           # every x-bin near 90%
+    assert per_group(plain).min() < per_group(mond).min()
+
+
+def test_mondrian_small_or_unseen_group_is_infinite():
+    mean_fn = lambda X: np.zeros(len(X))
+    gf = lambda X: X[:, 0].astype(int)
+    X = np.array([[0.0]] * 20 + [[1.0]] * 3)
+    y = np.ones(23)
+    m = MondrianSplitConformal(mean_fn, gf, alpha=0.1).calibrate(X, y)
+    lo, hi = m.predict(np.array([[0.0], [1.0], [5.0]]))
+    assert np.isfinite(hi[0]) and np.isinf(hi[1]) and np.isinf(hi[2])

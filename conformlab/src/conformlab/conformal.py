@@ -54,6 +54,31 @@ class CQR:
         return self.lo_fn(X) - self.q, self.hi_fn(X) + self.q
 
 
+class MondrianSplitConformal:
+    """Group-conditional split conformal for regression: one threshold per group (e.g. an x-bin), so
+    coverage is >= 1-alpha *within every group* with enough calibration points. Groups with fewer
+    than min_calibration_size(alpha) points get an infinite interval (the honest answer)."""
+
+    def __init__(self, mean_fn, group_fn, scale_fn=None, alpha=0.1):
+        self.mean_fn, self.group_fn, self.scale_fn, self.alpha = mean_fn, group_fn, scale_fn, alpha
+        self.q = {}
+
+    def _scale(self, X):
+        return np.ones(len(X)) if self.scale_fn is None else np.maximum(self.scale_fn(X), 1e-6)
+
+    def calibrate(self, X, y):
+        g = np.asarray(self.group_fn(X))
+        r = np.abs(np.asarray(y) - self.mean_fn(X)) / self._scale(X)
+        self.q = {k: conformal_quantile(r[g == k], self.alpha) for k in np.unique(g)}
+        return self
+
+    def predict(self, X):
+        g = np.asarray(self.group_fn(X))
+        q = np.array([self.q.get(k, np.inf) for k in g])   # unseen group -> infinite interval
+        m, h = self.mean_fn(X), q * self._scale(X)
+        return m - h, m + h
+
+
 # ------------------------------------------------------------------------- classification
 def lac_scores(P, y):
     """Least-ambiguous-set score: 1 - p(true class)."""

@@ -22,7 +22,7 @@ lower, upper = cqr.predict(Xnew)            # >= 90% marginal coverage, any mode
 
 | module | contents |
 |---|---|
-| `conformal.py` | `conformal_quantile` (the ceil((n+1)(1-a))-th order statistic, +inf if n is too small), `SplitConformal` (constant or normalised width), `CQR`, `ConformalClassifier` (LAC, randomised APS, optional Mondrian per-class calibration), `aci` (adaptive conformal inference for streams) |
+| `conformal.py` | `conformal_quantile` (the ceil((n+1)(1-a))-th order statistic, +inf if n is too small), `SplitConformal` (constant or normalised width), `CQR`, `ConformalClassifier` (LAC, randomised APS, optional Mondrian per-class calibration), `aci` (adaptive conformal inference for streams), `MondrianSplitConformal` (group-conditional regression intervals; infinite for under-populated or unseen groups) |
 | `models.py` | base learners in NumPy: random-Fourier-feature ridge, pinball-loss quantile regression (Adam), softmax regression |
 | `data.py` | heteroscedastic 1-D regression (Gaussian or heavy-tailed t3 noise) and Gaussian classes with two intrinsically hard classes |
 | `metrics.py` | coverage, width, equal-count binned coverage, class-conditional coverage, set size, the exact Beta law of coverage |
