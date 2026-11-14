@@ -104,3 +104,26 @@ def test_dueling_advantage_is_centered_and_reaches_goal():
     env = GridWorld(layout=["S..", "...", "..G"], seed=0)
     n, phi, _ = dqn(env, episodes=250, seed=0, dueling=True)
     assert evaluate(env, dqn_policy(n, phi), episodes=5)[1] == 1.0
+
+
+def test_nstep_emit_returns_and_tail_flush():
+    from rlgrid.dqn import nstep_emit
+    g = 0.5
+    pend = [(0, 0, 1.0, 1, False), (1, 0, 2.0, 2, False)]
+    assert nstep_emit(pend, 3, g, False) == []
+    pend.append((2, 1, 4.0, 3, True))
+    out = nstep_emit(pend, 3, g, True)
+    assert [o[5] for o in out] == [3, 2, 1] and pend == []
+    assert out[0][:5] == (0, 0, 1.0 + 1.0 + 1.0, 3, True)
+    assert out[1][2] == 2.0 + 0.5 * 4.0 and out[2][2] == 4.0
+
+
+def test_nstep1_matches_default_and_nstep3_reaches_goal():
+    env = GridWorld(layout=["S..", "...", "..G"], seed=0)
+    _, _, r1 = dqn(env, episodes=40, seed=1)
+    env = GridWorld(layout=["S..", "...", "..G"], seed=0)
+    _, _, r1b = dqn(env, episodes=40, seed=1, n_step=1)
+    assert (r1 == r1b).all()
+    env = GridWorld(layout=["S..", "...", "..G"], seed=0)
+    net, phi, _ = dqn(env, episodes=250, seed=0, n_step=3)
+    env.reset(); assert evaluate(env, dqn_policy(net, phi)) is not None

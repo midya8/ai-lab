@@ -77,6 +77,21 @@ class DuelQNet(QNet):
         return raw
 
 
+def nstep_emit(pend, n, gamma, done):
+    """Pop n-step transitions (s, a, R_n, s_{t+n}, done, k) from the episode's pending list.
+    Emits one when n steps are pending, and flushes shorter tails when the episode ends."""
+    out = []
+    while pend and (len(pend) >= n or done):
+        k = min(n, len(pend))
+        R = sum(gamma ** i * pend[i][2] for i in range(k))
+        last = pend[k - 1]
+        out.append((pend[0][0], pend[0][1], R, last[3], last[4], k))
+        pend.pop(0)
+        if len(pend) < n and not done:
+            break
+    return out
+
+
 def double_q_target(online, target, x):
     """Double DQN: the online net picks the action, the target net scores it."""
     a = online.forward(x)[1].argmax(1)
@@ -86,7 +101,7 @@ def double_q_target(online, target, x):
 def dqn(env, episodes=300, gamma=0.97, lr=0.2, eps_start=1.0, eps_end=0.05, eps_decay=0.99,
         batch=32, buffer=5000, target_every=50, hidden=64, seed=0, max_steps=200,
         use_target=True, use_replay=True, features="onehot", double=False,
-        prioritized=False, per_alpha=0.6, per_beta=0.4, per_eps=1e-3, dueling=False):
+        prioritized=False, per_alpha=0.6, per_beta=0.4, per_eps=1e-3, dueling=False, n_step=1):
     """Returns (net, phi, returns). Greedy policy: argmax over net.forward(phi)[1]."""
     rng = np.random.default_rng(seed)
     phi = coord_features(env) if features == "coords" else onehot_features(env)
@@ -97,6 +112,7 @@ def dqn(env, episodes=300, gamma=0.97, lr=0.2, eps_start=1.0, eps_end=0.05, eps_
     eps = eps_start
     for _ in range(episodes):
         s, tot = env.reset(), 0.0
+        pend = []
         for _ in range(max_steps):
             if rng.random() < eps:
                 a = int(rng.integers(env.n_actions))
@@ -104,11 +120,19 @@ def dqn(env, episodes=300, gamma=0.97, lr=0.2, eps_start=1.0, eps_end=0.05, eps_
                 a = int(net.forward(phi[s:s + 1])[1].argmax())
             s2, r, done = env.step(a)
             tot += r
-            tr = (s, a, r, s2, done)
-            buf.append(tr)
-            prio.append(max(prio, default=1.0))  # new transitions get max priority
-            if len(buf) > buffer:
-                buf.pop(0); prio.pop(0)
+            pend.append((s, a, r, s2, done))
+            emitted = nstep_emit(pend, n_step, gamma, done)
+            for tr in emitted:
+                buf.append(tr)
+                prio.append(max(prio, default=1.0))  # new transitions get max priority
+                if len(buf) > buffer:
+                    buf.pop(0); prio.pop(0)
+            if not emitted and not (use_replay and len(buf) >= batch):
+                s = s2
+                if done:
+                    break
+                continue
+            tr = emitted[-1] if emitted else buf[-1]
             idx, w = None, None
             if use_replay and len(buf) >= batch:
                 if prioritized:
@@ -120,10 +144,10 @@ def dqn(env, episodes=300, gamma=0.97, lr=0.2, eps_start=1.0, eps_end=0.05, eps_
                 batch_tr = [buf[i] for i in idx]
             else:
                 batch_tr = [tr]
-            S, A, R, S2, D = (np.array(z) for z in zip(*batch_tr))
+            S, A, R, S2, D, K = (np.array(z) for z in zip(*batch_tr))
             ref = tgt if use_target else net
             nxt = double_q_target(net, ref, phi[S2]) if double else ref.forward(phi[S2])[1].max(1)
-            td = net.step(phi[S], A, R + gamma * nxt * (~D.astype(bool)), lr, w)
+            td = net.step(phi[S], A, R + gamma ** K * nxt * (~D.astype(bool)), lr, w)
             if prioritized and idx is not None:
                 for i, e in zip(idx, td):
                     prio[i] = abs(float(e)) + per_eps
