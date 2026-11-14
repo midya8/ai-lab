@@ -65,3 +65,7 @@ Reading it honestly:
 - The Halton baseline initially used one fixed skip, so all seeds produced the same points; it now randomises the skip per seed (regression test included) and the table above is from the fixed code.
 - Acquisition maximisation is sampling plus local search, not gradient-based; in higher dimensions this would be the first thing to replace.
 - GP hyperparameters are point estimates (no MCMC / marginalisation), and there is no input warping or trust region.
+
+## Constrained optimisation
+
+`ConstrainedBayesOpt(bounds, n_constraints)` minimises f subject to c_k(x) <= 0: one GP per function, score = EI over the best feasible point x product of P(c_k <= 0); before any feasible point it maximises feasibility probability. Toy test: optimum on a disc boundary is found with the constraint respected (see `tests/test_constrained.py`; a 2-D toy, not a benchmark study).
