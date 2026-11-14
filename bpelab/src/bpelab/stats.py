@@ -59,3 +59,23 @@ def compare_tokenizers(toks: dict, text: str) -> list:
         raise ValueError("need at least one tokenizer")
     rows = [dict(name=n, **token_stats(t, text)) for n, t in toks.items()]
     return sorted(rows, key=lambda r: (r["fertility"], r["name"]))
+
+
+def roundtrip_failures(tok, texts, limit: int = 10) -> list:
+    """Texts for which decode(encode(t)) != t (needs tok.decode). Returns up to `limit` failures."""
+    bad = []
+    for t in texts:
+        if tok.decode(tok.encode(t)) != t:
+            bad.append(t)
+            if len(bad) >= limit:
+                break
+    return bad
+
+
+def worst_words(tok, text: str, top: int = 5) -> list:
+    """Words the tokenizer splits into the most tokens: [(word, n_tokens), ...], ties by word."""
+    seen = {}
+    for w in _WORD.findall(text):
+        if w not in seen:
+            seen[w] = len(tok.encode(w))
+    return sorted(seen.items(), key=lambda kv: (-kv[1], kv[0]))[:top]

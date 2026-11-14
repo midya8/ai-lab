@@ -59,3 +59,5 @@ Mixed: unigram is slightly worse at small vocabs and better at 768. Pruning uses
 ## Comparing tokenizers
 
 `bpelab.compare_tokenizers({"bpe-300": bpe, "unigram": uni}, text)` runs `token_stats` for each named tokenizer on the same text and returns rows sorted by fertility. 2 tests.
+
+`roundtrip_failures(tok, texts)` lists texts that do not survive decode(encode(t)); `worst_words(tok, text)` lists the words split into the most tokens (rare-word diagnostics). 3 tests.
