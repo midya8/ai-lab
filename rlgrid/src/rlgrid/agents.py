@@ -487,3 +487,26 @@ def outcome_probabilities(env, policy):
                 elif nxt in env.pits:
                     pit += n * pr
     return {"goal": float(goal), "pit": float(pit)}
+
+
+def return_variance(env, policy, gamma=0.97, tol=1e-12):
+    """Exact variance of the discounted return from every state under a fixed policy.
+    Iterates the second-moment Bellman equation
+    M(s) = sum p [ r^2 + 2 r g V(n) + g^2 M(n) ]  and returns M - V^2 (array over states)."""
+    v = policy_evaluation(env, policy, gamma)
+    m = np.zeros(env.n_states)
+    cells = [(r, c) for r in range(env.h) for c in range(env.w)
+             if (r, c) not in env.walls and not env.terminal((r, c))]
+    while True:
+        delta = 0.0
+        for pos in cells:
+            s = env.sid(pos)
+            new = 0.0
+            for p, n in env.transitions(pos, int(policy[s])):
+                r = env.reward(n)
+                vn, mn = (0.0, 0.0) if env.terminal(n) else (v[env.sid(n)], m[env.sid(n)])
+                new += p * (r * r + 2 * r * gamma * vn + gamma * gamma * mn)
+            delta = max(delta, abs(new - m[s]))
+            m[s] = new
+        if delta < tol:
+            return np.maximum(m - v * v, 0.0)

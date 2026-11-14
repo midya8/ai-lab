@@ -283,3 +283,29 @@ def test_outcome_probabilities_deterministic_goal():
     env = GridWorld()
     out = outcome_probabilities(env, greedy_policy(value_iteration(env)))
     assert abs(out["goal"] - 1.0) < 1e-9
+
+
+def test_return_variance_zero_when_deterministic():
+    from rlgrid import return_variance
+    env = GridWorld()
+    var = return_variance(env, greedy_policy(value_iteration(env)))
+    assert np.allclose(var, 0.0, atol=1e-6)
+
+
+def test_return_variance_matches_mc():
+    from rlgrid import return_variance
+    env = GridWorld(slip=0.2, seed=5)
+    pol = greedy_policy(value_iteration(env))
+    start = env.reset()
+    rets = []
+    for _ in range(4000):
+        s, done, t, g, d = env.reset(), False, 0, 0.0, 1.0
+        while not done and t < 500:
+            s, r, done = env.step(int(pol[s]))
+            g += d * r
+            d *= 0.97
+            t += 1
+        rets.append(g)
+    exact = return_variance(env, pol)[start]
+    assert exact > 0
+    assert abs(np.var(rets) - exact) < 0.25 * exact + 1e-3

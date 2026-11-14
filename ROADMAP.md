@@ -321,6 +321,7 @@
 - bpelab: `vocab_size_sweep` held-out bytes/token by vocab size with knee detection (3 tests, 49 total)
 - rlgrid: `expected_visits` / `expected_episode_length` exact via linear solve, cross-checked with Monte Carlo (2 tests, 46 total)
 - rlgrid: `outcome_probabilities` exact P(goal)/P(pit) per policy from expected visits, cross-checked with Monte Carlo (2 tests, 48 total)
+- rlgrid: `return_variance` exact variance of discounted return via second-moment Bellman equation, cross-checked with Monte Carlo (2 tests, 50 total)
 
 
 ## Next
