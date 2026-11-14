@@ -165,6 +165,26 @@ class BPETokenizer:
                 buf += self.vocab[i]
         return buf.decode("utf-8", errors="replace")
 
+    def explain(self, word: str):
+        """Trace how one word is encoded: the list of (merge_rank, left, right, pieces_after) steps.
+
+        Mirrors _encode_word exactly, so the final pieces equal the encoding of the word.
+        """
+        ids = list(word.encode("utf-8"))
+        steps = []
+        while len(ids) > 1:
+            best, best_rank = None, None
+            for p in zip(ids, ids[1:]):
+                r = self.ranks.get(p)
+                if r is not None and (best_rank is None or r < best_rank):
+                    best, best_rank = p, r
+            if best is None:
+                break
+            ids = list(_merge_word(tuple(ids), best, 256 + best_rank))
+            steps.append((best_rank, self.vocab[best[0]], self.vocab[best[1]],
+                          [self.vocab[i] for i in ids]))
+        return steps
+
     def compression(self, text: str) -> float:
         """Bytes per token."""
         n = len(self.encode(text))

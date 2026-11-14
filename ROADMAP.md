@@ -311,6 +311,7 @@
 - bpelab: `roundtrip_failures` + `worst_words` diagnostics (3 tests, 37 total)
 - bpelab: `transfer_matrix` cross-domain bytes/token table (2 tests, 39 total)
 - rlgrid: exact `policy_evaluation` + `policy_regret` (2 tests, 40 total)
+- bpelab: `BPETokenizer.explain` merge-by-merge encoding trace (2 tests, 41 total)
 
 
 ## Next
