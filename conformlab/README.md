@@ -1,0 +1,62 @@
+# conformlab
+
+Conformal prediction from scratch in NumPy: distribution-free prediction intervals and sets with a finite-sample coverage guarantee, and an honest look at where that guarantee is **not** enough. Everything runs on synthetic data with known ground truth, so coverage is measured against the truth rather than asserted.
+
+```bash
+pip install -r requirements.txt
+PYTHONPATH=src python -m pytest -q          # 13 tests (~2 s)
+python experiments/run_all.py               # regenerates experiments/results.txt (~1 min)
+```
+
+```python
+from conformlab import *
+rng = np.random.default_rng(0)
+Xtr, ytr = hetero_regression(2000, rng); Xc, yc = hetero_regression(1000, rng)
+feat = RFF(1, 120, 0.7)
+lo = QuantileRegressor(feat, 0.05).fit(Xtr, ytr); hi = QuantileRegressor(feat, 0.95).fit(Xtr, ytr)
+cqr = CQR(lo.predict, hi.predict, alpha=0.1).calibrate(Xc, yc)
+lower, upper = cqr.predict(Xnew)            # >= 90% marginal coverage, any model, any distribution
+```
+
+## What is in it
+
+| module | contents |
+|---|---|
+| `conformal.py` | `conformal_quantile` (the ceil((n+1)(1-a))-th order statistic, +inf if n is too small), `SplitConformal` (constant or normalised width), `CQR`, `ConformalClassifier` (LAC, randomised APS, optional Mondrian per-class calibration), `aci` (adaptive conformal inference for streams) |
+| `models.py` | base learners in NumPy: random-Fourier-feature ridge, pinball-loss quantile regression (Adam), softmax regression |
+| `data.py` | heteroscedastic 1-D regression (Gaussian or heavy-tailed t3 noise) and Gaussian classes with two intrinsically hard classes |
+| `metrics.py` | coverage, width, equal-count binned coverage, class-conditional coverage, set size, the exact Beta law of coverage |
+
+Tests check: the quantile rank rule; the **exact** Beta(k, n+1-k) law of coverage (mean and variance over 3000 calibration draws); marginal coverage for every method; CQR and Mondrian beating their plain counterparts on conditional coverage; APS score extremes and set/score consistency; ACI's deterministic long-run bound `|miss rate - alpha| <= (max(alpha,1-alpha)+gamma)/(gamma T)` even on a Cauchy stream.
+
+## Results (alpha = 0.1, 5 seeds, test n = 30,000; full tables in `experiments/results.txt`)
+
+**Regression with noise that grows toward the edges.** Every method hits 90% marginal coverage, as promised. The marginal number hides the problem:
+
+| method (Gaussian noise) | coverage | mean width | worst x-bin | best x-bin |
+|---|---|---|---|---|
+| constant-width | 0.905 | 1.18 | **0.772** | 1.000 |
+| normalised by a fitted sigma(x) | 0.902 | 1.00 | 0.887 | 0.918 |
+| CQR | 0.900 | 1.00 | 0.880 | 0.921 |
+
+Constant-width intervals are 15% wider *and* under-cover the noisy region by 13 points. Normalised and CQR are tied; with heavy-tailed t3 noise they are also ~10-13% narrower than constant-width. (On x ~ N(0,1) the noise barely varies over the data, so all three tie in width; the conditional gap still shows for constant-width.)
+
+**Classification, 6 classes, two hard ones** (base accuracy 0.725):
+
+| method | coverage | set size | worst class | hard-class coverage |
+|---|---|---|---|---|
+| LAC | 0.895 | 1.66 | 0.703 | 0.738 |
+| APS (randomised) | 0.898 | 1.94 | 0.744 | 0.775 |
+| LAC + Mondrian | 0.900 | 2.00 | 0.880 | 0.897 |
+| APS + Mondrian | 0.897 | 2.18 | 0.877 | 0.894 |
+
+Marginal 90% is met by all, but plain LAC gives the hard classes ~74%. Mondrian calibration restores per-class ~90% for 0.34 extra labels per set. Randomised APS produced empty sets 1.2% of the time here (3% with Mondrian); LAC never did, and gave the smallest sets. APS did not beat LAC on conditional coverage in this setup, contrary to its reputation, though the setup (well-specified softmax, low dimension) favours LAC.
+
+**Online shift** (residual scale doubles at the midpoint, T = 6000): static split conformal misses 39.9% after the shift. ACI brings the long-run miss rate to 0.100-0.103 for gamma in {0.005, 0.02, 0.05}. The cost is visible in `alpha_t`: it falls to ~0.004, i.e. the method is using near-maximal quantiles (and, at times, infinite intervals) of a 500-point calibration set, because a 2x scale shift can't be matched by a quantile of unshifted scores at a normal level. Coverage is restored by sometimes being uninformative.
+
+## Caveats
+
+- Marginal guarantees assume exchangeability; the shift experiment is exactly where that fails, and ACI only guarantees the *average* miss rate, not per-window coverage.
+- Test-set coverage is itself random: with a 1000-point calibration set the coverage of one fitted interval varies around 0.90 with std ~0.01 (the Beta law the tests check).
+- Hyperparameters (RFF width 120, lengthscale 0.7, ridge/steps) were fixed before looking at coverage; the sigma-hat model is a ridge fit to absolute training residuals, a crude choice that still worked.
+- All data are synthetic; no real-dataset claim is made.
