@@ -43,6 +43,40 @@ class QNet:
         return raw
 
 
+class DuelQNet(QNet):
+    """Dueling architecture: Q = V(s) + A(s,a) - mean_a A(s,a) on a shared ReLU trunk."""
+    def __init__(self, n_in, n_out, hidden=32, rng=None):
+        rng = rng or np.random.default_rng(0)
+        self.W1 = rng.normal(0, np.sqrt(2 / n_in), (n_in, hidden)); self.b1 = np.zeros(hidden)
+        self.Wv = rng.normal(0, np.sqrt(1 / hidden), (hidden, 1)); self.bv = np.zeros(1)
+        self.Wa = rng.normal(0, np.sqrt(1 / hidden), (hidden, n_out)); self.ba = np.zeros(n_out)
+
+    def forward(self, x):
+        h = np.maximum(x @ self.W1 + self.b1, 0)
+        a = h @ self.Wa + self.ba
+        return h, (h @ self.Wv + self.bv) + a - a.mean(1, keepdims=True)
+
+    def copy_from(self, o):
+        for k in ("W1", "b1", "Wv", "bv", "Wa", "ba"):
+            setattr(self, k, getattr(o, k).copy())
+
+    def step(self, x, a, target, lr, weights=None):
+        h, q = self.forward(x)
+        n = len(x)
+        raw = q[np.arange(n), a] - target
+        err = np.clip(raw, -1.0, 1.0)
+        if weights is not None:
+            err = err * weights
+        dq = np.zeros_like(q); dq[np.arange(n), a] = err / n
+        dv = dq.sum(1, keepdims=True)
+        da = dq - dq.mean(1, keepdims=True)
+        dh = (dv @ self.Wv.T + da @ self.Wa.T) * (h > 0)
+        self.Wv -= lr * h.T @ dv; self.bv -= lr * dv.sum(0)
+        self.Wa -= lr * h.T @ da; self.ba -= lr * da.sum(0)
+        self.W1 -= lr * x.T @ dh; self.b1 -= lr * dh.sum(0)
+        return raw
+
+
 def double_q_target(online, target, x):
     """Double DQN: the online net picks the action, the target net scores it."""
     a = online.forward(x)[1].argmax(1)
@@ -52,11 +86,12 @@ def double_q_target(online, target, x):
 def dqn(env, episodes=300, gamma=0.97, lr=0.2, eps_start=1.0, eps_end=0.05, eps_decay=0.99,
         batch=32, buffer=5000, target_every=50, hidden=64, seed=0, max_steps=200,
         use_target=True, use_replay=True, features="onehot", double=False,
-        prioritized=False, per_alpha=0.6, per_beta=0.4, per_eps=1e-3):
+        prioritized=False, per_alpha=0.6, per_beta=0.4, per_eps=1e-3, dueling=False):
     """Returns (net, phi, returns). Greedy policy: argmax over net.forward(phi)[1]."""
     rng = np.random.default_rng(seed)
     phi = coord_features(env) if features == "coords" else onehot_features(env)
-    net, tgt = QNet(phi.shape[1], env.n_actions, hidden, rng), QNet(phi.shape[1], env.n_actions, hidden, rng)
+    Net = DuelQNet if dueling else QNet
+    net, tgt = Net(phi.shape[1], env.n_actions, hidden, rng), Net(phi.shape[1], env.n_actions, hidden, rng)
     tgt.copy_from(net)
     buf, prio, steps, rets = [], [], 0, []
     eps = eps_start

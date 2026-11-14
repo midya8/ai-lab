@@ -304,6 +304,7 @@
 - bpelab: unigram `nbest` exact k-best segmentations, brute-force verified (25 tests)
 - rlgrid: Double DQN option `double=True` (2 tests, 32 total)
 - rlgrid: prioritized replay `prioritized=True` with IS weights (2 tests, 32 total; null result on the easy grid)
+- rlgrid: dueling network option `dueling=True` (`DuelQNet`, finite-difference gradient check, 34 tests total)
 
 
 ## Next

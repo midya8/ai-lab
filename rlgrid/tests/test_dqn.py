@@ -74,3 +74,33 @@ def test_prioritized_replay_reaches_goal_and_is_deterministic():
     n2, _, r2 = dqn(env, episodes=250, seed=0, prioritized=True)
     assert np.array_equal(r1, r2)
     assert evaluate(env, dqn_policy(n1, phi), episodes=5)[1] == 1.0
+
+
+def test_dueling_gradient_matches_finite_difference():
+    from rlgrid.dqn import DuelQNet
+    rng = np.random.default_rng(1)
+    x = rng.normal(size=(4, 3)); a = np.array([0, 2, 1, 3]); tg = rng.normal(size=4) * 0.3
+    net = DuelQNet(3, 4, 6, np.random.default_rng(2))
+    def loss(n):
+        q = n.forward(x)[1][np.arange(4), a]
+        return 0.5 * np.mean((q - tg) ** 2)
+    ref = DuelQNet(3, 4, 6, np.random.default_rng(2)); ref.copy_from(net)
+    lr = 1.0
+    net.step(x, a, tg, lr)
+    for k in ("W1", "Wv", "Wa"):
+        W = getattr(ref, k); g = np.zeros_like(W)
+        for i in np.ndindex(W.shape):
+            W[i] += 1e-6; lp = loss(ref); W[i] -= 2e-6; lm = loss(ref); W[i] += 1e-6
+            g[i] = (lp - lm) / 2e-6
+        assert np.allclose(getattr(net, k), W - lr * g, atol=1e-5)
+
+
+def test_dueling_advantage_is_centered_and_reaches_goal():
+    from rlgrid.dqn import DuelQNet
+    net = DuelQNet(3, 4, 6, np.random.default_rng(0))
+    x = np.random.default_rng(3).normal(size=(5, 3))
+    h, q = net.forward(x)
+    assert np.allclose(q.mean(1), (h @ net.Wv + net.bv)[:, 0])
+    env = GridWorld(layout=["S..", "...", "..G"], seed=0)
+    n, phi, _ = dqn(env, episodes=250, seed=0, dueling=True)
+    assert evaluate(env, dqn_policy(n, phi), episodes=5)[1] == 1.0
