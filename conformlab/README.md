@@ -100,3 +100,7 @@ RAPS shrinks APS sets modestly here but stays above LAC in size; the effect is e
 ## Size-stratified coverage
 
 `size_stratified_coverage(S, y)` reports coverage within each prediction-set-size stratum and `worst_size_stratum(S, y, min_count)` the lowest one among strata with enough points. Marginal coverage can hold while the large-set (hard) inputs are under-covered; this diagnostic exposes it. Tests check a hand example and that the strata recombine to the marginal coverage.
+
+## Set-outcome breakdown and worst class
+
+`set_outcome_breakdown(S, y)` splits test points into empty / correct singleton / wrong singleton / multi-label covered / multi-label missed (fractions sum to 1; correct singleton + multi covered equals coverage, tested). `worst_class_coverage(S, y, K, min_count)` returns the lowest-coverage class among classes with enough points, a one-line check for class-conditional failure.

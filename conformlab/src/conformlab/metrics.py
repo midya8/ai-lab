@@ -66,3 +66,32 @@ def worst_size_stratum(S, y, min_count=30):
         raise ValueError("no stratum has enough points")
     s = min(strata, key=lambda k: strata[k][0])
     return s, strata[s][0]
+
+
+def set_outcome_breakdown(S, y):
+    """Fractions of points whose set is: empty, a correct singleton, a wrong singleton,
+    or multi-label (containing / missing the truth). Fractions sum to 1."""
+    S = np.asarray(S, bool)
+    y = np.asarray(y, int)
+    size = S.sum(1)
+    hit = S[np.arange(len(S)), y]
+    n = len(S)
+    return {
+        "empty": float(np.mean(size == 0)),
+        "singleton_correct": float(np.mean((size == 1) & hit)),
+        "singleton_wrong": float(np.mean((size == 1) & ~hit)),
+        "multi_covered": float(np.mean((size > 1) & hit)),
+        "multi_missed": float(np.mean((size > 1) & ~hit)),
+    }
+
+
+def worst_class_coverage(S, y, K, min_count=30):
+    """(class, coverage) of the lowest-coverage class among classes with >= min_count points."""
+    y = np.asarray(y, int)
+    cc = class_conditional_coverage(S, y, K)
+    counts = np.bincount(y, minlength=K)
+    ok = [k for k in range(K) if counts[k] >= min_count]
+    if not ok:
+        raise ValueError("no class has enough points")
+    k = min(ok, key=lambda j: cc[j])
+    return int(k), float(cc[k])
