@@ -123,3 +123,17 @@ def wilson_interval(covered, z=1.96):
     centre = (p + z * z / (2 * n)) / d
     half = z * np.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / d
     return float(max(0.0, centre - half)), float(min(1.0, centre + half))
+
+
+def coverage_calibration_curve(mean_fn, X_cal, y_cal, X_test, y_test, alphas=(0.05, 0.1, 0.2, 0.3, 0.5), scale_fn=None):
+    """Validity curve for split conformal: for each alpha, calibrate once on (X_cal, y_cal) and
+    measure empirical coverage on the test set. Returns rows (nominal=1-alpha, empirical, gap).
+    Under exchangeability every gap should be >= 0 up to test-set noise (and < 1/(n_cal+1) on average)."""
+    from .conformal import SplitConformal
+    rows = []
+    for a in alphas:
+        sc = SplitConformal(mean_fn, scale_fn, alpha=a).calibrate(X_cal, y_cal)
+        lo, hi = sc.predict(X_test)
+        emp = interval_coverage(lo, hi, y_test)
+        rows.append((1 - a, float(emp), float(emp - (1 - a))))
+    return rows
