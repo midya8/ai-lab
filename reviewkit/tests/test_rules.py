@@ -170,6 +170,12 @@ def test_duplicate_set_item():
     assert rules("a.py", "s = {1, '1'}\n") == []
 
 
+def test_range_len():
+    assert rules("a.py", "for i in range(len(xs)):\n    pass\n") == [(1, "py-range-len")]
+    assert rules("a.py", "for i in range(1, len(xs)):\n    pass\n") == []
+    assert rules("a.py", "for i, v in enumerate(xs):\n    pass\n") == []
+
+
 def test_raise_notimplemented():
     assert rules("a.py", "def f():\n    raise NotImplemented\n") == [(2, "py-raise-notimplemented")]
     assert rules("a.py", "def f():\n    raise NotImplemented('x')\n") == [(2, "py-raise-notimplemented")]

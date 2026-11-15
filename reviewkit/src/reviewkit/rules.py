@@ -620,6 +620,14 @@ def ast_findings(ctx: FileContext, source: str, complexity_threshold: int = 10) 
                             f"Dict literal repeats the key {k.value!r}; the earlier value is silently discarded.",
                             "Remove the duplicate or fix the intended key.")
                     seen[key] = v
+        elif isinstance(node, (ast.For, ast.AsyncFor)) and isinstance(node.iter, ast.Call) \
+                and isinstance(node.iter.func, ast.Name) and node.iter.func.id == "range" \
+                and len(node.iter.args) == 1 and not node.iter.keywords \
+                and isinstance(node.iter.args[0], ast.Call) and isinstance(node.iter.args[0].func, ast.Name) \
+                and node.iter.args[0].func.id == "len" and len(node.iter.args[0].args) == 1:
+            add(node.lineno, "py-range-len", "low",
+                "`for i in range(len(x))` is usually clearer as iteration or `enumerate`.",
+                "Iterate directly, or use `enumerate(x)` when the index is needed.")
         elif isinstance(node, ast.Set):
             seen_s = set()
             for e in node.elts:
@@ -725,6 +733,7 @@ RULE_TABLE.update({
     "py-unreachable-code": ("medium", "Statements after return/raise/continue/break."),
     "py-assert-constant-string": ("medium", "assert on a non-empty string literal (always true)."),
     "py-duplicate-dict-key": ("medium", "Dict literal repeats a constant key."),
+    "py-range-len": ("low", "`for i in range(len(x))` loop."),
     "py-duplicate-set-item": ("low", "Set literal repeats a constant element."),
     "py-syntax-error": ("critical", "Changed Python file does not parse."),
     "py-taint-sql": ("high", "Untrusted input flows into SQL query text."),
