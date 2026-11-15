@@ -106,3 +106,20 @@ def interval_score(lo, hi, y, alpha=0.1):
     lo, hi, y = (np.asarray(a, float) for a in (lo, hi, y))
     pen = (2.0 / alpha) * (np.maximum(lo - y, 0.0) + np.maximum(y - hi, 0.0))
     return float(np.mean((hi - lo) + pen))
+
+
+def wilson_interval(covered, z=1.96):
+    """Wilson score interval for an empirical coverage rate from 0/1 outcomes -> (lo, hi).
+
+    Use it to tell a genuine coverage failure from test-set noise: with n test points the
+    sampling sd of coverage is about sqrt(c(1-c)/n), so 0.88 on n=100 does not refute a 0.90 target.
+    """
+    c = np.asarray(covered, float).reshape(-1)
+    n = len(c)
+    if n == 0:
+        raise ValueError("need at least one outcome")
+    p = c.mean()
+    d = 1 + z * z / n
+    centre = (p + z * z / (2 * n)) / d
+    half = z * np.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / d
+    return float(max(0.0, centre - half)), float(min(1.0, centre + half))
