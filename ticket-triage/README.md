@@ -34,3 +34,7 @@ Duplicate detection (`triage.dedupe`): TF-IDF cosine pairs via `find_duplicates(
 ## Drift monitor
 
 `triage.drift.drift_report(clf, reference_texts, new_texts)` compares an incoming batch with a reference batch without labels: PSI of the predicted-category mix (<0.1 stable, 0.1-0.25 moderate, >0.25 major), out-of-vocabulary rate, and mean-confidence drop, plus an `alert` flag. Tested on synthetic data only: same-distribution batches stay quiet, an unseen-vocabulary batch and a billing-only batch both alert. The alert thresholds are conventional defaults, not tuned.
+
+## Conformal prediction sets (`triage.conformal`)
+
+`ConformalTriage(model, alpha=0.1).calibrate(cal_texts, cal_labels)` returns category *sets* with >= 90% marginal coverage (split conformal, LAC score; calibrate on tickets not used for training). `route(text)` gives `auto` (one category), `review` (short candidate list for a human) or `escalate` (empty set). The test injects 30% label noise and checks mean coverage over 8 seeds is within 0.03 of 0.90. On the clean synthetic data the task is nearly separable, so sets are almost always singletons there.
