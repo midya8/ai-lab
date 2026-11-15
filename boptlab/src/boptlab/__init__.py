@@ -4,6 +4,7 @@ from .acquisition import expected_improvement, expected_improvement_grad, log_ex
 from .optimizer import BayesOpt, random_search, halton, optimize_acquisition, refine_ei_gradient
 from .costaware import CostAwareBayesOpt, best_at_budget
 from .constrained import ConstrainedBayesOpt, prob_feasible
+from .multiobj import ParEGO, pareto_mask, hypervolume_2d
 from .benchmarks import BENCHMARKS, Benchmark, branin, hartmann3, hartmann6, ackley, levy, rosenbrock, noisy
 
 __all__ = [n for n in dir() if not n.startswith("_")]

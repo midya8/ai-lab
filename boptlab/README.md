@@ -89,3 +89,8 @@ Reading it honestly:
 - **Hartmann-6 (50 evals):** EI median regret 0.003 vs UCB 0.018, Thompson 0.037, MES 0.124, PI 0.141; the IQRs of EI/UCB overlap. MES, the Branin winner, is among the worst here, so its Branin gain does not generalise.
 - **Ackley-5 (50 evals):** all methods are far from the optimum; UCB is best (3.8) and beats EI on 7/8 seeds, EI 5.6. This fits the earlier finding that UCB does best on Ackley.
 - 8 seeds only; ordering is suggestive.
+
+
+## Multi-objective (ParEGO)
+
+`ParEGO(bounds, n_obj=2).run(f, n)` runs Pareto optimisation: each step draws Dirichlet weights, scalarises the normalised objectives with the augmented Chebyshev function and takes one BO step. `pareto_mask` and the exact `hypervolume_2d` (checked by hand and against Monte Carlo) are included. Tested on Schaffer's problem (3 seeds, 20 evaluations): higher mean hypervolume than random search. A toy 1-D check, not a benchmark study.
