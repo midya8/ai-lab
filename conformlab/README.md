@@ -92,3 +92,7 @@ RAPS shrinks APS sets modestly here but stays above LAC in size; the effect is e
 ## Jackknife+ / CV+
 
 `JackknifePlus(fit_fn, alpha, folds=None)` uses every point for training and calibration (no held-out split). `fit_fn(X, y)` returns a predict callable; `folds=None` is leave-one-out, `folds=K` is CV+. Guarantee is coverage >= 1-2*alpha; tests check it against a brute-force implementation of the formula and empirically (about 0.9 at alpha=0.1 on a linear-Gaussian toy, which is a synthetic check, not a benchmark).
+
+## Conformal predictive distributions
+
+`ConformalPredictiveDistribution(mean_fn, scale_fn, randomised)` turns calibration residuals into a full predictive CDF `F(y|x)`, quantiles, equal-tailed asymmetric intervals and CRPS. With `randomised=True` the PIT is exactly uniform marginally (checked in `tests/test_cpd.py` on the synthetic heteroscedastic data); a correct scale function gives lower CRPS than a constant one.

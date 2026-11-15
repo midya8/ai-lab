@@ -318,3 +318,62 @@ def conformal_risk_control(loss_fn, lambdas, cal_data, alpha, B=1.0):
         if n / (n + 1) * risk + B / (n + 1) <= alpha:
             return lam, True
     return lambdas[-1], False
+
+
+# ------------------------------------------------------------ conformal predictive distributions
+class ConformalPredictiveDistribution:
+    """Split conformal predictive distribution (Vovk et al.): a full CDF for y given x, not only an interval.
+
+    Signed normalised residuals r_i = (y_i - mean(x_i)) / scale(x_i) on a calibration set give
+    F(y | x) = (#{r_i <= (y - mean(x)) / scale(x)} + U) / (n + 1), with U~Uniform(0,1) (randomised) or
+    U=1/2 (deterministic midpoint). The randomised version's probability integral transform is exactly
+    uniform marginally under exchangeability, so quantiles are calibrated at *every* level at once.
+    """
+
+    def __init__(self, mean_fn, scale_fn=None, randomised=False, seed=0):
+        self.mean_fn, self.scale_fn, self.randomised = mean_fn, scale_fn, randomised
+        self.rng = np.random.default_rng(seed)
+        self.r = None
+
+    def _scale(self, X):
+        return np.ones(len(X)) if self.scale_fn is None else np.asarray(self.scale_fn(X), float)
+
+    def calibrate(self, X, y):
+        self.r = np.sort((np.asarray(y, float) - self.mean_fn(X)) / self._scale(X))
+        return self
+
+    def cdf(self, X, y):
+        """F(y_i | x_i) for each row (y broadcast to len(X) if scalar)."""
+        n = len(self.r)
+        t = (np.broadcast_to(np.asarray(y, float), (len(X),)) - self.mean_fn(X)) / self._scale(X)
+        k = np.searchsorted(self.r, t, side="right")
+        u = self.rng.uniform(size=len(t)) if self.randomised else 0.5
+        return (k + u) / (n + 1)
+
+    def quantile(self, X, p):
+        """Predictive p-quantile of y | x (p in (0,1)); +-inf beyond the calibration resolution."""
+        n = len(self.r)
+        k = math.ceil(p * (n + 1))
+        if k < 1:
+            z = -np.inf
+        elif k > n:
+            z = np.inf
+        else:
+            z = self.r[k - 1]
+        return self.mean_fn(X) + self._scale(X) * z
+
+    def interval(self, X, alpha=0.1):
+        """Equal-tailed (asymmetric) interval from the predictive distribution."""
+        return self.quantile(X, alpha / 2), self.quantile(X, 1 - alpha / 2)
+
+    def crps(self, X, y, grid=200):
+        """Mean CRPS estimated from the calibration-residual empirical distribution (exact for a step CDF)."""
+        y = np.asarray(y, float)
+        out = []
+        m, s = self.mean_fn(X), self._scale(X)
+        r = self.r
+        n = len(r)
+        for i in range(len(y)):
+            z = r * s[i] + m[i]                       # atoms of the predictive distribution
+            out.append(np.mean(np.abs(z - y[i])) - 0.5 * np.mean(np.abs(z[:, None] - z[None, :])))
+        return float(np.mean(out))
