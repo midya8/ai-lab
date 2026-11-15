@@ -340,6 +340,7 @@
 - reviewkit: AST rule py-duplicate-set-item (repeated constant in a set literal; 132 tests)
 - reviewkit: AST rule py-range-len (`for i in range(len(x))`; 133 tests)
 - reviewkit: py-blocking-in-async now also flags subprocess.run/call/check_output (134 tests)
+- diffusionlab v0.2: DPM-Solver-2 sampler (wins at >=16 NFE, loses below; documented)
 
 
 ## Next

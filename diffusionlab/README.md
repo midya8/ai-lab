@@ -92,3 +92,22 @@ Reading: unguided class-conditional accuracy 0.963 matches the exact model's 0.9
 ## Spiral study (non-analytic data, v0.2)
 
 `shapes.spiral` is a two-arm spiral with no closed-form score, so only sample metrics apply (`experiments/spiral.py`, output in `experiments/spiral_results.txt`; single seed, 4000 steps). Floor between two exact sets: sliced-W1 0.0162 +- 0.0027; pure noise: 0.1563. Deterministic DDIM (eta=0) beat ancestral (eta=1) at every step count: sliced-W1 0.2160 / 0.0933 / 0.0436 / 0.0288 / 0.0247 at 5 / 10 / 25 / 50 / 100 steps. Even at 100 steps the net stays above the floor. Single seed, so differences of a few thousandths are not established.
+
+## DPM-Solver-2 (v0.2)
+
+`diffusionlab.dpm.sample_dpm2` is a midpoint second-order solver in half-log-SNR
+(2 eps-evaluations per step). Sliced-Wasserstein to ring data, oracle eps, linear T=100,
+4000 samples, one seed, same starting noise (equal NFE = evaluations):
+
+| NFE | DDIM | DPM-Solver-2 |
+|----:|-----:|-------------:|
+| 4 | 0.302 | 0.696 |
+| 6 | 0.160 | 0.366 |
+| 8 | 0.106 | 0.202 |
+| 12 | 0.070 | 0.072 |
+| 16 | 0.055 | 0.039 |
+| 24 | 0.039 | 0.031 |
+
+Honest reading: with this coarse 100-step discrete schedule, the second-order solver is
+**worse** below ~12 NFE (few, large steps; the midpoint timestep is rounded to an integer)
+and wins from 16 NFE up. Single seed; the test only asserts the NFE=16 win.
