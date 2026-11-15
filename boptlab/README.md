@@ -83,3 +83,9 @@ Reading it honestly:
 - **Hartmann-3 (30 evals):** no clear winner; medians are all <= 0.015 and the IQRs overlap (Thompson 0.000, EI 0.001, MES 0.008).
 - **log-EI is identical to EI** here (0/12 seeds differ): they share an argmax away from the far tail, so log-EI's benefit is numerical stability, not better results.
 - Only two benchmarks and 12 seeds: the Branin MES gain looks real, the rest is not established.
+
+**Harder problems** (`EXTRA=1 python experiments/acq_compare.py`, 8 seeds, output in `experiments/acq_compare_extra_results.txt`):
+
+- **Hartmann-6 (50 evals):** EI median regret 0.003 vs UCB 0.018, Thompson 0.037, MES 0.124, PI 0.141; the IQRs of EI/UCB overlap. MES, the Branin winner, is among the worst here, so its Branin gain does not generalise.
+- **Ackley-5 (50 evals):** all methods are far from the optimum; UCB is best (3.8) and beats EI on 7/8 seeds, EI 5.6. This fits the earlier finding that UCB does best on Ackley.
+- 8 seeds only; ordering is suggestive.

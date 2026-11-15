@@ -1,0 +1,10 @@
+Final regret (f(best) - optimum), 8 fresh seeds, median [IQR]. 'beats EI' = seeds where regret is strictly lower than EI on the same seed.
+
+| benchmark (evals) | ei | logei | pi | ucb | ts | mes |
+|---|---|---|---|---|---|---|
+| hartmann6 (50) | 0.003 [0.001, 0.121] | 0.003 [0.001, 0.121] | 0.141 [0.053, 0.238] | 0.018 [0.002, 0.121] | 0.037 [0.030, 0.131] | 0.124 [0.056, 0.136] |
+| &nbsp; beats EI | - | 0/8 | 1/8 | 4/8 | 1/8 | 1/8 |
+| ackley5 (50) | 5.569 [4.958, 8.777] | 5.569 [4.958, 8.777] | 8.755 [7.239, 11.042] | 3.765 [3.425, 4.225] | 6.074 [5.227, 7.553] | 6.381 [5.183, 7.175] |
+| &nbsp; beats EI | - | 0/8 | 3/8 | 7/8 | 4/8 | 4/8 |
+
+(runtime 412 s)

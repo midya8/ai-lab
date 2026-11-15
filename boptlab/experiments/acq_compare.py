@@ -3,11 +3,15 @@ Usage: python experiments/acq_compare.py  -> prints a markdown table (final regr
 import os, sys, time
 import numpy as np
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-from boptlab import BayesOpt, branin, hartmann3
+from boptlab import BayesOpt, branin, hartmann3, hartmann6
+from boptlab.benchmarks import ackley
 
 SEEDS = range(100, 112)
 ACQS = ["ei", "logei", "pi", "ucb", "ts", "mes"]
 BENCH = [(branin, 25), (hartmann3, 30)]
+if os.environ.get('EXTRA') == '1':   # harder problems, run separately: EXTRA=1 python experiments/acq_compare.py
+    BENCH = [(hartmann6, 50), (ackley(5), 50)]
+    SEEDS = range(100, 108)
 
 
 def med_iqr(a):
