@@ -1,0 +1,10 @@
+Branin regret at equal cumulative cost, 10 seeds, median [IQR] (inf = nothing affordable yet).
+
+| budget | cost-aware (EIpu) | cost-blind EI | seeds aware strictly better | seeds tied |
+|---|---|---|---|---|
+| 15 | 4.920 [2.104, 6.193] | 4.920 [2.104, 6.193] | 0/10 | 10 |
+| 30 | 0.746 [0.230, 1.254] | 3.660 [1.340, 5.456] | 8/10 | 0 |
+| 60 | 0.039 [0.013, 0.059] | 2.055 [0.321, 2.682] | 9/10 | 0 |
+
+Median evaluations used by budget 60: aware 19, blind 13
+(19s)
