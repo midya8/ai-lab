@@ -377,3 +377,22 @@ class ConformalPredictiveDistribution:
             z = r * s[i] + m[i]                       # atoms of the predictive distribution
             out.append(np.mean(np.abs(z - y[i])) - 0.5 * np.mean(np.abs(z[:, None] - z[None, :])))
         return float(np.mean(out))
+
+
+def exact_expected_coverage(n, alpha):
+    """Exact marginal coverage of split conformal with n calibration points (continuous scores):
+    ceil((n+1)(1-alpha)) / (n+1), capped at 1. It lies in [1-alpha, 1-alpha+1/(n+1))."""
+    if n < 1:
+        raise ValueError("n must be >= 1")
+    return min(1.0, math.ceil((n + 1) * (1 - alpha)) / (n + 1))
+
+
+def calibration_size_for_slack(alpha, slack):
+    """Smallest n whose exact expected coverage exceeds the 1-alpha target by at most `slack`
+    (i.e. the conservativeness from finite calibration data is <= slack)."""
+    if not 0 < alpha < 1 or slack <= 0:
+        raise ValueError("need 0<alpha<1 and slack>0")
+    n = max(1, min_calibration_size(alpha))
+    while exact_expected_coverage(n, alpha) - (1 - alpha) > slack + 1e-12:
+        n += 1
+    return n

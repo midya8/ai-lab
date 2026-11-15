@@ -104,3 +104,7 @@ RAPS shrinks APS sets modestly here but stays above LAC in size; the effect is e
 ## Set-outcome breakdown and worst class
 
 `set_outcome_breakdown(S, y)` splits test points into empty / correct singleton / wrong singleton / multi-label covered / multi-label missed (fractions sum to 1; correct singleton + multi covered equals coverage, tested). `worst_class_coverage(S, y, K, min_count)` returns the lowest-coverage class among classes with enough points, a one-line check for class-conditional failure.
+
+## Calibration-size planning
+
+`exact_expected_coverage(n, alpha)` gives the exact marginal coverage of split conformal with `n` calibration points (continuous scores): `ceil((n+1)(1-alpha))/(n+1)`. `calibration_size_for_slack(alpha, slack)` returns the smallest `n` whose over-coverage is at most `slack`. A simulation test checks the formula.
