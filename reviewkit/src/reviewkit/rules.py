@@ -630,6 +630,18 @@ def ast_findings(ctx: FileContext, source: str, complexity_threshold: int = 10) 
             add(node.lineno, "py-range-len", "low",
                 "`for i in range(len(x))` is usually clearer as iteration or `enumerate`.",
                 "Iterate directly, or use `enumerate(x)` when the index is needed.")
+        elif isinstance(node, ast.ClassDef) and any(
+                isinstance(d, ast.Name) and d.id == "dataclass"
+                or isinstance(d, ast.Call) and isinstance(d.func, ast.Name) and d.func.id == "dataclass"
+                or isinstance(d, ast.Attribute) and d.attr == "dataclass"
+                or isinstance(d, ast.Call) and isinstance(d.func, ast.Attribute) and d.func.attr == "dataclass"
+                for d in node.decorator_list):
+            for stmt in node.body:
+                val = stmt.value if isinstance(stmt, ast.AnnAssign) else None
+                if isinstance(val, (ast.List, ast.Dict, ast.Set)):
+                    add(stmt.lineno, "py-dataclass-mutable-default", "high",
+                        "Mutable default on a dataclass field raises ValueError at import (or is shared if it slips through).",
+                        "Use `field(default_factory=list)` (or dict/set).")
         elif isinstance(node, ast.Set):
             seen_s = set()
             for e in node.elts:
@@ -735,6 +747,7 @@ RULE_TABLE.update({
     "py-unreachable-code": ("medium", "Statements after return/raise/continue/break."),
     "py-assert-constant-string": ("medium", "assert on a non-empty string literal (always true)."),
     "py-duplicate-dict-key": ("medium", "Dict literal repeats a constant key."),
+    "py-dataclass-mutable-default": ("high", "Dataclass field defaults to a list/dict/set literal."),
     "py-range-len": ("low", "`for i in range(len(x))` loop."),
     "py-duplicate-set-item": ("low", "Set literal repeats a constant element."),
     "py-syntax-error": ("critical", "Changed Python file does not parse."),

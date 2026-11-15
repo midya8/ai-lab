@@ -449,3 +449,11 @@ def test_assert_constant_string():
     assert rules("a.py", "assert 'x must be positive'\n") == [(1, "py-assert-constant-string")]
     assert rules("a.py", "assert x > 0, 'x must be positive'\n") == []
     assert rules("a.py", "assert ''\n") == []
+
+
+def test_dataclass_mutable_default():
+    src = "from dataclasses import dataclass\n@dataclass\nclass A:\n    xs: list = []\n"
+    assert rules("a.py", src) == [(4, "py-dataclass-mutable-default")]
+    ok = "from dataclasses import dataclass, field\n@dataclass\nclass A:\n    xs: list = field(default_factory=list)\n    n: int = 0\n"
+    assert rules("a.py", ok) == []
+    assert rules("a.py", "class B:\n    xs: list = []\n") == []
