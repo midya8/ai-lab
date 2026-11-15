@@ -58,12 +58,34 @@ def optimize_acquisition(score, d, rng, anchors=None, n_random=2000, n_refine=4,
     return best_x
 
 
+def refine_ei_gradient(gp, x0, best, xi=0.0, steps=60, lr=0.05):
+    """Projected gradient ascent on EI over [0,1]^d from x0, using the analytic gradient with backtracking.
+    Never returns a point with lower EI than x0 (monotone by construction)."""
+    from .acquisition import expected_improvement_grad
+    x = np.clip(np.asarray(x0, float), 0, 1)
+    ei, g = expected_improvement_grad(gp, x[None, :], best, xi)
+    ei, g = float(ei[0]), g[0]
+    step = lr
+    for _ in range(steps):
+        gn = np.linalg.norm(g)
+        if gn < 1e-12 or step < 1e-9:
+            break
+        cand = np.clip(x + step * g / gn, 0, 1)
+        ec, gc = expected_improvement_grad(gp, cand[None, :], best, xi)
+        if ec[0] > ei:
+            x, ei, g = cand, float(ec[0]), gc[0]
+            step *= 1.5
+        else:
+            step *= 0.5
+    return x
+
+
 class BayesOpt:
     """GP-based Bayesian optimiser. acquisition in {'ei','logei','pi','ucb','ts'}; set noisy=True for noisy objectives
     (incumbent becomes the best *posterior mean* at observed points instead of the best raw observation)."""
 
     def __init__(self, bounds, acquisition="ei", kernel="matern52", n_init=None, noisy=False, beta=2.0, xi=0.0,
-                 rng=None, refit_every=1, fit_kwargs=None):
+                 rng=None, refit_every=1, fit_kwargs=None, grad_refine=False):
         if acquisition not in ("ei", "logei", "pi", "ucb", "ts"):
             raise ValueError("acquisition must be one of ei, logei, pi, ucb, ts")
         self.bounds = np.asarray(bounds, float)
@@ -72,6 +94,7 @@ class BayesOpt:
         self.n_init = n_init if n_init is not None else max(5, 2 * self.d)
         self.rng = rng or np.random.default_rng(0)
         self.refit_every, self.fit_kwargs = refit_every, fit_kwargs or {}
+        self.grad_refine = grad_refine
         self.U = np.empty((0, self.d)); self.y = np.empty(0)
         self.gp = None
         self._hyp, self._asks = None, 0
@@ -139,6 +162,8 @@ class BayesOpt:
                         return A.probability_of_improvement(mu, sd, best, self.xi)
                     return A.confidence_bound(mu, sd, self.beta)
                 u = optimize_acquisition(score, self.d, self.rng, anchors)
+                if self.grad_refine and self.acq == "ei":
+                    u = refine_ei_gradient(g, u, best, self.xi)
             picks.append(u)
             if q > 1:  # constant liar (CL-min): pretend the pick returned the current best value
                 cur = cur.condition(u[None, :], [self.y.min()])

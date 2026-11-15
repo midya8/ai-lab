@@ -114,3 +114,28 @@ def test_quasi_random_baseline_differs_across_seeds_and_stays_in_bounds():
     X2, _ = random_search(branin, branin.bounds, 16, np.random.default_rng(1), quasi=True)
     assert not np.allclose(X1, X2)
     assert (X1 >= branin.bounds[:, 0]).all() and (X1 <= branin.bounds[:, 1]).all()
+
+
+def test_gradient_refinement_never_lowers_ei_and_stays_in_bounds():
+    from boptlab import fit_gp, expected_improvement, refine_ei_gradient
+    rng = np.random.default_rng(3)
+    U = rng.random((12, 2))
+    y = np.array([branin(branin.bounds[:, 0] + u * (branin.bounds[:, 1] - branin.bounds[:, 0])) for u in U])
+    gp = fit_gp(U, y, rng=rng)
+    best = y.min()
+    gains = 0
+    for _ in range(10):
+        x0 = rng.random(2)
+        x1 = refine_ei_gradient(gp, x0, best)
+        e0 = expected_improvement(*gp.predict(x0[None]), best)[0]
+        e1 = expected_improvement(*gp.predict(x1[None]), best)[0]
+        assert (x1 >= 0).all() and (x1 <= 1).all()
+        assert e1 >= e0 - 1e-12
+        gains += e1 > e0 + 1e-9
+    assert gains >= 5
+
+
+def test_bayesopt_grad_refine_runs_and_improves_on_init():
+    bo = BayesOpt(branin.bounds, acquisition="ei", grad_refine=True, rng=np.random.default_rng(1))
+    bo.run(branin, 20)
+    assert len(bo.y) == 20 and bo.best()[1] < 5.0 and bo.best()[1] <= bo.y[:bo.n_init].min()
