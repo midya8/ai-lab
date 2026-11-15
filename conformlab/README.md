@@ -108,3 +108,7 @@ RAPS shrinks APS sets modestly here but stays above LAC in size; the effect is e
 ## Calibration-size planning
 
 `exact_expected_coverage(n, alpha)` gives the exact marginal coverage of split conformal with `n` calibration points (continuous scores): `ceil((n+1)(1-alpha))/(n+1)`. `calibration_size_for_slack(alpha, slack)` returns the smallest `n` whose over-coverage is at most `slack`. A simulation test checks the formula.
+
+## Exchangeability monitor (martingale.py)
+
+`detect_change(scores, delta)` runs randomised online conformal p-values through a simple-mixture power martingale; by Ville's inequality the false-alarm probability is <= delta under exchangeability. Tests: 200 iid streams at delta=0.1 alarm <= 15%; a +2 sigma mean shift at t=300 is caught. Quick check (50 seeds, delta=0.01, shift 0 -> 2 sigma at t=300): 50/50 detected, median delay 32 steps. Synthetic Gaussian data only.
