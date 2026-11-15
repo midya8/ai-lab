@@ -356,6 +356,8 @@ def secret_findings(ctx: FileContext) -> List[Finding]:
 # --------------------------------------------------------------------------- AST rules
 
 _MUTABLE_CALLS = {"list", "dict", "set", "defaultdict", "OrderedDict", "deque", "Counter"}
+_STR_PURE_METHODS = frozenset({"strip", "lstrip", "rstrip", "lower", "upper", "title", "capitalize", "casefold",
+                               "swapcase", "replace", "removeprefix", "removesuffix", "zfill", "center", "ljust", "rjust", "encode", "decode", "format", "translate", "expandtabs"})
 _REQUEST_FUNCS = {"get", "post", "put", "delete", "patch", "head", "request", "options"}
 
 
@@ -428,6 +430,15 @@ def ast_findings(ctx: FileContext, source: str, complexity_threshold: int = 10) 
             add(node.lineno, "py-useless-comparison", "medium",
                 "Comparison used as a statement has no effect (missing assert or assignment?).",
                 "Use `assert ...`, assign the result, or delete the line.")
+        if (isinstance(node, ast.Expr) and isinstance(node.value, ast.Call)
+                and isinstance(node.value.func, ast.Attribute)
+                and node.value.func.attr in _STR_PURE_METHODS
+                and isinstance(node.value.func.value, (ast.Name, ast.Constant, ast.Attribute))
+                and (not isinstance(node.value.func.value, ast.Constant) or isinstance(node.value.func.value.value, (str, bytes)))
+                and node.value.func.attr != "copy"):
+            add(node.lineno, "py-discarded-str-result", "medium",
+                f"`.{node.value.func.attr}()` returns a new string; discarding the result leaves the original unchanged.",
+                "Assign the result, e.g. `s = s." + node.value.func.attr + "(...)`.")
         if isinstance(node, ast.AsyncFunctionDef):
             stack = list(node.body)
             while stack:
@@ -766,6 +777,7 @@ RULE_TABLE.update({
     "py-dataclass-mutable-default": ("high", "Dataclass field defaults to a list/dict/set literal."),
     "py-default-evaluated-once": ("medium", "Default argument calls time/uuid/random once at def time."),
     "py-self-assign": ("low", "`x = x` no-op assignment."),
+    "py-discarded-str-result": ("medium", "`s.strip()` / `.replace()` / `.lower()` etc. used as a statement; strings are immutable."),
     "py-range-len": ("low", "`for i in range(len(x))` loop."),
     "py-duplicate-set-item": ("low", "Set literal repeats a constant element."),
     "py-syntax-error": ("critical", "Changed Python file does not parse."),

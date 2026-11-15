@@ -469,3 +469,10 @@ def test_self_assign():
     assert rules("a.py", "x = 1\nx = x\n") == [(2, "py-self-assign")]
     assert rules("a.py", "x = 1\ny = x\n") == []
     assert rules("a.py", "x = y = z\n") == []
+
+
+def test_discarded_str_result():
+    assert rules("a.py", "s = ' a '\ns.strip()\n") == [(2, "py-discarded-str-result")]
+    assert (2, "py-discarded-str-result") in rules("a.py", "def f(self):\n    self.name.replace('a', 'b')\n")
+    assert rules("a.py", "s = ' a '\ns = s.strip()\n") == []
+    assert rules("a.py", "import numpy as np\nx = np.zeros(3)\nx.fill(1)\n") == []
