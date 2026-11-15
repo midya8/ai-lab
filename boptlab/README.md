@@ -73,3 +73,12 @@ Reading it honestly:
 ## Max-value Entropy Search (`acquisition="mes"`)
 
 `max_value_entropy_search(mu, sd, ystar)` implements MES (Wang & Jegelka 2017) for minimisation. The minimum-value samples `ystar` come from joint GP posterior draws on 400 random candidates (capped at the incumbent), not the Gumbel approximation of the paper. Gamma is clipped at -10 and the CDF uses erfc to avoid underflow. Tests check non-negativity, that an uncertain near-optimal point outscores a certain bad one, and that the loop gets Branin below 1.5 in 25 evaluations on one seed. It has not been benchmarked against EI/UCB/Thompson across seeds, so no ranking is claimed.
+
+## Multi-seed acquisition comparison (12 fresh seeds)
+
+`experiments/acq_compare.py` (output in `experiments/acq_compare_results.txt`) runs EI, log-EI, PI, UCB, Thompson and MES on seeds disjoint from `run_all.py`, 12 seeds each.
+
+- **Branin (25 evals):** MES median regret 0.001 vs EI 0.022, and beats EI on 11/12 seeds; UCB (beta=2, untuned) and PI are worse.
+- **Hartmann-3 (30 evals):** no clear winner; medians are all <= 0.015 and the IQRs overlap (Thompson 0.000, EI 0.001, MES 0.008).
+- **log-EI is identical to EI** here (0/12 seeds differ): they share an argmax away from the far tail, so log-EI's benefit is numerical stability, not better results.
+- Only two benchmarks and 12 seeds: the Branin MES gain looks real, the rest is not established.
