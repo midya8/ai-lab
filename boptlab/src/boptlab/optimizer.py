@@ -81,13 +81,13 @@ def refine_ei_gradient(gp, x0, best, xi=0.0, steps=60, lr=0.05):
 
 
 class BayesOpt:
-    """GP-based Bayesian optimiser. acquisition in {'ei','logei','pi','ucb','ts'}; set noisy=True for noisy objectives
+    """GP-based Bayesian optimiser. acquisition in {'ei','logei','pi','ucb','ts','mes'}; set noisy=True for noisy objectives
     (incumbent becomes the best *posterior mean* at observed points instead of the best raw observation)."""
 
     def __init__(self, bounds, acquisition="ei", kernel="matern52", n_init=None, noisy=False, beta=2.0, xi=0.0,
                  rng=None, refit_every=1, fit_kwargs=None, grad_refine=False):
-        if acquisition not in ("ei", "logei", "pi", "ucb", "ts"):
-            raise ValueError("acquisition must be one of ei, logei, pi, ucb, ts")
+        if acquisition not in ("ei", "logei", "pi", "ucb", "ts", "mes"):
+            raise ValueError("acquisition must be one of ei, logei, pi, ucb, ts, mes")
         self.bounds = np.asarray(bounds, float)
         self.d = len(self.bounds)
         self.acq, self.kernel_kind, self.noisy, self.beta, self.xi = acquisition, kernel, noisy, beta, xi
@@ -145,7 +145,13 @@ class BayesOpt:
         picks = []
         cur = gp
         for _ in range(q):
-            if self.acq == "ts":
+            if self.acq == "mes":
+                C = self.rng.random((400, self.d))
+                ystar = np.minimum(cur.sample(C, 8, self.rng).min(1), best)
+                g = cur
+                u = optimize_acquisition(lambda Cc, g=g, ys=ystar: A.max_value_entropy_search(*g.predict(Cc), ys),
+                                         self.d, self.rng, anchors)
+            elif self.acq == "ts":
                 C = np.vstack([self.rng.random((800, self.d)),
                                np.clip(np.repeat(anchors, 100, 0) + 0.05 * self.rng.standard_normal((100 * len(anchors), self.d)), 0, 1)])
                 draw = cur.sample(C, 1, self.rng)[0]

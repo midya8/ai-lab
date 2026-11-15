@@ -69,3 +69,7 @@ Reading it honestly:
 ## Constrained optimisation
 
 `ConstrainedBayesOpt(bounds, n_constraints)` minimises f subject to c_k(x) <= 0: one GP per function, score = EI over the best feasible point x product of P(c_k <= 0); before any feasible point it maximises feasibility probability. Toy test: optimum on a disc boundary is found with the constraint respected (see `tests/test_constrained.py`; a 2-D toy, not a benchmark study).
+
+## Max-value Entropy Search (`acquisition="mes"`)
+
+`max_value_entropy_search(mu, sd, ystar)` implements MES (Wang & Jegelka 2017) for minimisation. The minimum-value samples `ystar` come from joint GP posterior draws on 400 random candidates (capped at the incumbent), not the Gumbel approximation of the paper. Gamma is clipped at -10 and the CDF uses erfc to avoid underflow. Tests check non-negativity, that an uncertain near-optimal point outscores a certain bad one, and that the loop gets Branin below 1.5 in 25 evaluations on one seed. It has not been benchmarked against EI/UCB/Thompson across seeds, so no ranking is claimed.

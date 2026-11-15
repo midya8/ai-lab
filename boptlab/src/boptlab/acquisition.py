@@ -4,6 +4,7 @@ import math
 import numpy as np
 
 _erf = np.frompyfunc(math.erf, 1, 1)
+_erfc = np.frompyfunc(math.erfc, 1, 1)
 
 
 def norm_cdf(z):
@@ -93,3 +94,14 @@ def expected_improvement_grad(gp, Xs, best, xi=0.0):
     ei = np.maximum(imp * norm_cdf(z) + sd * norm_pdf(z), 0.0)
     grad = -norm_cdf(z)[:, None] * dmu + norm_pdf(z)[:, None] * dsd
     return ei, grad
+
+
+def max_value_entropy_search(mu, sd, ystar):
+    """Max-value Entropy Search (Wang & Jegelka 2017) for minimisation.
+    ystar: samples of the global minimum value. Returns the mean over samples of
+    gamma*phi(gamma)/(2*Phi(gamma)) - log Phi(gamma), with gamma = (mu - ystar)/sd (>= 0 information gain)."""
+    mu = np.asarray(mu, float)[:, None]
+    sd = np.maximum(np.asarray(sd, float)[:, None], 1e-12)
+    g = np.clip((mu - np.asarray(ystar, float)[None, :]) / sd, -10.0, None)  # clip: avoids Phi underflow; the term is already ~|g| huge-but-finite there
+    cdf = 0.5 * np.asarray(_erfc(-g / math.sqrt(2.0)), dtype=float)  # erfc keeps the left tail accurate
+    return np.mean(g * norm_pdf(g) / (2.0 * cdf) - np.log(cdf), axis=1)
