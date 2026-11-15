@@ -457,3 +457,9 @@ def test_dataclass_mutable_default():
     ok = "from dataclasses import dataclass, field\n@dataclass\nclass A:\n    xs: list = field(default_factory=list)\n    n: int = 0\n"
     assert rules("a.py", ok) == []
     assert rules("a.py", "class B:\n    xs: list = []\n") == []
+
+
+def test_default_evaluated_once():
+    assert rules("a.py", "import time\ndef f(t=time.time()):\n    pass\n") == [(2, "py-default-evaluated-once")]
+    assert (2, "py-default-evaluated-once") in rules("a.py", "from datetime import datetime\ndef f(*, t=datetime.now()):\n    pass\n")
+    assert rules("a.py", "import time\ndef f(t=None):\n    t = t or time.time()\n") == []

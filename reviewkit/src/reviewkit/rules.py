@@ -472,6 +472,14 @@ def ast_findings(ctx: FileContext, source: str, complexity_threshold: int = 10) 
                     add(d.lineno, "py-mutable-default", "medium",
                         f"Mutable default argument in `{node.name}` is created once and shared across calls.",
                         "Default to `None` and create the object inside the function.")
+            for d in defaults:
+                if isinstance(d, ast.Call):
+                    fn = d.func
+                    nm = (fn.value.id + "." + fn.attr) if isinstance(fn, ast.Attribute) and isinstance(fn.value, ast.Name) else None
+                    if nm in _TIME_DEFAULTS or nm is None and isinstance(fn, ast.Attribute) and fn.attr in ("now", "utcnow", "today"):
+                        add(d.lineno, "py-default-evaluated-once", "medium",
+                            f"Default argument in `{node.name}` calls `{nm or fn.attr}()` once at definition time, so every call sees the same stale value.",
+                            "Default to `None` and compute the value inside the function.")
             score = cyclomatic(node)
             if score > complexity_threshold:
                 span_end = getattr(node, "end_lineno", node.lineno)
@@ -695,6 +703,8 @@ def ast_findings(ctx: FileContext, source: str, complexity_threshold: int = 10) 
 
 
 RULE_TABLE: Dict[str, Tuple[str, str]] = {r.id: (r.severity, r.message) for r in LINE_RULES}
+_TIME_DEFAULTS = {"time.time", "uuid.uuid4", "uuid.uuid1", "datetime.now", "datetime.utcnow", "datetime.today", "date.today", "random.random"}
+
 RULE_TABLE.update({
     "secret-token": ("critical", "Committed token of a recognisable format (AWS, GitHub, private key, sk-, Slack)."),
     "secret-assignment": ("high", "Credential-looking name assigned a string literal (skipped in test paths)."),
@@ -748,6 +758,7 @@ RULE_TABLE.update({
     "py-assert-constant-string": ("medium", "assert on a non-empty string literal (always true)."),
     "py-duplicate-dict-key": ("medium", "Dict literal repeats a constant key."),
     "py-dataclass-mutable-default": ("high", "Dataclass field defaults to a list/dict/set literal."),
+    "py-default-evaluated-once": ("medium", "Default argument calls time/uuid/random once at def time."),
     "py-range-len": ("low", "`for i in range(len(x))` loop."),
     "py-duplicate-set-item": ("low", "Set literal repeats a constant element."),
     "py-syntax-error": ("critical", "Changed Python file does not parse."),
