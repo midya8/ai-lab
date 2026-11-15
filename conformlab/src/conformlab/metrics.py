@@ -44,3 +44,25 @@ def coverage_beta_params(n, alpha):
     import math
     k = math.ceil((n + 1) * (1 - alpha))
     return k, n + 1 - k
+
+
+def size_stratified_coverage(S, y):
+    """Coverage within each prediction-set-size stratum (the SSC diagnostic of Angelopoulos et al.).
+
+    Returns {size: (coverage, count)}. Marginal coverage can be met while the hardest (largest-set) inputs
+    are badly under-covered; this exposes that. Returns the worst stratum via `worst_size_stratum`.
+    """
+    S = np.asarray(S, bool)
+    y = np.asarray(y, int)
+    sizes = S.sum(1)
+    hit = S[np.arange(len(y)), y]
+    return {int(s): (float(hit[sizes == s].mean()), int((sizes == s).sum())) for s in np.unique(sizes)}
+
+
+def worst_size_stratum(S, y, min_count=30):
+    """Lowest coverage among size strata with at least `min_count` points (avoids noise from tiny strata)."""
+    strata = {s: v for s, v in size_stratified_coverage(S, y).items() if v[1] >= min_count}
+    if not strata:
+        raise ValueError("no stratum has enough points")
+    s = min(strata, key=lambda k: strata[k][0])
+    return s, strata[s][0]

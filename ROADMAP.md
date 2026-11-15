@@ -334,6 +334,7 @@
 - conformlab: `outlier` module: conformal p-values (super-uniform, tie-safe) + Benjamini-Hochberg for FDR-controlled outlier flagging; tested vs brute-force BH and FDR/power over 400 trials (4 tests, 31 total)
 
 - boptlab v0.1: NEW PROJECT — Bayesian optimisation from scratch in NumPy (ARD RBF/Matern-5/2 GP, analytic marginal-likelihood gradients checked against finite differences, EI/PI/UCB/Thompson, constant-liar batches, noise-aware incumbent, 6 benchmarks); EI/UCB/TS beat random and Halton on every function, no acquisition function wins everywhere, Matern > RBF on 3 of 4, batch q=8 costs visibly (41 tests)
+- conformlab: size-stratified coverage diagnostic (`size_stratified_coverage`, `worst_size_stratum`; 3 tests, 40 total)
 
 
 ## Next

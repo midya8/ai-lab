@@ -96,3 +96,7 @@ RAPS shrinks APS sets modestly here but stays above LAC in size; the effect is e
 ## Conformal predictive distributions
 
 `ConformalPredictiveDistribution(mean_fn, scale_fn, randomised)` turns calibration residuals into a full predictive CDF `F(y|x)`, quantiles, equal-tailed asymmetric intervals and CRPS. With `randomised=True` the PIT is exactly uniform marginally (checked in `tests/test_cpd.py` on the synthetic heteroscedastic data); a correct scale function gives lower CRPS than a constant one.
+
+## Size-stratified coverage
+
+`size_stratified_coverage(S, y)` reports coverage within each prediction-set-size stratum and `worst_size_stratum(S, y, min_count)` the lowest one among strata with enough points. Marginal coverage can hold while the large-set (hard) inputs are under-covered; this diagnostic exposes it. Tests check a hand example and that the strata recombine to the marginal coverage.
