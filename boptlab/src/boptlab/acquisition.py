@@ -82,3 +82,14 @@ def log_expected_improvement(mu, sigma, best, xi=0.0):
     with np.errstate(divide="ignore"):
         det = np.log(np.maximum(imp, 0.0))
     return np.where(ok, val, det)
+
+
+def expected_improvement_grad(gp, Xs, best, xi=0.0):
+    """EI and its analytic gradient w.r.t. the candidate points, for a fitted `GP` (minimisation).
+    dEI/dx = -Phi(z) dmu/dx + phi(z) dsigma/dx. Returns (ei (n,), grad (n, d))."""
+    mu, sd, dmu, dsd = gp.predict_grad(Xs)
+    imp = best - xi - mu
+    z = imp / sd
+    ei = np.maximum(imp * norm_cdf(z) + sd * norm_pdf(z), 0.0)
+    grad = -norm_cdf(z)[:, None] * dmu + norm_pdf(z)[:, None] * dsd
+    return ei, grad

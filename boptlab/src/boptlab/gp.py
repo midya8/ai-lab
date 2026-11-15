@@ -33,6 +33,18 @@ class Kernel:
         A, B = np.atleast_2d(A), np.atleast_2d(B)
         return self.sf2 * self._g(self._r2_parts(A, B).sum(-1))
 
+    def dk_dx(self, Xs, X):
+        """Gradient of k(x_i, X_j) w.r.t. x_i: array (n, m, d)."""
+        Xs, X = np.atleast_2d(Xs), np.atleast_2d(X)
+        diff = Xs[:, None, :] - X[None, :, :]
+        r2 = (diff**2 / self.ls**2).sum(-1)
+        if self.kind == "rbf":
+            dg = -0.5 * np.exp(-0.5 * r2)
+        else:
+            r = np.sqrt(np.maximum(r2, 0.0))
+            dg = -(5.0 / 6.0) * (1.0 + _SQRT5 * r) * np.exp(-_SQRT5 * r)
+        return self.sf2 * dg[:, :, None] * 2.0 * diff / self.ls**2
+
     def grads(self, A):
         """K(A, A) and dK/d(log l_d) (list), dK/d(log sf2) for symmetric A."""
         D = self._r2_parts(A, A)
@@ -107,6 +119,22 @@ class GP:
             return mu * self.sd_y + self.mu_y, cov * self.sd_y**2
         var = np.maximum(self.kernel.sf2 - (V**2).sum(0), 1e-12)
         return mu * self.sd_y + self.mu_y, np.sqrt(var) * self.sd_y
+
+    def predict_grad(self, Xs):
+        """Posterior mean, std and their analytic gradients w.r.t. each row of Xs (original y scale).
+        Returns mu (n,), sd (n,), dmu (n, d), dsd (n, d)."""
+        Xs = np.atleast_2d(Xs)
+        Ks = self.kernel(Xs, self.X)                      # (n, m)
+        dK = self.kernel.dk_dx(Xs, self.X)                # (n, m, d)
+        V = np.linalg.solve(self.L, Ks.T)                 # (m, n)
+        W = np.linalg.solve(self.L.T, V)                  # K^-1 k_*, (m, n)
+        mu = Ks @ self.alpha
+        var = np.maximum(self.kernel.sf2 - (V**2).sum(0), 1e-12)
+        dmu = np.einsum("nmd,m->nd", dK, self.alpha)
+        dvar = -2.0 * np.einsum("nmd,mn->nd", dK, W)
+        sd = np.sqrt(var)
+        dsd = dvar / (2.0 * sd[:, None])
+        return mu * self.sd_y + self.mu_y, sd * self.sd_y, dmu * self.sd_y, dsd * self.sd_y
 
     def sample(self, Xs, n_samples, rng):
         """Joint posterior samples of the latent function at Xs: (n_samples, len(Xs))."""

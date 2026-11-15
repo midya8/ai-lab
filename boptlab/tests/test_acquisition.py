@@ -106,3 +106,40 @@ def test_logei_optimizer_runs_and_beats_random():
     o = BayesOpt(b.bounds, acquisition="logei", rng=np.random.default_rng(0))
     o.run(b.f, 20)
     assert o.y.min() - b.optimum < 1.0
+
+
+def _fit_gp(kind, seed=0):
+    rng = np.random.default_rng(seed)
+    X = rng.random((12, 3))
+    y = np.sin(4 * X[:, 0]) + X[:, 1] ** 2 - X[:, 2]
+    return GP(Kernel([0.4, 0.6, 0.5], sf2=1.3, kind=kind), sn2=1e-4).fit(X, y), y
+
+
+@pytest.mark.parametrize("kind", ["rbf", "matern52"])
+def test_predict_grad_matches_finite_differences(kind):
+    gp, _ = _fit_gp(kind)
+    Xs = np.random.default_rng(5).random((6, 3))
+    mu, sd, dmu, dsd = gp.predict_grad(Xs)
+    m0, s0 = gp.predict(Xs)
+    assert np.allclose(mu, m0) and np.allclose(sd, s0)
+    h = 1e-6
+    for d in range(3):
+        e = np.zeros(3); e[d] = h
+        mp, sp = gp.predict(Xs + e); mm, sm = gp.predict(Xs - e)
+        assert np.allclose(dmu[:, d], (mp - mm) / (2 * h), rtol=1e-4, atol=1e-6)
+        assert np.allclose(dsd[:, d], (sp - sm) / (2 * h), rtol=1e-3, atol=1e-5)
+
+
+@pytest.mark.parametrize("kind", ["rbf", "matern52"])
+def test_ei_grad_matches_finite_differences(kind):
+    from boptlab import expected_improvement_grad
+    gp, y = _fit_gp(kind)
+    Xs = np.random.default_rng(7).random((5, 3))
+    best = float(y.min())
+    ei, g = expected_improvement_grad(gp, Xs, best)
+    assert np.allclose(ei, expected_improvement(*gp.predict(Xs), best))
+    h = 1e-6
+    for d in range(3):
+        e = np.zeros(3); e[d] = h
+        num = (expected_improvement(*gp.predict(Xs + e), best) - expected_improvement(*gp.predict(Xs - e), best)) / (2 * h)
+        assert np.allclose(g[:, d], num, rtol=1e-3, atol=1e-6)
