@@ -463,3 +463,9 @@ def test_default_evaluated_once():
     assert rules("a.py", "import time\ndef f(t=time.time()):\n    pass\n") == [(2, "py-default-evaluated-once")]
     assert (2, "py-default-evaluated-once") in rules("a.py", "from datetime import datetime\ndef f(*, t=datetime.now()):\n    pass\n")
     assert rules("a.py", "import time\ndef f(t=None):\n    t = t or time.time()\n") == []
+
+
+def test_self_assign():
+    assert rules("a.py", "x = 1\nx = x\n") == [(2, "py-self-assign")]
+    assert rules("a.py", "x = 1\ny = x\n") == []
+    assert rules("a.py", "x = y = z\n") == []

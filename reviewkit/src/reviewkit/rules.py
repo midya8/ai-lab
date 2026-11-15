@@ -582,6 +582,12 @@ def ast_findings(ctx: FileContext, source: str, complexity_threshold: int = 10) 
                 add(node.lineno, "py-assert-tuple", "high",
                     "`assert (cond, msg)` asserts a non-empty tuple, which is always true; the check never fails.",
                     "Write `assert cond, msg` without the parentheses around both.")
+        elif isinstance(node, ast.Assign):
+            if (len(node.targets) == 1 and isinstance(node.targets[0], ast.Name)
+                    and isinstance(node.value, ast.Name) and node.targets[0].id == node.value.id):
+                add(node.lineno, "py-self-assign", "low",
+                    f"`{node.value.id} = {node.value.id}` assigns a name to itself and does nothing.",
+                    "Delete it, or assign the intended value (often a typo for another variable).")
         elif isinstance(node, ast.Raise):
             exc = node.exc.func if isinstance(node.exc, ast.Call) else node.exc
             if isinstance(exc, ast.Name) and exc.id == "NotImplemented":
@@ -759,6 +765,7 @@ RULE_TABLE.update({
     "py-duplicate-dict-key": ("medium", "Dict literal repeats a constant key."),
     "py-dataclass-mutable-default": ("high", "Dataclass field defaults to a list/dict/set literal."),
     "py-default-evaluated-once": ("medium", "Default argument calls time/uuid/random once at def time."),
+    "py-self-assign": ("low", "`x = x` no-op assignment."),
     "py-range-len": ("low", "`for i in range(len(x))` loop."),
     "py-duplicate-set-item": ("low", "Set literal repeats a constant element."),
     "py-syntax-error": ("critical", "Changed Python file does not parse."),
