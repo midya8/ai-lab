@@ -95,3 +95,14 @@ def worst_class_coverage(S, y, K, min_count=30):
         raise ValueError("no class has enough points")
     k = min(ok, key=lambda j: cc[j])
     return int(k), float(cc[k])
+
+
+def interval_score(lo, hi, y, alpha=0.1):
+    """Mean Winkler interval score: width + (2/alpha) * distance outside the interval.
+
+    A proper scoring rule for central (1-alpha) intervals; lower is better. It rewards narrow
+    intervals but punishes misses, so it cannot be gamed by width alone.
+    """
+    lo, hi, y = (np.asarray(a, float) for a in (lo, hi, y))
+    pen = (2.0 / alpha) * (np.maximum(lo - y, 0.0) + np.maximum(y - hi, 0.0))
+    return float(np.mean((hi - lo) + pen))
