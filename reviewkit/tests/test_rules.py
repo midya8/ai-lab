@@ -231,6 +231,12 @@ def test_fstring_no_placeholder():
     assert rules("a.py", "x = f'{v:>{w}}'\n") == []
 
 
+def test_blocking_subprocess_in_async():
+    src = "import subprocess\nasync def f():\n    subprocess.run(['ls'], check=True)\n"
+    assert rules("a.py", src) == [(3, "py-blocking-in-async")]
+    assert rules("a.py", "import subprocess\ndef f():\n    subprocess.run(['ls'], check=True)\n") == []
+
+
 def test_blocking_in_async():
     src = "import time\nasync def f():\n    time.sleep(1)\n"
     assert rules("a.py", src) == [(3, "py-blocking-in-async")]

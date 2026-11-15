@@ -339,6 +339,7 @@
 - conformlab: `interval_score` (Winkler score, proper scoring rule for intervals; minimised at true quantiles on Gaussian draws; 3 tests, 46 total)
 - reviewkit: AST rule py-duplicate-set-item (repeated constant in a set literal; 132 tests)
 - reviewkit: AST rule py-range-len (`for i in range(len(x))`; 133 tests)
+- reviewkit: py-blocking-in-async now also flags subprocess.run/call/check_output (134 tests)
 
 
 ## Next

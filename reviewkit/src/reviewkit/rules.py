@@ -437,10 +437,12 @@ def ast_findings(ctx: FileContext, source: str, complexity_threshold: int = 10) 
                 if (isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
                         and isinstance(n.func.value, ast.Name)
                         and ((n.func.value.id == "time" and n.func.attr == "sleep")
-                             or (n.func.value.id == "requests" and n.func.attr in _REQUEST_FUNCS))):
+                             or (n.func.value.id == "requests" and n.func.attr in _REQUEST_FUNCS)
+                             or (n.func.value.id == "subprocess"
+                                 and n.func.attr in ("run", "call", "check_call", "check_output")))):
                     add(n.lineno, "py-blocking-in-async", "medium",
                         "Blocking call inside `async def` stalls the whole event loop.",
-                        "Use `await asyncio.sleep(...)`, an async HTTP client, or `asyncio.to_thread(...)`.")
+                        "Use `await asyncio.sleep(...)`, an async HTTP client, `asyncio.create_subprocess_exec`, or `asyncio.to_thread(...)`.")
                 stack.extend(ast.iter_child_nodes(n))
         for field in ("body", "orelse", "finalbody"):
             block = getattr(node, field, None)
@@ -707,7 +709,7 @@ RULE_TABLE.update({
     "py-subprocess-no-check": ("low", "`subprocess.run` without `check=`."),
     "py-open-unclosed": ("low", "`open(...).read()/write()` without a with-block."),
     "py-duplicate-except": ("medium", "Exception type caught twice in one try."),
-    "py-blocking-in-async": ("medium", "time.sleep / requests call inside async def."),
+    "py-blocking-in-async": ("medium", "time.sleep / requests / subprocess call inside async def."),
     "py-useless-comparison": ("medium", "Comparison as a bare statement has no effect."),
     "py-insecure-random-secret": ("medium", "`random` used to generate a token/secret/password."),
     "py-tar-extractall": ("high", "Archive extractall without filter/members (path traversal)."),
