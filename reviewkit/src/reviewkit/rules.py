@@ -620,6 +620,16 @@ def ast_findings(ctx: FileContext, source: str, complexity_threshold: int = 10) 
                             f"Dict literal repeats the key {k.value!r}; the earlier value is silently discarded.",
                             "Remove the duplicate or fix the intended key.")
                     seen[key] = v
+        elif isinstance(node, ast.Set):
+            seen_s = set()
+            for e in node.elts:
+                if isinstance(e, ast.Constant) and isinstance(e.value, (str, bytes, int, float)) and not isinstance(e.value, bool):
+                    key = (type(e.value).__name__, e.value)
+                    if key in seen_s:
+                        add(e.lineno, "py-duplicate-set-item", "low",
+                            f"Set literal repeats {e.value!r}; the duplicate has no effect and often hides a typo.",
+                            "Remove the duplicate or fix the intended element.")
+                    seen_s.add(key)
         elif isinstance(node, ast.UnaryOp):
             if isinstance(node.op, ast.Not) and isinstance(node.operand, ast.Compare) \
                     and len(node.operand.ops) == 1 and isinstance(node.operand.ops[0], (ast.In, ast.Is)):
@@ -715,6 +725,7 @@ RULE_TABLE.update({
     "py-unreachable-code": ("medium", "Statements after return/raise/continue/break."),
     "py-assert-constant-string": ("medium", "assert on a non-empty string literal (always true)."),
     "py-duplicate-dict-key": ("medium", "Dict literal repeats a constant key."),
+    "py-duplicate-set-item": ("low", "Set literal repeats a constant element."),
     "py-syntax-error": ("critical", "Changed Python file does not parse."),
     "py-taint-sql": ("high", "Untrusted input flows into SQL query text."),
     "py-taint-shell": ("high", "Untrusted input flows into a shell command."),

@@ -337,6 +337,7 @@
 - conformlab: size-stratified coverage diagnostic (`size_stratified_coverage`, `worst_size_stratum`; 3 tests, 40 total)
 - ticket-triage: `conformal` module — split-conformal category sets with auto/review/escalate routing; coverage tested under 30% label noise (3 tests, 64 total)
 - conformlab: `interval_score` (Winkler score, proper scoring rule for intervals; minimised at true quantiles on Gaussian draws; 3 tests, 46 total)
+- reviewkit: AST rule py-duplicate-set-item (repeated constant in a set literal; 132 tests)
 
 
 ## Next
