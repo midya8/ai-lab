@@ -439,6 +439,18 @@ def ast_findings(ctx: FileContext, source: str, complexity_threshold: int = 10) 
             add(node.lineno, "py-discarded-str-result", "medium",
                 f"`.{node.value.func.attr}()` returns a new string; discarding the result leaves the original unchanged.",
                 "Assign the result, e.g. `s = s." + node.value.func.attr + "(...)`.")
+        if isinstance(node, ast.FunctionDef) and node.name == "__init__":
+            stk = list(node.body)
+            while stk:
+                n = stk.pop()
+                if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda, ast.ClassDef)):
+                    continue
+                if (isinstance(n, ast.Return) and n.value is not None
+                        and not (isinstance(n.value, ast.Constant) and n.value.value is None)):
+                    add(n.lineno, "py-init-returns-value", "high",
+                        "`__init__` returns a value; Python raises TypeError when the class is instantiated.",
+                        "Return nothing from `__init__` (use a classmethod or `__new__` if you need a different object).")
+                stk.extend(ast.iter_child_nodes(n))
         if isinstance(node, ast.AsyncFunctionDef):
             stack = list(node.body)
             while stack:
@@ -776,6 +788,7 @@ RULE_TABLE.update({
     "py-duplicate-dict-key": ("medium", "Dict literal repeats a constant key."),
     "py-dataclass-mutable-default": ("high", "Dataclass field defaults to a list/dict/set literal."),
     "py-default-evaluated-once": ("medium", "Default argument calls time/uuid/random once at def time."),
+    "py-init-returns-value": ("high", "`__init__` returns a non-None value (TypeError at instantiation)."),
     "py-self-assign": ("low", "`x = x` no-op assignment."),
     "py-discarded-str-result": ("medium", "`s.strip()` / `.replace()` / `.lower()` etc. used as a statement; strings are immutable."),
     "py-range-len": ("low", "`for i in range(len(x))` loop."),

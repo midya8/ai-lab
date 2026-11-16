@@ -476,3 +476,9 @@ def test_discarded_str_result():
     assert (2, "py-discarded-str-result") in rules("a.py", "def f(self):\n    self.name.replace('a', 'b')\n")
     assert rules("a.py", "s = ' a '\ns = s.strip()\n") == []
     assert rules("a.py", "import numpy as np\nx = np.zeros(3)\nx.fill(1)\n") == []
+
+
+def test_init_returns_value():
+    assert rules("a.py", "class A:\n    def __init__(self):\n        return 1\n") == [(3, "py-init-returns-value")]
+    assert rules("a.py", "class A:\n    def __init__(self):\n        return None\n") == []
+    assert rules("a.py", "class A:\n    def __init__(self):\n        def g():\n            return 2\n        self.g = g\n") == []
