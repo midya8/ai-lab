@@ -152,3 +152,15 @@ def selective_accuracy(S, y):
     if not single.any():
         return rate, float("nan")
     return rate, float(S[single, y[single]].mean())
+
+
+def set_size_histogram(S):
+    """Fraction of test points whose prediction set has size 0, 1, ..., K (length K+1 array).
+
+    Complements `mean_set_size`: the same mean can hide very different shapes (all size-2 sets versus
+    a mix of singletons and large sets).
+    """
+    S = np.asarray(S, bool)
+    K = S.shape[1]
+    counts = np.bincount(S.sum(1), minlength=K + 1)
+    return counts / counts.sum()
