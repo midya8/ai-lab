@@ -115,3 +115,17 @@ and wins from 16 NFE up. Single seed; the test only asserts the NFE=16 win.
 ## v-prediction and SNR weights (`diffusionlab.vparam`)
 
 Exact conversions between eps, x0 and v parametrisations (`v = alpha*eps - sigma*x0`), wrappers that expose any eps-predictor as a v-predictor and back, and per-timestep loss multipliers (eps, x0, v, min-SNR-gamma). Tests verify round-trips and that a v-wrapped oracle reproduces DDIM / DPM-Solver-2 samples. These are utilities only; training with a v or min-SNR loss is not yet benchmarked here.
+
+
+## eps- vs v-prediction, multi-seed (`experiments/param_study.py`)
+
+Ring GMM, 4000 steps, 4 seeds, unconditional; excess eps error vs the exact optimum (mean over 10 noise levels) and sliced-W1 of deterministic DDIM samples (lower is better). Raw output: `experiments/param_study_results.txt`.
+
+| target | weighting (multiplier on eps-MSE) | excess eps err | sW1 @10 steps | sW1 @50 steps |
+|---|---|---|---|---|
+| eps | 1 (plain) | 0.0017 +- 0.0001 | 0.1036 | 0.0463 |
+| v | SNR+1 (plain v-MSE) | 0.0014 +- 0.0000 | 0.1002 | 0.0457 |
+| eps | min(SNR, 5) | 0.0303 +- 0.0122 | 0.2418 | 0.1730 |
+| v | min(SNR, 5) | 0.0039 +- 0.0002 | 0.0988 | 0.0464 |
+
+Reading: plain v-MSE is slightly better than eps-MSE on error and about equal on sample quality (differences in sW1 are small; I did not test significance). The `min(SNR, 5)` multiplier is the x0-style weight and starves high-noise steps when applied to an eps-net, which is clearly harmful (not the published min-SNR-gamma eps weight, `min(SNR,g)/SNR`). Toy 2-D data; do not extrapolate to images.
