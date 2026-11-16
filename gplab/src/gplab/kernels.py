@@ -288,3 +288,80 @@ class Product(_Composite):
     def grad(self, X):
         Ka, Kb = self.a(X), self.b(X)
         return [g * Kb for g in self.a.grad(X)] + [Ka * g for g in self.b.grad(X)]
+
+
+class SpectralMixture(Kernel):
+    """Spectral-mixture kernel (Wilson & Adams 2013), product over input dimensions:
+    k(t) = sum_q w_q prod_d exp(-2 pi^2 t_d^2 v_qd) cos(2 pi t_d mu_qd).
+    The spectral density is a Gaussian mixture, so it can express several periodicities and
+    extrapolate them. Parameters (all log): w (Q), mu (Q*d), v (Q*d). Multimodal likelihood:
+    initialise means from the data periodogram or use restarts."""
+
+    def __init__(self, weights, means, variances):
+        w = np.atleast_1d(np.asarray(weights, float))
+        mu = np.asarray(means, float).reshape(w.size, -1)
+        v = np.asarray(variances, float).reshape(w.size, -1)
+        assert mu.shape == v.shape
+        self.Q, self.d = mu.shape
+        self._t = np.log(np.concatenate([w, mu.ravel(), v.ravel()]))
+
+    @property
+    def n_params(self):  # type: ignore[override]
+        return self.Q * (1 + 2 * self.d)
+
+    @property
+    def params(self):
+        return self._t.copy()
+
+    @params.setter
+    def params(self, theta):
+        self._t = np.asarray(theta, float).copy()
+
+    @property
+    def weights(self):
+        return np.exp(self._t[: self.Q])
+
+    @property
+    def means(self):
+        return np.exp(self._t[self.Q: self.Q + self.Q * self.d]).reshape(self.Q, self.d)
+
+    @property
+    def variances(self):
+        return np.exp(self._t[self.Q + self.Q * self.d:]).reshape(self.Q, self.d)
+
+    def param_names(self):
+        return ([f"log_w{q}" for q in range(self.Q)]
+                + [f"log_mu{q}_{j}" for q in range(self.Q) for j in range(self.d)]
+                + [f"log_v{q}_{j}" for q in range(self.Q) for j in range(self.d)])
+
+    def _parts(self, X, Y):
+        T = X[:, None, :] - Y[None, :, :]                      # n x m x d
+        w, mu, v = self.weights, self.means, self.variances
+        env = np.exp(-2 * np.pi ** 2 * T[:, :, None, :] ** 2 * v[None, None])    # n m Q d
+        osc = np.cos(2 * np.pi * T[:, :, None, :] * mu[None, None])
+        return T, w, mu, v, env, osc
+
+    def __call__(self, X, Y=None):
+        X = _as2d(X)
+        Y = X if Y is None else _as2d(Y)
+        _, w, _, _, env, osc = self._parts(X, Y)
+        return (w[None, None] * (env * osc).prod(-1)).sum(-1)
+
+    def diag(self, X):
+        return np.full(_as2d(X).shape[0], self.weights.sum())
+
+    def grad(self, X):
+        X = _as2d(X)
+        T, w, mu, v, env, osc = self._parts(X, X)
+        f = env * osc                                          # n m Q d
+        prod = f.prod(-1)                                      # n m Q
+        out = [w[q] * prod[:, :, q] for q in range(self.Q)]
+        Tq = T[:, :, None, :]
+        d_mu = -env * np.sin(2 * np.pi * Tq * mu[None, None]) * 2 * np.pi * Tq * mu[None, None]
+        d_v = f * (-2 * np.pi ** 2 * Tq ** 2 * v[None, None])
+        for dd in (d_mu, d_v):
+            for q in range(self.Q):
+                for j in range(self.d):
+                    g = dd[:, :, q, j] * np.prod(np.delete(f[:, :, q, :], j, axis=-1), axis=-1)
+                    out.append(w[q] * g)
+        return out

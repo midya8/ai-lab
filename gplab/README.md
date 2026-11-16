@@ -8,7 +8,7 @@ Everything is synthetic with a known generating process, so recovery and calibra
 
 | Piece | Where | What it does |
 |---|---|---|
-| `RBF`, `Matern32`, `Matern52` (iso/ARD), `Periodic`, `Linear`, `+` / `*` | `kernels.py` | covariance functions whose `grad(X)` gives `dK/d(log param)` for every parameter; sums and products use the sum/product rules, so `Periodic * RBF + Linear` is fit with exact gradients |
+| `RBF`, `Matern32`, `Matern52` (iso/ARD), `Periodic`, `SpectralMixture`, `Linear`, `+` / `*` | `kernels.py` | covariance functions whose `grad(X)` gives `dK/d(log param)` for every parameter; sums and products use the sum/product rules, so `Periodic * RBF + Linear` is fit with exact gradients |
 | `ExactGP` | `gp.py` | Cholesky GP: log marginal likelihood **and its analytic gradient** (`0.5 tr((a a^T - K^-1) dK)`), multi-restart L-BFGS fitting, predictive mean/var/covariance, posterior and prior samples, **closed-form leave-one-out** (no refits) |
 | `SparseGP` | `sparse.py` | one collapsed O(n m^2) implementation of **VFE** (Titsias bound, with the trace term), **FITC** (per-point noise) and **DTC**; inducing points by greedy pivoted-Cholesky (`greedy_inducing`) or k-means |
 | `RandomFourierFeatures`, `NystromFeatures`, `FeatureGP` | `features.py` | RFF for RBF (Gaussian spectrum) and Matern 3/2, 5/2 (Student-t spectrum), optional orthogonal blocks; Nystrom map; Bayesian linear regression on features (O(n D^2)) |
@@ -184,3 +184,5 @@ p = clf.predict_proba(Xs)
 ```
 Tests (6 new, 68 total) verify the mode is a stationary point of the penalised likelihood, beats
 perturbations, the LML matches exact 1-D integration in the Gaussian limit, and that fitting improves LML on a synthetic two-moons set.
+
+- `SpectralMixture` (v0.3): Gaussian-mixture spectral density kernel with analytic gradients (per-dimension product). Tests: finite-difference gradients, PSD, reduces to RBF at zero mean, and on a two-frequency signal (0.5 and 1.3 Hz, synthetic) extrapolates 8 to 10 with RMSE < 0.15 and under half of an RBF GP's; L-BFGS from a rough init recovers both frequencies within 0.03. The likelihood is multimodal, so initialise means from a periodogram or use restarts.
