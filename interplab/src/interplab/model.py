@@ -6,7 +6,7 @@ check the logits agree to float64 precision, so analyses on this class are analy
 trained model, not of a re-implementation.
 
 Hook points (names): "embed", "L{l}.pattern" (B,H,T,T), "L{l}.head_out" (B,H,T,D),
-"L{l}.resid_mid" (B,T,D, after attention), "L{l}.mlp_out" (B,T,D).
+"L{l}.resid_mid" (B,T,D, after attention), "L{l}.mlp_hidden" (B,T,4D, post-GELU), "L{l}.mlp_out" (B,T,D).
 A hook is a callable array -> array (or None to leave it unchanged).
 """
 import numpy as np
@@ -105,7 +105,8 @@ class InterpModel:
             head_out = hook(f"L{l}.head_out", np.einsum("bhtd,hde->bhte", z, wo))
             resid = hook(f"L{l}.resid_mid", resid + head_out.sum(1) + blk["proj"][1])
             m = _ln(resid, *blk["ln2"])
-            mlp = hook(f"L{l}.mlp_out", _gelu(m @ blk["fc1"][0] + blk["fc1"][1]) @ blk["fc2"][0] + blk["fc2"][1])
+            hid = hook(f"L{l}.mlp_hidden", _gelu(m @ blk["fc1"][0] + blk["fc1"][1]))
+            mlp = hook(f"L{l}.mlp_out", hid @ blk["fc2"][0] + blk["fc2"][1])
             resid = resid + mlp
         if cache is not None:
             cache["resid_final"] = resid

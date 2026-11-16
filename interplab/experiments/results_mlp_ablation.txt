@@ -1,0 +1,12 @@
+seed 0 zero-ablate whole MLP: base nll 0.132 acc 0.992 | L0: nll 3.305 acc 0.317 | L1: nll 0.293 acc 0.901
+seed 0 mean-ablate whole MLP: base nll 0.132 acc 0.992 | L0: nll 3.616 acc 0.436 | L1: nll 0.400 acc 0.940
+seed 0 L0 single-neuron mean-ablation: max d_nll 0.7386, median 0.00101, top10 share 0.87, top10 joint 1.0904 vs sum 0.8681
+seed 0 L1 single-neuron mean-ablation: max d_nll 0.0087, median 0.00065, top10 share 0.34, top10 joint 0.0437 vs sum 0.0423
+seed 1 zero-ablate whole MLP: base nll 0.145 acc 0.982 | L0: nll 3.200 acc 0.274 | L1: nll 0.427 acc 0.857
+seed 1 mean-ablate whole MLP: base nll 0.145 acc 0.982 | L0: nll 3.529 acc 0.400 | L1: nll 0.488 acc 0.907
+seed 1 L0 single-neuron mean-ablation: max d_nll 0.3182, median 0.00215, top10 share 0.59, top10 joint 0.4993 vs sum 0.4129
+seed 1 L1 single-neuron mean-ablation: max d_nll 0.0075, median 0.00054, top10 share 0.36, top10 joint 0.0535 vs sum 0.0491
+seed 2 zero-ablate whole MLP: base nll 0.185 acc 0.972 | L0: nll 3.815 acc 0.185 | L1: nll 1.064 acc 0.682
+seed 2 mean-ablate whole MLP: base nll 0.185 acc 0.972 | L0: nll 3.910 acc 0.257 | L1: nll 0.921 acc 0.769
+seed 2 L0 single-neuron mean-ablation: max d_nll 0.1210, median 0.00291, top10 share 0.38, top10 joint 0.3718 vs sum 0.2407
+seed 2 L1 single-neuron mean-ablation: max d_nll 0.0089, median 0.00084, top10 share 0.30, top10 joint 0.0709 vs sum 0.0559

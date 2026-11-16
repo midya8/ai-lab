@@ -52,6 +52,20 @@ So: the network solves the task, provably by copying from the right source, but 
 | `analysis.py` | `previous_token_scores`, `induction_scores`, `period_offset_profile`, `head_ablation_table` (zero/mean), `logit_attribution` (exactly additive; tested), `patch_head_effects`, `composition_scores` (Q/K/V), `copy_fidelity`, `uniform_attention_baseline` |
 | `report.py` / `__main__.py` | one-call report and CLI |
 
+## MLP ablation (v0.2)
+
+New hook `L{l}.mlp_hidden` (post-GELU), `neuron_ablate`, `mlp_ablation_table`, `neuron_ablation_table`;
+`experiments/mlp_ablation.py` -> `experiments/results_mlp_ablation.txt` (3 seeds, 256 fresh sequences each).
+The MLPs are not decoration: ablating the whole layer-0 MLP drops accuracy from 0.97-0.99 to 0.19-0.44
+(NLL 0.13-0.19 -> 3.2-3.9, near chance ln 24 = 3.18 or worse), so the attention circuit depends on it, while
+the layer-1 MLP is much less critical (acc 0.68-0.94 left, seed-dependent: seed 2 hurts most).
+Single layer-0 neurons: the median neuron does almost nothing (d_nll ~0.001-0.003), but the worst one costs
+0.12-0.74 NLL, and how concentrated the damage is varies by seed (top-10 neurons carry 38-87% of summed damage).
+Ablating the top 10 together costs more than the sum of their single effects in every seed (e.g. 1.09 vs 0.87),
+i.e. the neurons are partly redundant/interacting. Layer-1 neurons are individually negligible (max d_nll <0.01).
+Caveats: I did not find out *what* the layer-0 MLP computes (that needs e.g. patching/SAE), only that it is needed;
+the top-10 choice was fixed before running; 3 seeds are a small sample.
+
 ## Honest limits
 
 * Three seeds, 2×2 heads, one synthetic task. Per-head numbers differ across seeds; only the pattern (layer 0 carries the lookup, no sharp induction head) is consistent.

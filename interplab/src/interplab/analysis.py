@@ -102,6 +102,50 @@ def head_ablation_table(model, tokens, periods, mode="zero"):
     return dict(baseline=dict(nll=base_nll, acc=base_acc), rows=rows)
 
 
+# ------------------------------------------------------------------ MLP neuron ablation
+def neuron_ablate(layer, neurons, ref_cache=None):
+    """Zero (or, with ref_cache, replace by the batch-and-position mean) the given hidden neurons."""
+    idx = np.atleast_1d(np.asarray(neurons, dtype=int))
+    mean = None if ref_cache is None else ref_cache[f"L{layer}.mlp_hidden"].mean(axis=0)  # (T, F)
+
+    def fn(x):
+        x = x.copy()
+        x[:, :, idx] = 0.0 if mean is None else mean[None, : x.shape[1]][:, :, idx]
+        return x
+    return {f"L{layer}.mlp_hidden": fn}
+
+
+def mlp_ablation_table(model, tokens, periods, mode="zero"):
+    """Whole-MLP ablation per layer: rows (layer, nll, acc, d_nll) plus the baseline."""
+    base_nll, base_acc = loss_and_acc(model, tokens, periods)
+    _, ref = _run(model, tokens[:, :-1])
+    rows = []
+    for l in range(model.layers):
+        F = ref[f"L{l}.mlp_hidden"].shape[-1]
+        hk = neuron_ablate(l, np.arange(F), ref if mode == "mean" else None)
+        nll, acc = loss_and_acc(model, tokens, periods, hk)
+        rows.append(dict(layer=l, nll=nll, acc=acc, d_nll=nll - base_nll))
+    return dict(baseline=dict(nll=base_nll, acc=base_acc), rows=rows)
+
+
+def neuron_ablation_table(model, tokens, periods, layer, mode="zero", top=10):
+    """Single-neuron ablations in one layer, sorted by damage (d_nll). Also returns the
+    concentration: share of the summed positive damage carried by the top-`top` neurons, and
+    the damage of ablating those `top` together (single effects need not add up)."""
+    base_nll, _ = loss_and_acc(model, tokens, periods)
+    _, ref = _run(model, tokens[:, :-1])
+    F = ref[f"L{layer}.mlp_hidden"].shape[-1]
+    rc = ref if mode == "mean" else None
+    d = np.array([loss_and_acc(model, tokens, periods, neuron_ablate(layer, [j], rc))[0] - base_nll
+                  for j in range(F)])
+    order = np.argsort(-d)
+    top_idx = order[:top]
+    pos = np.clip(d, 0, None).sum()
+    joint = loss_and_acc(model, tokens, periods, neuron_ablate(layer, top_idx, rc))[0] - base_nll
+    return dict(layer=layer, d_nll=d, order=order, top_share=float(np.clip(d[top_idx], 0, None).sum() / pos) if pos > 0 else 0.0,
+                joint_top_d_nll=float(joint), sum_top_d_nll=float(d[top_idx].sum()))
+
+
 # ------------------------------------------------------------------ direct logit attribution
 def logit_attribution(model, tokens, periods):
     """Decompose the correct-token logit (centred over the vocabulary) into additive contributions of

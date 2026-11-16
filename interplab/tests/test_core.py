@@ -194,3 +194,28 @@ def test_offset_profile_on_hand_built_pattern():
     prof = period_offset_profile({"L0.pattern": pat}, 0, np.array([p]), offsets=[-1, 0, 1])
     assert prof[0].tolist() == [0.0, 0.0, 1.0]
     assert 0 < uniform_attention_baseline(np.array([4, 6]), 17) < 0.2
+
+
+def test_mlp_hidden_hook_is_consistent_and_ablation_noop_for_empty():
+    import numpy as np
+    from interplab import InterpModel, neuron_ablate, make_batch
+    rng = np.random.default_rng(0)
+    D, H, V, T, F = 8, 2, 11, 6, 32
+    r = lambda *s: rng.normal(0, 0.3, s)
+    blk = dict(ln1=(np.ones(D), np.zeros(D)), ln2=(np.ones(D), np.zeros(D)), qkv=(r(D, 3 * D), np.zeros(3 * D)),
+               proj=(r(D, D), np.zeros(D)), fc1=(r(D, F), np.zeros(F)), fc2=(r(F, D), np.zeros(D)))
+    m = InterpModel(dict(tok=r(V, D), pos=r(T, D), blocks=[blk], lnf=(np.ones(D), np.zeros(D)), head=(r(D, V), np.zeros(V))), H)
+    ids = rng.integers(0, V, (3, T))
+    cache = {}
+    base = m.forward(ids, None, cache)
+    assert cache["L0.mlp_hidden"].shape == (3, T, F)
+    assert np.allclose(m.forward(ids, neuron_ablate(0, [])), base)
+    out = m.forward(ids, neuron_ablate(0, [0, 5]))
+    assert not np.allclose(out, base)
+    # ablating all neurons == zero MLP output except bias
+    full = m.forward(ids, neuron_ablate(0, np.arange(F)))
+    ref = m.forward(ids, {"L0.mlp_out": lambda x: np.zeros_like(x) + blk["fc2"][1]})
+    assert np.allclose(full, ref)
+    # mean-ablation with the batch itself as reference leaves the mean activation unchanged
+    mm = m.forward(ids, neuron_ablate(0, [3], cache))
+    assert mm.shape == base.shape

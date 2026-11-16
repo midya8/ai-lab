@@ -32,3 +32,14 @@ def test_trained_model_copies_from_the_true_source(trained):
     tokens, periods = make_batch(np.random.default_rng(8), 150)
     r = copy_fidelity(im, tokens, periods, np.random.default_rng(1))
     assert r["follow"] > 0.6 and r["follow"] > r["control"] + 0.3
+
+
+def test_mlp_ablation_tables(trained):
+    from interplab import mlp_ablation_table, neuron_ablation_table
+    im, _ = trained
+    tokens, periods = make_batch(np.random.default_rng(5), 64)
+    t = mlp_ablation_table(im, tokens, periods)
+    assert len(t["rows"]) == im.layers
+    n = neuron_ablation_table(im, tokens, periods, layer=0, top=5)
+    assert n["d_nll"].shape[0] == 4 * im.D and n["d_nll"][n["order"][0]] >= n["d_nll"][n["order"][-1]]
+    assert 0.0 <= n["top_share"] <= 1.0
