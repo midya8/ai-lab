@@ -465,6 +465,14 @@ def ast_findings(ctx: FileContext, source: str, complexity_threshold: int = 10) 
             add(node.lineno, "py-site-exit", "low",
                 f"`{node.func.id}()` comes from the `site` module and is absent under `python -S` and frozen apps.",
                 "Use `sys.exit()` or raise `SystemExit`.")
+        if isinstance(node, ast.Compare):
+            for op, comp in zip(node.ops, node.comparators):
+                if (isinstance(op, (ast.In, ast.NotIn)) and isinstance(comp, ast.Call)
+                        and isinstance(comp.func, ast.Attribute) and comp.func.attr == "keys"
+                        and not comp.args and not comp.keywords):
+                    add(node.lineno, "py-in-dict-keys", "low",
+                        "`x in d.keys()` builds a keys view for a test `x in d` already does directly.",
+                        "Drop `.keys()`: `if x in d:`.")
         if isinstance(node, ast.Assign):
             for tgt in node.targets:
                 if isinstance(tgt, ast.Name) and tgt.id in _SHADOW_BUILTINS:
@@ -825,6 +833,7 @@ RULE_TABLE.update({
     "py-dataclass-mutable-default": ("high", "Dataclass field defaults to a list/dict/set literal."),
     "py-default-evaluated-once": ("medium", "Default argument calls time/uuid/random once at def time."),
     "py-mutate-while-iterating": ("high", "List mutated (append/remove/insert/pop/extend) inside a `for` over itself."),
+    "py-in-dict-keys": ("low", "Membership test against `d.keys()` (use `x in d`)."),
     "py-shadow-builtin": ("low", "Variable assigned with a common builtin name (list/dict/id/type/...)."),
     "py-site-exit": ("low", "Bare `exit()`/`quit()` (use sys.exit)."),
     "py-is-literal": ("medium", "`is`/`is not` against a str/number literal (use ==)."),

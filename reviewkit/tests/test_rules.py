@@ -514,3 +514,9 @@ def test_shadow_builtin():
     assert (2, "py-shadow-builtin") in rules("a.py", "def f(xs):\n    list = xs[:]\n    return list\n")
     ok = "def f(xs):\n    items = xs[:]\n    return items\n"
     assert all(r != "py-shadow-builtin" for _, r in rules("a.py", ok))
+
+
+def test_in_dict_keys():
+    assert (2, "py-in-dict-keys") in rules("a.py", "def f(d, k):\n    return k in d.keys()\n")
+    ok = "def f(d, k):\n    return k in d\n"
+    assert all(r != "py-in-dict-keys" for _, r in rules("a.py", ok))
