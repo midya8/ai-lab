@@ -70,3 +70,45 @@ def loss_weights(sched: Schedule, kind: str, gamma: float = 5.0) -> np.ndarray:
     else:
         raise ValueError(f"unknown weighting {kind!r}")
     return w
+
+
+def train_param(net, sampler_fn, sched: Schedule, target: str = "eps", weighting: str = "eps",
+                gamma: float = 5.0, steps: int = 4000, batch: int = 256, lr: float = 2e-3,
+                p_uncond: float = 0.1, ema_decay: float = 0.995, seed: int = 0) -> list:
+    """Train `net` to predict `target` in {"eps", "v"} with an SNR-based loss weighting.
+
+    `weighting` is the multiplier on the *eps*-MSE (see `loss_weights`).  The
+    network regresses `target`; the per-sample weight applied to its MSE is the
+    desired eps-space weight divided by the target's intrinsic factor (1 for eps,
+    SNR+1 for v, since v-MSE = (SNR+1) * eps-MSE up to the x_t-dependent map),
+    so target="v", weighting="v" is plain v-MSE and target="eps", weighting="v" is
+    the eps-network trained with the v-MSE-equivalent weight.
+    Returns the per-step weighted loss history.  Use `v_fn_to_eps_fn` on a v-net's
+    predictions before sampling.
+    """
+    from .diffusion import q_sample
+    from .net import Adam
+    if target not in ("eps", "v"):
+        raise ValueError(f"unknown target {target!r}")
+    W = loss_weights(sched, weighting, gamma)
+    rng = np.random.default_rng(seed)
+    opt = Adam(net.params, lr=lr)
+    hist = []
+    for it in range(steps):
+        x0, labels = sampler_fn(batch, rng)
+        t = rng.integers(1, sched.T + 1, size=batch)
+        eps = rng.standard_normal(x0.shape)
+        xt = q_sample(x0, t, eps, sched)
+        ab = sched.abar[t][:, None]
+        a, s = np.sqrt(ab), np.sqrt(1.0 - ab)
+        tgt = eps if target == "eps" else a * eps - s * x0
+        w = W[t] if target == "eps" else W[t] / (ab / (1.0 - ab) + 1.0)[:, 0]
+        lab = labels.copy() if labels is not None else None
+        if lab is not None and p_uncond > 0:
+            lab[rng.random(batch) < p_uncond] = -1
+        loss, grads = net.loss_and_grads(xt, t, lab, tgt, weights=w)
+        cosine = 0.5 * (1 + np.cos(np.pi * it / steps))
+        opt.step(grads, lr=lr * (0.05 + 0.95 * cosine))
+        net.update_ema(min(ema_decay, (1 + it) / (10 + it)))
+        hist.append(loss)
+    return hist

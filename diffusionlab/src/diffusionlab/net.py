@@ -63,13 +63,15 @@ class EpsNet:
         feats = self.featurize(x, t, labels)
         return self._forward(feats, self.ema if use_ema else self.params)[0]
 
-    def loss_and_grads(self, x, t, labels, target):
-        """Mean squared error against `target` (elementwise mean) and parameter grads."""
+    def loss_and_grads(self, x, t, labels, target, weights=None):
+        """Mean squared error against `target` (elementwise mean) and parameter grads.
+        `weights` (N,) optionally scales each sample's squared error."""
         feats = self.featurize(x, t, labels)
         out, acts, pres = self._forward(feats, self.params)
         diff = out - target
-        loss = float((diff ** 2).mean())
-        g = 2.0 * diff / diff.size
+        w = np.ones((len(diff), 1)) if weights is None else np.asarray(weights, dtype=float)[:, None]
+        loss = float((w * diff ** 2).mean())
+        g = 2.0 * w * diff / diff.size
         grads = [None] * len(self.params)
         n = len(self.params) // 2
         for i in reversed(range(n)):
