@@ -533,3 +533,10 @@ def test_get_none_default():
     assert (2, "py-get-none-default") in rules("a.py", "def f(d):\n    return d.get('a', None)\n")
     ok = "def f(d):\n    return d.get('a') or d.get('b', 0)\n"
     assert all(r != "py-get-none-default" for _, r in rules("a.py", ok))
+
+
+def test_listcomp_in_any():
+    assert (2, "py-listcomp-in-any") in rules("a.py", "def f(x):\n    return any([i > 1 for i in x])\n")
+    assert (2, "py-listcomp-in-any") in rules("a.py", "def f(x):\n    return all([i for i in x])\n")
+    ok = "def f(x):\n    return any(i > 1 for i in x) or any(x)\n"
+    assert all(r != "py-listcomp-in-any" for _, r in rules("a.py", ok))

@@ -475,6 +475,12 @@ def ast_findings(ctx: FileContext, source: str, complexity_threshold: int = 10) 
             add(node.lineno, "py-len-compare-zero", "low",
                 "`len(x) == 0` / `len(x) > 0` is a verbose emptiness test.",
                 "Use `if not x:` / `if x:` (use an explicit length check only for numpy arrays or custom types).")
+        if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                and node.func.id in ("any", "all") and len(node.args) == 1
+                and isinstance(node.args[0], ast.ListComp)):
+            add(node.lineno, "py-listcomp-in-any", "low",
+                f"`{node.func.id}([...])` builds the whole list and defeats short-circuiting.",
+                f"Pass a generator expression: `{node.func.id}(x for ...)`.")
         if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
                 and node.func.attr == "get" and len(node.args) == 2 and not node.keywords
                 and isinstance(node.args[1], ast.Constant) and node.args[1].value is None):
@@ -850,6 +856,7 @@ RULE_TABLE.update({
     "py-default-evaluated-once": ("medium", "Default argument calls time/uuid/random once at def time."),
     "py-mutate-while-iterating": ("high", "List mutated (append/remove/insert/pop/extend) inside a `for` over itself."),
     "py-len-compare-zero": ("low", "`len(x) == 0` / `> 0` instead of truthiness."),
+    "py-listcomp-in-any": ("low", "`any([...])`/`all([...])` with a list comprehension (use a generator)."),
     "py-get-none-default": ("low", "`.get(k, None)` with redundant None default."),
     "py-in-dict-keys": ("low", "Membership test against `d.keys()` (use `x in d`)."),
     "py-shadow-builtin": ("low", "Variable assigned with a common builtin name (list/dict/id/type/...)."),
