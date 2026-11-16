@@ -85,7 +85,9 @@ class BayesOpt:
     (incumbent becomes the best *posterior mean* at observed points instead of the best raw observation)."""
 
     def __init__(self, bounds, acquisition="ei", kernel="matern52", n_init=None, noisy=False, beta=2.0, xi=0.0,
-                 rng=None, refit_every=1, fit_kwargs=None, grad_refine=False):
+                 rng=None, refit_every=1, fit_kwargs=None, grad_refine=False, liar="min"):
+        if liar not in ("min", "mean", "max", "believer"):
+            raise ValueError("liar must be one of min, mean, max, believer")
         if acquisition not in ("ei", "logei", "pi", "ucb", "ts", "mes"):
             raise ValueError("acquisition must be one of ei, logei, pi, ucb, ts, mes")
         self.bounds = np.asarray(bounds, float)
@@ -95,6 +97,7 @@ class BayesOpt:
         self.rng = rng or np.random.default_rng(0)
         self.refit_every, self.fit_kwargs = refit_every, fit_kwargs or {}
         self.grad_refine = grad_refine
+        self.liar = liar
         self.U = np.empty((0, self.d)); self.y = np.empty(0)
         self.gp = None
         self._hyp, self._asks = None, 0
@@ -171,8 +174,12 @@ class BayesOpt:
                 if self.grad_refine and self.acq == "ei":
                     u = refine_ei_gradient(g, u, best, self.xi)
             picks.append(u)
-            if q > 1:  # constant liar (CL-min): pretend the pick returned the current best value
-                cur = cur.condition(u[None, :], [self.y.min()])
+            if q > 1:  # constant liar (default CL-min; also CL-mean/CL-max or Kriging believer) for batch picks
+                if self.liar == "believer":  # Kriging believer: hallucinate the posterior mean
+                    lie = float(cur.predict(u[None, :])[0][0])
+                else:
+                    lie = {"min": self.y.min(), "mean": self.y.mean(), "max": self.y.max()}[self.liar]
+                cur = cur.condition(u[None, :], [lie])
         return self.from_unit(np.array(picks))
 
     def run(self, f, n_total, q=1):
