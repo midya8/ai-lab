@@ -344,6 +344,7 @@
 - boptlab: multi-objective ParEGO + exact 2-D hypervolume (6 tests)
 - conformlab: `LocallyWeightedConformal` — learned log-residual scale model, valid even when the scale model is wrong (3 tests, 68 total)
 - diffusionlab: 4-seed eps vs v-prediction x weighting study (`experiments/param_study.py`); plain v-MSE slightly better, min(SNR,5) on an eps-net harmful
+- datadoctor: redundant_features / drop_redundant (duplicate and anti-collinear columns, 4 tests)
 
 
 ## Next
