@@ -137,3 +137,18 @@ def coverage_calibration_curve(mean_fn, X_cal, y_cal, X_test, y_test, alphas=(0.
         emp = interval_coverage(lo, hi, y_test)
         rows.append((1 - a, float(emp), float(emp - (1 - a))))
     return rows
+
+
+def selective_accuracy(S, y):
+    """Abstain unless the set is a singleton; return (answer_rate, accuracy_on_answered).
+
+    accuracy is nan when nothing is answered. Under split conformal the *singleton* error is not
+    controlled at alpha (only marginal miscoverage is), so this is an empirical diagnostic.
+    """
+    S = np.asarray(S, bool)
+    y = np.asarray(y, int)
+    single = S.sum(1) == 1
+    rate = float(single.mean())
+    if not single.any():
+        return rate, float("nan")
+    return rate, float(S[single, y[single]].mean())

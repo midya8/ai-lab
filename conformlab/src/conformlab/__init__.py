@@ -5,6 +5,6 @@ from .data import hetero_regression, gaussian_classes, sigma_true, mean_true
 from .models import RFF, RidgeRegressor, QuantileRegressor, SoftmaxRegressor
 from .metrics import (interval_coverage, mean_width, binned_coverage, set_coverage,
                       class_conditional_coverage, mean_set_size, empty_rate, coverage_beta_params,
-                      size_stratified_coverage, worst_size_stratum, wilson_interval, set_outcome_breakdown, worst_class_coverage, interval_score, coverage_calibration_curve)
+                      size_stratified_coverage, worst_size_stratum, wilson_interval, set_outcome_breakdown, worst_class_coverage, selective_accuracy, interval_score, coverage_calibration_curve)
 from .martingale import online_conformal_pvalues, power_martingale_log, detect_change
 from .outlier import conformal_pvalues, benjamini_hochberg, conformal_outliers
