@@ -39,6 +39,35 @@ class SplitConformal:
         return m - h, m + h
 
 
+class LocallyWeightedConformal:
+    """Normalised split conformal with a *learned* scale (Lei et al. 2018).
+
+    The scale model regresses log(|residual|) on features, fitted on data disjoint from the
+    calibration set (pass the same training split you fitted `mean_fn` on, or a separate one).
+    exp(E[log|r|]) under-estimates sigma by a constant factor; conformal calibration absorbs it,
+    so validity never depends on the scale model being right -- only efficiency does.
+    """
+
+    def __init__(self, mean_fn, scale_model, alpha=0.1, floor=1e-3):
+        self.mean_fn, self.scale_model, self.alpha, self.floor, self.q = mean_fn, scale_model, alpha, floor, None
+
+    def fit_scale(self, X, y):
+        r = np.abs(np.asarray(y, float) - self.mean_fn(X))
+        self.scale_model.fit(X, np.log(r + self.floor))
+        return self
+
+    def scale(self, X):
+        return np.exp(self.scale_model.predict(X))
+
+    def calibrate(self, X, y):
+        self.q = conformal_quantile(np.abs(np.asarray(y, float) - self.mean_fn(X)) / self.scale(X), self.alpha)
+        return self
+
+    def predict(self, X):
+        m, h = self.mean_fn(X), self.q * self.scale(X)
+        return m - h, m + h
+
+
 class CQR:
     """Conformalised quantile regression (Romano et al. 2019): widen/narrow [lo, hi] by a constant."""
 
