@@ -465,6 +465,16 @@ def ast_findings(ctx: FileContext, source: str, complexity_threshold: int = 10) 
             add(node.lineno, "py-site-exit", "low",
                 f"`{node.func.id}()` comes from the `site` module and is absent under `python -S` and frozen apps.",
                 "Use `sys.exit()` or raise `SystemExit`.")
+        if (isinstance(node, ast.Compare) and len(node.ops) == 1
+                and isinstance(node.ops[0], (ast.Eq, ast.NotEq, ast.Gt))
+                and isinstance(node.left, ast.Call) and isinstance(node.left.func, ast.Name)
+                and node.left.func.id == "len" and len(node.left.args) == 1
+                and isinstance(node.comparators[0], ast.Constant)
+                and node.comparators[0].value == 0
+                and not isinstance(node.comparators[0].value, bool)):
+            add(node.lineno, "py-len-compare-zero", "low",
+                "`len(x) == 0` / `len(x) > 0` is a verbose emptiness test.",
+                "Use `if not x:` / `if x:` (use an explicit length check only for numpy arrays or custom types).")
         if isinstance(node, ast.Compare):
             for op, comp in zip(node.ops, node.comparators):
                 if (isinstance(op, (ast.In, ast.NotIn)) and isinstance(comp, ast.Call)
@@ -833,6 +843,7 @@ RULE_TABLE.update({
     "py-dataclass-mutable-default": ("high", "Dataclass field defaults to a list/dict/set literal."),
     "py-default-evaluated-once": ("medium", "Default argument calls time/uuid/random once at def time."),
     "py-mutate-while-iterating": ("high", "List mutated (append/remove/insert/pop/extend) inside a `for` over itself."),
+    "py-len-compare-zero": ("low", "`len(x) == 0` / `> 0` instead of truthiness."),
     "py-in-dict-keys": ("low", "Membership test against `d.keys()` (use `x in d`)."),
     "py-shadow-builtin": ("low", "Variable assigned with a common builtin name (list/dict/id/type/...)."),
     "py-site-exit": ("low", "Bare `exit()`/`quit()` (use sys.exit)."),

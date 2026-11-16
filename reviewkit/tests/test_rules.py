@@ -520,3 +520,10 @@ def test_in_dict_keys():
     assert (2, "py-in-dict-keys") in rules("a.py", "def f(d, k):\n    return k in d.keys()\n")
     ok = "def f(d, k):\n    return k in d\n"
     assert all(r != "py-in-dict-keys" for _, r in rules("a.py", ok))
+
+
+def test_len_compare_zero():
+    assert (2, "py-len-compare-zero") in rules("a.py", "def f(x):\n    return len(x) == 0\n")
+    assert (2, "py-len-compare-zero") in rules("a.py", "def f(x):\n    return len(x) > 0\n")
+    ok = "def f(x):\n    return len(x) == 3 or not x or len(x) > 1\n"
+    assert all(r != "py-len-compare-zero" for _, r in rules("a.py", ok))
