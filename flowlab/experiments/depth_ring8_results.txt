@@ -1,0 +1,11 @@
+# dataset=ring8 steps=3000 batch=256 hidden=64 train=20000 held-out=20000 seeds=[0, 1, 2]
+# true NLL is the exact data entropy (Monte-Carlo, held-out samples); gap = flow NLL - true NLL (nats, KL estimate)
+coupling    L  params            gap      bridge%   sec
+affine      2     520   1.202±0.054    39.7± 2.8     9
+affine      4    1036   0.597±0.031    13.4± 0.3    17
+affine      8    2068   0.495±0.020    11.0± 0.8    39
+affine     16    4132   0.400±0.036     8.1± 0.9    89
+additive    2     390   1.541±0.001    50.7± 0.2     8
+additive    4     776   1.121±0.056    37.3± 0.6    16
+additive    8    1548   0.642±0.064    18.4± 3.2    32
+additive   16    3092   0.431±0.068    10.6± 1.4    62

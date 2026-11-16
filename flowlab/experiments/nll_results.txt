@@ -1,0 +1,4 @@
+# steps=3000 batch=256 hidden=64 train=20000 held-out=20000 seeds=[0, 1, 2]; affine couplings; nats/example (lower is better)
+dataset   gauss(diag)           L=2           L=4           L=8          L=16
+moons           2.016   1.426±0.092   1.213±0.025   1.089±0.025   1.053±0.021
+spiral          3.566   2.702±0.097   1.807±0.013   1.450±0.119   1.244±0.079

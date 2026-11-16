@@ -1,0 +1,11 @@
+# dataset=checker4 steps=3000 batch=256 hidden=64 train=20000 held-out=20000 seeds=[0, 1, 2]
+# true NLL is the exact data entropy (Monte-Carlo, held-out samples); gap = flow NLL - true NLL (nats, KL estimate)
+coupling    L  params            gap      bridge%   sec
+affine      2     520   0.587±0.002          n/a     9
+affine      4    1036   0.476±0.017          n/a    17
+affine      8    2068   0.380±0.010          n/a    38
+affine     16    4132   0.316±0.010          n/a    90
+additive    2     390   0.702±0.001          n/a     8
+additive    4     776   0.612±0.010          n/a    16
+additive    8    1548   0.523±0.018          n/a    31
+additive   16    3092   0.473±0.004          n/a    61
