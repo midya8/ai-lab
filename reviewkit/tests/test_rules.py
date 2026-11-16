@@ -508,3 +508,9 @@ def test_site_exit():
     assert (2, "py-site-exit") in rules("a.py", "def f():\n    exit(1)\n")
     ok = "import sys\n\ndef f():\n    sys.exit(1)\n"
     assert all(r != "py-site-exit" for _, r in rules("a.py", ok))
+
+
+def test_shadow_builtin():
+    assert (2, "py-shadow-builtin") in rules("a.py", "def f(xs):\n    list = xs[:]\n    return list\n")
+    ok = "def f(xs):\n    items = xs[:]\n    return items\n"
+    assert all(r != "py-shadow-builtin" for _, r in rules("a.py", ok))

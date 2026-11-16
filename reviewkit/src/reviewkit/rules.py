@@ -402,6 +402,10 @@ def _first_added(added: Set[int], lo: int, hi: int) -> Optional[int]:
     return min(hits) if hits else None
 
 
+_SHADOW_BUILTINS = frozenset({"list", "dict", "set", "str", "int", "float", "id", "type", "input",
+                               "max", "min", "sum", "len", "all", "any", "map", "filter", "sorted"})
+
+
 def ast_findings(ctx: FileContext, source: str, complexity_threshold: int = 10) -> List[Finding]:
     out: List[Finding] = []
     added = set(ctx.added)
@@ -461,6 +465,12 @@ def ast_findings(ctx: FileContext, source: str, complexity_threshold: int = 10) 
             add(node.lineno, "py-site-exit", "low",
                 f"`{node.func.id}()` comes from the `site` module and is absent under `python -S` and frozen apps.",
                 "Use `sys.exit()` or raise `SystemExit`.")
+        if isinstance(node, ast.Assign):
+            for tgt in node.targets:
+                if isinstance(tgt, ast.Name) and tgt.id in _SHADOW_BUILTINS:
+                    add(node.lineno, "py-shadow-builtin", "low",
+                        f"Assigning to `{tgt.id}` shadows the builtin of the same name for the rest of the scope.",
+                        f"Rename the variable (e.g. `{tgt.id}_`).")
         if isinstance(node, ast.ExceptHandler) and isinstance(node.type, ast.BoolOp):
             add(node.lineno, "py-except-boolop", "high",
                 "`except A or B:` evaluates to just the first exception class; the others are never caught.",
@@ -815,6 +825,7 @@ RULE_TABLE.update({
     "py-dataclass-mutable-default": ("high", "Dataclass field defaults to a list/dict/set literal."),
     "py-default-evaluated-once": ("medium", "Default argument calls time/uuid/random once at def time."),
     "py-mutate-while-iterating": ("high", "List mutated (append/remove/insert/pop/extend) inside a `for` over itself."),
+    "py-shadow-builtin": ("low", "Variable assigned with a common builtin name (list/dict/id/type/...)."),
     "py-site-exit": ("low", "Bare `exit()`/`quit()` (use sys.exit)."),
     "py-is-literal": ("medium", "`is`/`is not` against a str/number literal (use ==)."),
     "py-except-boolop": ("high", "`except A or B:` only catches A (use a tuple)."),
