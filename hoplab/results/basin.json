@@ -1,0 +1,58 @@
+[
+ {
+  "noise": 0.0,
+  "hebbian": 0.5333333333333333,
+  "pseudoinverse": 1.0,
+  "storkey": 1.0,
+  "dam-poly3": 1.0,
+  "dam-exp": 1.0
+ },
+ {
+  "noise": 0.05,
+  "hebbian": 0.4166666666666667,
+  "pseudoinverse": 1.0,
+  "storkey": 1.0,
+  "dam-poly3": 1.0,
+  "dam-exp": 1.0
+ },
+ {
+  "noise": 0.1,
+  "hebbian": 0.31666666666666665,
+  "pseudoinverse": 1.0,
+  "storkey": 1.0,
+  "dam-poly3": 1.0,
+  "dam-exp": 1.0
+ },
+ {
+  "noise": 0.15,
+  "hebbian": 0.30000000000000004,
+  "pseudoinverse": 1.0,
+  "storkey": 0.9666666666666667,
+  "dam-poly3": 1.0,
+  "dam-exp": 1.0
+ },
+ {
+  "noise": 0.2,
+  "hebbian": 0.18333333333333335,
+  "pseudoinverse": 0.9833333333333334,
+  "storkey": 0.9500000000000001,
+  "dam-poly3": 1.0,
+  "dam-exp": 1.0
+ },
+ {
+  "noise": 0.3,
+  "hebbian": 0.05000000000000001,
+  "pseudoinverse": 0.5666666666666667,
+  "storkey": 0.5166666666666666,
+  "dam-poly3": 1.0,
+  "dam-exp": 1.0
+ },
+ {
+  "noise": 0.4,
+  "hebbian": 0.016666666666666666,
+  "pseudoinverse": 0.05000000000000001,
+  "storkey": 0.06666666666666667,
+  "dam-poly3": 0.4666666666666666,
+  "dam-exp": 0.5499999999999999
+ }
+]

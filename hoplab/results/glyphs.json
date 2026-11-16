@@ -1,0 +1,32 @@
+[
+ {
+  "rule": "hebbian",
+  "flip10": 0.0575,
+  "bottom3_blank": 0.0,
+  "stored_stable": 0.7342857142857143
+ },
+ {
+  "rule": "pseudoinverse",
+  "flip10": 0.895,
+  "bottom3_blank": 0.5,
+  "stored_stable": 1.0
+ },
+ {
+  "rule": "storkey",
+  "flip10": 0.46,
+  "bottom3_blank": 0.5,
+  "stored_stable": 0.8771428571428571
+ },
+ {
+  "rule": "dam-poly3",
+  "flip10": 0.575,
+  "bottom3_blank": 0.5,
+  "stored_stable": 0.9457142857142857
+ },
+ {
+  "rule": "dam-exp",
+  "flip10": 1.0,
+  "bottom3_blank": 0.9,
+  "stored_stable": 1.0
+ }
+]
