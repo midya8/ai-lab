@@ -396,3 +396,58 @@ def calibration_size_for_slack(alpha, slack):
     while exact_expected_coverage(n, alpha) - (1 - alpha) > slack + 1e-12:
         n += 1
     return n
+
+
+def _binom_sf(n, x, k):
+    """P(Binomial(n, x) >= k), summed in log space."""
+    import math
+    if k <= 0:
+        return 1.0
+    if k > n:
+        return 0.0
+    if x <= 0.0:
+        return 0.0
+    if x >= 1.0:
+        return 1.0
+    lx, l1x = math.log(x), math.log1p(-x)
+    terms = [math.lgamma(n + 1) - math.lgamma(i + 1) - math.lgamma(n - i + 1) + i * lx + (n - i) * l1x
+             for i in range(k, n + 1)]
+    m = max(terms)
+    return min(1.0, math.exp(m) * sum(math.exp(t - m) for t in terms))
+
+
+def prob_coverage_below(n, alpha, target):
+    """Training-conditional guarantee: P(coverage of one calibrated split-conformal set < target) with n
+    calibration points and continuous scores. Coverage ~ Beta(k, n+1-k), k = ceil((n+1)(1-alpha)),
+    and P(Beta(k, n+1-k) <= x) = P(Binomial(n, x) >= k)."""
+    import math
+    k = math.ceil((n + 1) * (1 - alpha))
+    if k > n:
+        return 0.0
+    return _binom_sf(n, target, k)
+
+
+def pac_calibration_size(alpha, eps, delta, n_max=100000):
+    """Smallest n with P(coverage < 1-alpha-eps) <= delta, i.e. a (eps, delta) PAC coverage guarantee.
+    The marginal guarantee needs far fewer points than this; PAC sizes show the price of 'this one
+    calibration set' reliability. Found by doubling then bisection (the probability is not exactly
+    monotone in n because of ceil, so the bisection result is verified and walked back)."""
+    target = 1 - alpha - eps
+    # n below min_calibration_size gives an infinite (useless) set that trivially never under-covers: exclude
+    ok = lambda n: n >= min_calibration_size(alpha) and prob_coverage_below(n, alpha, target) <= delta
+    hi = 1
+    while not ok(hi):
+        hi *= 2
+        if hi > n_max:
+            raise ValueError("no n <= n_max reaches the requested guarantee")
+    lo = hi // 2
+    while hi - lo > 1:
+        mid = (lo + hi) // 2
+        if ok(mid):
+            hi = mid
+        else:
+            lo = mid
+    n = hi
+    while ok(n - 1):
+        n -= 1
+    return n

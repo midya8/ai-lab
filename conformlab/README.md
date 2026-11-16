@@ -112,3 +112,7 @@ RAPS shrinks APS sets modestly here but stays above LAC in size; the effect is e
 ## Exchangeability monitor (martingale.py)
 
 `detect_change(scores, delta)` runs randomised online conformal p-values through a simple-mixture power martingale; by Ville's inequality the false-alarm probability is <= delta under exchangeability. Tests: 200 iid streams at delta=0.1 alarm <= 15%; a +2 sigma mean shift at t=300 is caught. Quick check (50 seeds, delta=0.01, shift 0 -> 2 sigma at t=300): 50/50 detected, median delay 32 steps. Synthetic Gaussian data only.
+
+## PAC / training-conditional guarantee
+
+Marginal coverage is an average over calibration sets; one particular calibration set can under-cover. `prob_coverage_below(n, alpha, target)` gives the exact probability that a single split-conformal set has coverage below `target` (coverage ~ Beta(k, n+1-k), evaluated through the binomial identity, no SciPy). `pac_calibration_size(alpha, eps, delta)` returns the smallest `n` with P(coverage < 1-alpha-eps) <= delta. For alpha=0.1: (eps=0.05, delta=0.05) needs n=85, (0.02, 0.05) needs 567, (0.02, 0.01) needs 1284, versus n=9 for the marginal guarantee. Tests compare against a 40k-run simulation and check minimality. Continuous scores assumed.
