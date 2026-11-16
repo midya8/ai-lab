@@ -235,6 +235,22 @@ def aci(scores_fn, stream_len, alpha=0.1, gamma=0.02, window=None):
     return miss, traj
 
 
+def quantile_tracker(scores, alpha=0.1, eta=0.1, q0=0.0):
+    """Online quantile tracking (the P-term of conformal PID control, Angelopoulos et al. 2023).
+
+    Needs no calibration set: q_{t+1} = q_t + eta * (err_t - alpha), err_t = 1[score_t > q_t].
+    Returns (miss indicators, q_t trajectory). If scores lie in [0, B] and q0 in [0, B], the long-run
+    miss rate satisfies |mean(miss) - alpha| <= (B + eta) / (eta * T) for ANY sequence (no exchangeability).
+    """
+    scores = np.asarray(scores, float)
+    q, miss, traj = float(q0), np.zeros(len(scores), bool), np.zeros(len(scores))
+    for t, s in enumerate(scores):
+        traj[t] = q
+        miss[t] = s > q
+        q += eta * (float(miss[t]) - alpha)
+    return miss, traj
+
+
 # ------------------------------------------------------------------ covariate shift
 def weighted_conformal_quantile(scores, weights, w_test, alpha):
     """Tibshirani et al. (2019) weighted quantile for ONE test point: the (1-alpha)-quantile of

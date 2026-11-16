@@ -1,5 +1,5 @@
 from .conformal import (SplitConformal, CQR, LocallyWeightedConformal, ConformalClassifier, conformal_quantile, min_calibration_size,
-                        lac_scores, aps_scores, aps_sets, raps_scores, raps_sets, aci,
+                        lac_scores, aps_scores, aps_sets, raps_scores, raps_sets, aci, quantile_tracker,
                         conformal_risk_control, weighted_conformal_quantile, JackknifePlus, WeightedSplitConformal, MondrianSplitConformal, logistic_density_ratio, ConformalPredictiveDistribution, exact_expected_coverage, calibration_size_for_slack, prob_coverage_below, pac_calibration_size)
 from .data import hetero_regression, gaussian_classes, sigma_true, mean_true
 from .models import RFF, RidgeRegressor, QuantileRegressor, SoftmaxRegressor
