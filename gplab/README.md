@@ -192,3 +192,13 @@ perturbations, the LML matches exact 1-D integration in the Gaussian limit, and 
 `gplab.ard` fits an ARD-RBF GP by marginal likelihood and ranks inputs by inverse lengthscale
 (`fit_ard`, `relevance`, `rank_features`). Tests check that on a 5-input synthetic function
 with 2 informative inputs, those two are ranked first and ARD beats an isotropic kernel on held-out MSE.
+
+## SVGP (v0.4)
+
+`SVGP` trains a sparse variational GP with natural-gradient minibatch steps (Hensman et al. 2013) in the whitened parametrisation. For Gaussian likelihoods each step is a convex blend of the current natural parameters with the minibatch estimate of the optimum; at rho=1 on the full batch it reproduces the collapsed VFE predictor and bound exactly (tested to 1e-6). Hyperparameters and Z are fixed. Cost per step is O(b m^2 + m^3).
+
+```python
+from gplab import RBF, SVGP, kmeans_inducing
+gp = SVGP(RBF(0.9, 1.2), kmeans_inducing(X, 12), noise=0.1).fit(X, y, epochs=60, batch=40)
+mean, var = gp.predict(Xs)
+```
