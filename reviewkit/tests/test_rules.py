@@ -540,3 +540,10 @@ def test_listcomp_in_any():
     assert (2, "py-listcomp-in-any") in rules("a.py", "def f(x):\n    return all([i for i in x])\n")
     ok = "def f(x):\n    return any(i > 1 for i in x) or any(x)\n"
     assert all(r != "py-listcomp-in-any" for _, r in rules("a.py", ok))
+
+
+def test_iterate_dict_keys():
+    assert (2, "py-iterate-dict-keys") in rules("a.py", "def f(d):\n    for k in d.keys():\n        print(k)\n")
+    assert any(r == "py-iterate-dict-keys" for _, r in rules("a.py", "def f(d):\n    return [k for k in d.keys()]\n"))
+    ok = "def f(d):\n    for k in d:\n        print(k)\n    for k in other.items():\n        pass\n"
+    assert all(r != "py-iterate-dict-keys" for _, r in rules("a.py", ok))

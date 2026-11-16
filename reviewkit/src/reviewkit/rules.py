@@ -475,6 +475,12 @@ def ast_findings(ctx: FileContext, source: str, complexity_threshold: int = 10) 
             add(node.lineno, "py-len-compare-zero", "low",
                 "`len(x) == 0` / `len(x) > 0` is a verbose emptiness test.",
                 "Use `if not x:` / `if x:` (use an explicit length check only for numpy arrays or custom types).")
+        if (isinstance(node, (ast.For, ast.comprehension))
+                and isinstance(node.iter, ast.Call) and isinstance(node.iter.func, ast.Attribute)
+                and node.iter.func.attr == "keys" and not node.iter.args and not node.iter.keywords):
+            add(getattr(node, "lineno", node.iter.lineno), "py-iterate-dict-keys", "low",
+                "Iterating `d.keys()` is redundant; iterating the dict yields keys already.",
+                "Use `for k in d:` (keep `list(d.keys())` only when mutating the dict in the loop).")
         if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
                 and node.func.id in ("any", "all") and len(node.args) == 1
                 and isinstance(node.args[0], ast.ListComp)):
@@ -856,6 +862,7 @@ RULE_TABLE.update({
     "py-default-evaluated-once": ("medium", "Default argument calls time/uuid/random once at def time."),
     "py-mutate-while-iterating": ("high", "List mutated (append/remove/insert/pop/extend) inside a `for` over itself."),
     "py-len-compare-zero": ("low", "`len(x) == 0` / `> 0` instead of truthiness."),
+    "py-iterate-dict-keys": ("low", "`for k in d.keys()` instead of `for k in d`."),
     "py-listcomp-in-any": ("low", "`any([...])`/`all([...])` with a list comprehension (use a generator)."),
     "py-get-none-default": ("low", "`.get(k, None)` with redundant None default."),
     "py-in-dict-keys": ("low", "Membership test against `d.keys()` (use `x in d`)."),
