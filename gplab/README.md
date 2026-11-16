@@ -186,3 +186,9 @@ Tests (6 new, 68 total) verify the mode is a stationary point of the penalised l
 perturbations, the LML matches exact 1-D integration in the Gaussian limit, and that fitting improves LML on a synthetic two-moons set.
 
 - `SpectralMixture` (v0.3): Gaussian-mixture spectral density kernel with analytic gradients (per-dimension product). Tests: finite-difference gradients, PSD, reduces to RBF at zero mean, and on a two-frequency signal (0.5 and 1.3 Hz, synthetic) extrapolates 8 to 10 with RMSE < 0.15 and under half of an RBF GP's; L-BFGS from a rough init recovers both frequencies within 0.03. The likelihood is multimodal, so initialise means from a periodogram or use restarts.
+
+## ARD feature relevance (v0.3.1)
+
+`gplab.ard` fits an ARD-RBF GP by marginal likelihood and ranks inputs by inverse lengthscale
+(`fit_ard`, `relevance`, `rank_features`). Tests check that on a 5-input synthetic function
+with 2 informative inputs, those two are ranked first and ARD beats an isotropic kernel on held-out MSE.

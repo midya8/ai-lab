@@ -14,4 +14,4 @@ __all__ = [
     "greedy_inducing", "kmeans_inducing", "kernel_approx_error", "lbfgs",
     "gaussian_nlpd", "coverage", "sample_gp_data", "seasonal_trend", "smooth_function",
 ]
-__version__ = "0.3.0"
+__version__ = "0.3.1"
