@@ -496,3 +496,27 @@ def pac_calibration_size(alpha, eps, delta, n_max=100000):
     while ok(n - 1):
         n -= 1
     return n
+
+
+# ------------------------------------------------------------------- fixed top-k baseline
+def rank_scores(P, y):
+    """0-indexed rank of the true label under descending probability (ties broken by index)."""
+    order = np.argsort(-P, axis=1, kind="stable")
+    return np.argmax(order == np.asarray(y, int)[:, None], axis=1).astype(float)
+
+
+def calibrate_topk(P_cal, y_cal, alpha=0.1):
+    """Smallest fixed k such that top-k sets have >= 1-alpha coverage (finite-sample valid: split
+    conformal on rank scores). A non-adaptive baseline: every input gets the same set size, so
+    compare its mean size to LAC/APS sets at the same coverage."""
+    q = conformal_quantile(rank_scores(P_cal, y_cal), alpha)
+    K = P_cal.shape[1]
+    return int(min(K, np.floor(q) + 1)) if np.isfinite(q) else K
+
+
+def topk_sets(P, k):
+    """Boolean (n, K) matrix selecting each row's k most probable labels."""
+    order = np.argsort(-P, axis=1, kind="stable")[:, :k]
+    S = np.zeros(P.shape, bool)
+    np.put_along_axis(S, order, True, 1)
+    return S
