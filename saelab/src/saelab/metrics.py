@@ -97,3 +97,44 @@ def feature_recall(true_a: np.ndarray, learned_a: np.ndarray, true_dirs: np.ndar
         tot += int(on.sum())
         hit += int((learned_a[on, j[i]] > 0).sum())
     return hit / tot if tot else float("nan")
+
+
+def absorption(world, learned_a: np.ndarray, true_a: np.ndarray, dec: np.ndarray,
+               parent_thresh: float = 0.7) -> dict:
+    """Feature absorption in a hierarchical world (see ``make_hierarchical_world``).
+
+    For every parent feature that has a latent at cosine >= ``parent_thresh`` ("its" latent), compare
+    how often that latent fires when the parent is active but none of its children are, versus when
+    the parent is active together with at least one child. A healthy SAE fires the parent latent in
+    both situations. An *absorbing* SAE lets the child's latent also carry the parent direction and
+    silences the parent latent whenever a child is present.
+
+    ``absorption = 1 - rate_with_child / rate_without_child`` (clipped to [0, 1]; 0 = none,
+    1 = the parent latent never fires when a child does). Returns the mean over parents plus the
+    two firing rates and the number of parents that had a latent at all.
+    """
+    if world.parent is None:
+        raise ValueError("absorption needs a hierarchical world")
+    c = cosine_matrix(world.directions, dec)
+    parents = np.where(world.parent < 0)[0]
+    rate_no, rate_child, vals, found = [], [], [], 0
+    for p in parents:
+        j = int(c[p].argmax())
+        if c[p, j] < parent_thresh:
+            continue
+        found += 1
+        kids = np.where(world.parent == p)[0]
+        on = true_a[:, p] > 0
+        has_kid = (true_a[:, kids] > 0).any(axis=1)
+        a_no, a_kid = on & ~has_kid, on & has_kid
+        if not a_no.any() or not a_kid.any():
+            continue
+        r_no = float((learned_a[a_no, j] > 0).mean())
+        r_kid = float((learned_a[a_kid, j] > 0).mean())
+        rate_no.append(r_no)
+        rate_child.append(r_kid)
+        vals.append(float(np.clip(1.0 - r_kid / max(r_no, 1e-12), 0.0, 1.0)))
+    return {"absorption": float(np.mean(vals)) if vals else float("nan"),
+            "rate_no_child": float(np.mean(rate_no)) if rate_no else float("nan"),
+            "rate_with_child": float(np.mean(rate_child)) if rate_child else float("nan"),
+            "parents_found": found / len(parents)}
