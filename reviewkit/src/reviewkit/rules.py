@@ -448,6 +448,14 @@ def ast_findings(ctx: FileContext, source: str, complexity_threshold: int = 10) 
                         add(c.lineno, "py-mutate-while-iterating", "high",
                             f"`{node.iter.id}.{c.func.attr}()` mutates the list being iterated; items get skipped or the loop never ends.",
                             f"Iterate over a copy (`for x in list({node.iter.id}):`) or build a new list.")
+        if isinstance(node, ast.Compare):
+            for op, cmp_ in zip(node.ops, node.comparators):
+                if (isinstance(op, (ast.Is, ast.IsNot)) and isinstance(cmp_, ast.Constant)
+                        and isinstance(cmp_.value, (str, int, float, bytes))
+                        and not isinstance(cmp_.value, bool)):
+                    add(node.lineno, "py-is-literal", "medium",
+                        "`is` compares identity, not value; with a str/number literal the result is implementation-dependent.",
+                        "Use `==` / `!=` for value comparison.")
         if isinstance(node, ast.ExceptHandler) and isinstance(node.type, ast.BoolOp):
             add(node.lineno, "py-except-boolop", "high",
                 "`except A or B:` evaluates to just the first exception class; the others are never caught.",
@@ -802,6 +810,7 @@ RULE_TABLE.update({
     "py-dataclass-mutable-default": ("high", "Dataclass field defaults to a list/dict/set literal."),
     "py-default-evaluated-once": ("medium", "Default argument calls time/uuid/random once at def time."),
     "py-mutate-while-iterating": ("high", "List mutated (append/remove/insert/pop/extend) inside a `for` over itself."),
+    "py-is-literal": ("medium", "`is`/`is not` against a str/number literal (use ==)."),
     "py-except-boolop": ("high", "`except A or B:` only catches A (use a tuple)."),
     "py-init-returns-value": ("high", "`__init__` returns a non-None value (TypeError at instantiation)."),
     "py-self-assign": ("low", "`x = x` no-op assignment."),

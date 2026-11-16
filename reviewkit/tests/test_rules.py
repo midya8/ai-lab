@@ -495,3 +495,10 @@ def test_mutate_while_iterating():
     assert (4, "py-mutate-while-iterating") in rules("a.py", src)
     ok = "def f(xs):\n    for x in list(xs):\n        xs.remove(x)\n    for y in xs:\n        ys.append(y)\n"
     assert all(r != "py-mutate-while-iterating" for _, r in rules("a.py", ok))
+
+
+def test_is_literal():
+    assert (2, "py-is-literal") in rules("a.py", "def f(x):\n    return x is 'a'\n")
+    assert (2, "py-is-literal") in rules("a.py", "def f(x):\n    return x is not 3\n")
+    ok = "def f(x):\n    return x is None or x is True or x == 'a'\n"
+    assert all(r != "py-is-literal" for _, r in rules("a.py", ok))
