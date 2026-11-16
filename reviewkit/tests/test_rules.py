@@ -502,3 +502,9 @@ def test_is_literal():
     assert (2, "py-is-literal") in rules("a.py", "def f(x):\n    return x is not 3\n")
     ok = "def f(x):\n    return x is None or x is True or x == 'a'\n"
     assert all(r != "py-is-literal" for _, r in rules("a.py", ok))
+
+
+def test_site_exit():
+    assert (2, "py-site-exit") in rules("a.py", "def f():\n    exit(1)\n")
+    ok = "import sys\n\ndef f():\n    sys.exit(1)\n"
+    assert all(r != "py-site-exit" for _, r in rules("a.py", ok))
