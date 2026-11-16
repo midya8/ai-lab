@@ -1,0 +1,8 @@
+{
+ "width": 512,
+ "members": 24,
+ "steps": 300,
+ "mean_vs_analytic_rel_err": 0.025049591606468833,
+ "single_net_vs_analytic_rel_err": 0.05456085983974366,
+ "expected_noise_floor": 0.010506722197080877
+}

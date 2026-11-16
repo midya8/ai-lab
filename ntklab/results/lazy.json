@@ -1,0 +1,43 @@
+{
+ "depth": 2,
+ "steps": 600,
+ "rows": [
+  {
+   "width": 8,
+   "func_gap": 0.31173808710844925,
+   "kernel_move": 0.8309064729603458,
+   "train_loss": 0.0023744401557760897,
+   "linearised_train_loss": 0.005528005302899115
+  },
+  {
+   "width": 32,
+   "func_gap": 0.17692881250277762,
+   "kernel_move": 0.3346934437249571,
+   "train_loss": 0.00012534072148507417,
+   "linearised_train_loss": 0.00016028238670198985
+  },
+  {
+   "width": 128,
+   "func_gap": 0.07982953698142635,
+   "kernel_move": 0.07701336139080728,
+   "train_loss": 9.427071540550005e-06,
+   "linearised_train_loss": 1.1456327693923253e-05
+  },
+  {
+   "width": 512,
+   "func_gap": 0.0417721001208372,
+   "kernel_move": 0.032627687462025205,
+   "train_loss": 4.667273802408938e-06,
+   "linearised_train_loss": 2.4440308739406287e-06
+  },
+  {
+   "width": 2048,
+   "func_gap": 0.018325178467284955,
+   "kernel_move": 0.01125586575562404,
+   "train_loss": 1.2521060655211048e-06,
+   "linearised_train_loss": 8.095098761099011e-07
+  }
+ ],
+ "gap_slope": -0.5129713987650831,
+ "kernel_slope": -0.7885272987377676
+}
