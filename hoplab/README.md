@@ -14,7 +14,7 @@ The point of the project is to *measure* why modern Hopfield networks matter: ho
 | Continuous modern Hopfield | `modern.py` | `xi <- X^T softmax(beta X xi)`, the Ramsauer et al. energy (monotone, tested), `attention()` and a test that the update equals scaled dot-product attention with `beta = 1/sqrt(d)` |
 | Diagnostics | `modern.py` | `effective_number` (exp-entropy of the attention weights: 1 = retrieval, p = global average), `separation` (distance to nearest rival pattern) |
 | Patterns | `patterns.py`, `glyphs.py` | random and template-correlated +-1 patterns, flip/occlusion noise, ten 5x7 digit bitmaps |
-| Studies + CLI | `studies.py`, `__main__.py` | `python -m hoplab capacity | stress | basin | correlated | beta | glyphs [--json]` |
+| Studies + CLI | `studies.py`, `__main__.py` | `python -m hoplab {capacity,stress,basin,correlated,beta,glyphs} [--json]` |
 
 ## Quick start
 
