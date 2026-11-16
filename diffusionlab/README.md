@@ -111,3 +111,7 @@ Reading: unguided class-conditional accuracy 0.963 matches the exact model's 0.9
 Honest reading: with this coarse 100-step discrete schedule, the second-order solver is
 **worse** below ~12 NFE (few, large steps; the midpoint timestep is rounded to an integer)
 and wins from 16 NFE up. Single seed; the test only asserts the NFE=16 win.
+
+## v-prediction and SNR weights (`diffusionlab.vparam`)
+
+Exact conversions between eps, x0 and v parametrisations (`v = alpha*eps - sigma*x0`), wrappers that expose any eps-predictor as a v-predictor and back, and per-timestep loss multipliers (eps, x0, v, min-SNR-gamma). Tests verify round-trips and that a v-wrapped oracle reproduces DDIM / DPM-Solver-2 samples. These are utilities only; training with a v or min-SNR loss is not yet benchmarked here.
