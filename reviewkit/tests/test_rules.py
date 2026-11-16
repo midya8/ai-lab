@@ -488,3 +488,10 @@ def test_except_boolop():
     assert rules("a.py", "try:\n    f()\nexcept ValueError or KeyError:\n    pass\n") == [(3, "py-except-boolop"), (4, "py-swallowed-exception")] or \
         (3, "py-except-boolop") in rules("a.py", "try:\n    f()\nexcept ValueError or KeyError:\n    g()\n")
     assert all(r != "py-except-boolop" for _, r in rules("a.py", "try:\n    f()\nexcept (ValueError, KeyError):\n    g()\n"))
+
+
+def test_mutate_while_iterating():
+    src = "def f(xs):\n    for x in xs:\n        if x:\n            xs.remove(x)\n"
+    assert (4, "py-mutate-while-iterating") in rules("a.py", src)
+    ok = "def f(xs):\n    for x in list(xs):\n        xs.remove(x)\n    for y in xs:\n        ys.append(y)\n"
+    assert all(r != "py-mutate-while-iterating" for _, r in rules("a.py", ok))
