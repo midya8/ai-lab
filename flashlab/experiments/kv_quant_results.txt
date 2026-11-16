@@ -1,0 +1,46 @@
+Setup: 4 kv heads, d=64, N=1024 cached tokens, last 64 queries, causal, 5 seeds.
+Keys have 4 outlier channels x8 (synthetic assumption). Baseline = fp16 K+V = 256 bytes per token-head.
+rel err = ||out - out_exact|| / ||out_exact|| (mean over seeds); lse err = max |lse - lse_exact|.
+
+DIFFUSE queries (x1)
+  K bits V bits  group  bytes/tok  compress   rel err     worst   lse err
+       8      8     64        132     1.94x    0.0358    0.0397    0.0669
+       8      8     16        144     1.78x    0.0206    0.0220    0.0379
+       8      4     64        100     2.56x    0.1118    0.1153    0.0669
+       8      4     16        112     2.29x    0.0868    0.0883    0.0379
+       4      8     64        100     2.56x    0.5547    0.5775    1.2476
+       4      8     16        112     2.29x    0.3265    0.3737    0.7295
+       4      4     64         68     3.76x    0.5644    0.5881    1.2476
+       4      4     16         80     3.20x    0.3382    0.3850    0.7295
+       4      2     64         52     4.92x    0.8931    0.9167    1.2476
+       4      2     16         64     4.00x    0.6761    0.7160    0.7295
+       2      4     64         52     4.92x    1.0739    1.1743    3.4071
+       2      4     16         64     4.00x    0.7681    0.8770    1.8943
+       2      2     64         36     7.11x    1.3219    1.4769    3.4071
+       2      2     16         48     5.33x    0.9843    1.0967    1.8943
+
+PEAKY queries (x3)
+  K bits V bits  group  bytes/tok  compress   rel err     worst   lse err
+       8      8     64        132     1.94x    0.0596    0.0630    0.3987
+       8      8     16        144     1.78x    0.0342    0.0389    0.2380
+       8      4     64        100     2.56x    0.1222    0.1248    0.3987
+       8      4     16        112     2.29x    0.0914    0.0931    0.2380
+       4      8     64        100     2.56x    0.7968    0.8265    6.0788
+       4      8     16        112     2.29x    0.5285    0.5691    3.6150
+       4      4     64         68     3.76x    0.8035    0.8317    6.0788
+       4      4     16         80     3.20x    0.5353    0.5749    3.6150
+       4      2     64         52     4.92x    1.0440    1.0572    6.0788
+       4      2     16         64     4.00x    0.7895    0.8205    3.6150
+       2      4     64         52     4.92x    1.1658    1.2160   13.5741
+       2      4     16         64     4.00x    0.9851    1.0184    8.6087
+       2      2     64         36     7.11x    1.3187    1.3804   13.5741
+       2      2     16         48     5.33x    1.1375    1.1690    8.6087
+
+Which of K and V is more sensitive? (4-bit, group 16, the other tensor exact; diffuse / peaky)
+  K only: rel err 0.3264 / 0.5284
+  V only: rel err 0.0845 / 0.0848
+
+Key scale layout at equal scale overhead (8 bytes/token-head): per-token group 16 vs per-channel over 16-token blocks. V exact.
+  K bits  per-token g16  per-channel b16   (diffuse | peaky)
+       4 0.3264 | 0.5284   0.1248 | 0.2024
+       2 0.7628 | 0.9809   0.9500 | 1.0681
