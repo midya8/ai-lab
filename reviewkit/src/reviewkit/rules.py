@@ -439,6 +439,10 @@ def ast_findings(ctx: FileContext, source: str, complexity_threshold: int = 10) 
             add(node.lineno, "py-discarded-str-result", "medium",
                 f"`.{node.value.func.attr}()` returns a new string; discarding the result leaves the original unchanged.",
                 "Assign the result, e.g. `s = s." + node.value.func.attr + "(...)`.")
+        if isinstance(node, ast.ExceptHandler) and isinstance(node.type, ast.BoolOp):
+            add(node.lineno, "py-except-boolop", "high",
+                "`except A or B:` evaluates to just the first exception class; the others are never caught.",
+                "Use a tuple: `except (A, B):`.")
         if isinstance(node, ast.FunctionDef) and node.name == "__init__":
             stk = list(node.body)
             while stk:
@@ -788,6 +792,7 @@ RULE_TABLE.update({
     "py-duplicate-dict-key": ("medium", "Dict literal repeats a constant key."),
     "py-dataclass-mutable-default": ("high", "Dataclass field defaults to a list/dict/set literal."),
     "py-default-evaluated-once": ("medium", "Default argument calls time/uuid/random once at def time."),
+    "py-except-boolop": ("high", "`except A or B:` only catches A (use a tuple)."),
     "py-init-returns-value": ("high", "`__init__` returns a non-None value (TypeError at instantiation)."),
     "py-self-assign": ("low", "`x = x` no-op assignment."),
     "py-discarded-str-result": ("medium", "`s.strip()` / `.replace()` / `.lower()` etc. used as a statement; strings are immutable."),

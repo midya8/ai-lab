@@ -482,3 +482,9 @@ def test_init_returns_value():
     assert rules("a.py", "class A:\n    def __init__(self):\n        return 1\n") == [(3, "py-init-returns-value")]
     assert rules("a.py", "class A:\n    def __init__(self):\n        return None\n") == []
     assert rules("a.py", "class A:\n    def __init__(self):\n        def g():\n            return 2\n        self.g = g\n") == []
+
+
+def test_except_boolop():
+    assert rules("a.py", "try:\n    f()\nexcept ValueError or KeyError:\n    pass\n") == [(3, "py-except-boolop"), (4, "py-swallowed-exception")] or \
+        (3, "py-except-boolop") in rules("a.py", "try:\n    f()\nexcept ValueError or KeyError:\n    g()\n")
+    assert all(r != "py-except-boolop" for _, r in rules("a.py", "try:\n    f()\nexcept (ValueError, KeyError):\n    g()\n"))
