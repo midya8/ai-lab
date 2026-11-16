@@ -527,3 +527,9 @@ def test_len_compare_zero():
     assert (2, "py-len-compare-zero") in rules("a.py", "def f(x):\n    return len(x) > 0\n")
     ok = "def f(x):\n    return len(x) == 3 or not x or len(x) > 1\n"
     assert all(r != "py-len-compare-zero" for _, r in rules("a.py", ok))
+
+
+def test_get_none_default():
+    assert (2, "py-get-none-default") in rules("a.py", "def f(d):\n    return d.get('a', None)\n")
+    ok = "def f(d):\n    return d.get('a') or d.get('b', 0)\n"
+    assert all(r != "py-get-none-default" for _, r in rules("a.py", ok))
