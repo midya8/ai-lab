@@ -4,9 +4,11 @@ Graph neural networks from scratch in NumPy — **GCN, GraphSAGE and multi-head 
 
 ```bash
 pip install -r requirements.txt
-PYTHONPATH=src python -m pytest -q          # 36 tests, ~3 s
+PYTHONPATH=src python -m pytest -q          # 55 tests, ~3 s
 OMP_NUM_THREADS=1 PYTHONPATH=src python experiments/homophily.py   # ~5 min on 2 cores
 OMP_NUM_THREADS=1 PYTHONPATH=src python experiments/depth.py       # ~6 min
+OMP_NUM_THREADS=1 PYTHONPATH=src python experiments/decoupled_depth.py      # ~3 min
+OMP_NUM_THREADS=1 PYTHONPATH=src python experiments/decoupled_homophily.py # ~1 min
 ```
 
 ```python
@@ -29,6 +31,10 @@ print(fit(model, g.x, g.y, ops, train, val, test).test_acc)
 | `GNN` | stack of any of the above (or an MLP that ignores the graph), optional residual connections and **PairNorm** (with its own backward) |
 | `sbm_graph` | attributed SBM with a *target* edge homophily and fixed expected degree, so features carry the same signal whatever the edges do |
 | `fit` | full-batch Adam, L2 on weights, best-validation-epoch restore (test accuracy is read only there) |
+| `APPNP` | MLP, then K steps of personalised-PageRank propagation `H <- (1-a) Ahat H + a Z` (parameter-free; adjoint is tested) |
+| `SGC` | `(Ahat^K X) W + b`: K-hop smoothing cached once, then a linear classifier |
+| `JKNet` | GCN stack whose classifier reads the concatenation of *all* layer outputs (jumping knowledge) |
+| `label_propagation` | Zhou et al. label spreading from the training labels; edges only, no features |
 | `dirichlet_energy`, `mean_pairwise_cosine` | oversmoothing diagnostics |
 
 Correctness is tested, not asserted: every layer type, depth 1 and 3, with residual + PairNorm, multi-head GAT and isolated nodes, all match central finite differences; GAT attention rows are distributions supported on neighbours; GCN/SAGE/GAT are **permutation-equivariant** (relabel the nodes, outputs permute); the MLP provably ignores the graph; repeated `Ahat` propagation drives Dirichlet energy monotonically to ~0 on a connected graph.
@@ -68,6 +74,42 @@ GCN on an h = 0.8 graph, hidden 32, 200 epochs, 4 seeds; each cell is test acc (
 * PairNorm keeps energy near 0.16 and cosine near 0.26 at every depth; residual + PairNorm scores highest at L=32 (1.00 vs 0.98-0.99), a gap within noise at 4 seeds.
 * At L=2 the task is already at ceiling (0.99), so depth has nothing to add on this graph — depth is not helping accuracy anywhere in this table.
 
+## Study 3 (v0.2): does decoupling propagation from transformation fix depth?
+
+Study 2 left a caveat: plain GCN's collapse mixes oversmoothing with deep-network trainability. SGC separates them cleanly: it is a *linear* model on `Ahat^K X`, nothing deep to train, so if it fails at large K that is the smoothing itself. Same graphs as Study 2 (h = 0.8, 4 seeds, width 32, 200 epochs; test acc, train acc in brackets; `experiments/decoupled_depth_results.txt`):
+
+| model | K/L=2 | 8 | 16 | 32 | 64 |
+|---|---|---|---|---|---|
+| GCN, plain (L layers) | 0.99 (1.00) | 0.98 (1.00) | **0.23** (0.28) | **0.24** (0.32) | not run |
+| JKNet, concat (L layers) | 0.98 (1.00) | 0.99 (1.00) | 0.99 (1.00) | 0.99 (1.00) | not run |
+| SGC (K hops) | 0.99 (1.00) | 0.99 (1.00) | 0.86 (0.91) | **0.26** (0.33) | **0.23** (0.29) |
+| APPNP, a = 0.1 (K hops) | 0.98 (0.99) | 0.98 (1.00) | 0.97 (1.00) | 0.97 (1.00) | 0.97 (1.00) |
+| APPNP, a = 0 (K hops) | 0.98 (1.00) | 0.99 (1.00) | 0.99 (1.00) | **0.36** (0.38) | **0.24** (0.25) |
+
+* **Decoupling alone does not help; teleportation does.** SGC and APPNP with a = 0 have *no* trainable depth and still fall to chance (0.25) by K = 32-64, with train accuracy collapsing too: the features really are smoothed into one direction. So at least part of plain GCN's collapse in Study 2 is genuine oversmoothing, not just trainability.
+* APPNP with a = 0.1 loses nothing from K = 2 to K = 64: mixing a fixed share of each node's own prediction back in at every hop stops the fixed point from being the degenerate one (the output converges to the closed form `a (I - (1-a) Ahat)^-1 Z`, which is tested).
+* JKNet is the other fix: shallow, unsmoothed layers stay visible to the classifier, so extra layers cannot hurt. (Not run beyond L = 32 for GCN/JKNet because of the cost of deep dense stacks.)
+* At L = 2..8 everything sits at the ceiling (0.98-0.99): depth buys no accuracy on this graph, only risk.
+
+### Homophily again, with decoupled models and label propagation
+
+Same graphs, splits and seeds as Study 1, so the MLP and GCN columns are identical to that table (`experiments/decoupled_homophily_results.txt`):
+
+| edge homophily | MLP | GCN | SGC k=2 | APPNP k=10 | label propagation |
+|---|---|---|---|---|---|
+| 0.1 | 0.590 | 0.407 | 0.404 | 0.505 | 0.107 |
+| 0.2 | 0.590 | 0.379 | 0.384 | 0.547 | 0.176 |
+| 0.3 | 0.590 | 0.478 | 0.468 | 0.595 | 0.287 |
+| 0.5 | 0.590 | 0.751 | 0.731 | 0.732 | 0.577 |
+| 0.7 | 0.590 | 0.945 | 0.936 | 0.902 | 0.897 |
+| 0.9 | 0.590 | 0.998 | 0.998 | 0.998 | 0.998 |
+
+(std 0.002-0.067 over 6 graphs; see the results file.)
+
+* SGC tracks GCN almost cell for cell: on this data the non-linearity buys nothing.
+* APPNP's retained own-prediction makes it the most robust graph model at low homophily (0.55 vs GCN 0.38 at h = 0.2) but it still trails the MLP below h = 0.3, and it is ~0.03-0.04 behind GCN at 0.7 (K = 10, a = 0.1 was not tuned for either regime).
+* Label propagation, which never touches a feature, matches the feature-aware models at h = 0.9 and is competitive at 0.7, then falls **below the 0.25 chance level** at h <= 0.2: with mostly cross-class edges, spreading labels actively spreads the *wrong* ones. At h = 0.1 it scores 0.107.
+
 ## Limitations
 
 * Synthetic SBM graphs with Gaussian features; no real citation graphs (no download-free source). Effects such as GAT's weak showing may change on real data with more labels.
@@ -77,4 +119,4 @@ GCN on an h = 0.8 graph, hidden 32, 200 epochs, 4 seeds; each cell is test acc (
 
 ## Ideas next
 
-APPNP / SGC / JKNet to test whether decoupling propagation from transformation removes the depth collapse; label-propagation baseline; a GCN on real text graphs built from `docqa`/`ragkit` chunk similarity; sparse (CSR) operators; heterophily-aware layers (H2GCN-style ego/neighbour/2-hop separation).
+dropout; hyperparameter sweeps for APPNP (K, a) per homophily regime; a GCN on real text graphs built from `docqa`/`ragkit` chunk similarity; sparse (CSR) operators; heterophily-aware layers (H2GCN-style ego/neighbour/2-hop separation).

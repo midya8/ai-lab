@@ -1,0 +1,9 @@
+depth study with decoupled models, h=0.8, 4 graphs, width 32, 200 epochs
+cell: test acc (train acc), mean over graphs; '-' = not run
+
+model                      K/L=2           K/L=8          K/L=16          K/L=32          K/L=64
+gcn (plain)          0.99 (1.00)     0.98 (1.00)     0.23 (0.28)     0.24 (0.32)               -
+jknet (concat)       0.98 (1.00)     0.99 (1.00)     0.99 (1.00)     0.99 (1.00)               -
+sgc                  0.99 (1.00)     0.99 (1.00)     0.86 (0.91)     0.26 (0.33)     0.23 (0.29)
+appnp (a=0.1)        0.98 (0.99)     0.98 (1.00)     0.97 (1.00)     0.97 (1.00)     0.97 (1.00)
+appnp (a=0)          0.98 (1.00)     0.99 (1.00)     0.99 (1.00)     0.36 (0.38)     0.24 (0.25)
