@@ -1,0 +1,3 @@
+{"mode": "lti-wide", "seq_len": 32, "seed": 0, "params": 7580, "tok": 0.94225, "exact": 0.788, "long_tok": 0.65775, "long_exact": 0.168}
+{"mode": "lti-wide", "seq_len": 32, "seed": 1, "params": 7580, "tok": 0.88675, "exact": 0.591, "long_tok": 0.601, "long_exact": 0.095}
+{"mode": "lti-wide", "seq_len": 32, "seed": 2, "params": 7580, "tok": 0.8815, "exact": 0.584, "long_tok": 0.55375, "long_exact": 0.097}
