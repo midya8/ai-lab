@@ -1,0 +1,48 @@
+1. Slow-memory traffic (elements, 1 head, d=64, non-causal), naive vs tiled
+     N   tile          naive          tiled   ratio
+   512     16      1,179,648      2,163,200    0.55
+   512     64      1,179,648        590,336    2.00
+   512    256      1,179,648        197,120    5.98
+  1024     16      4,456,448      8,520,704    0.52
+  1024     64      4,456,448      2,229,248    2.00
+  1024    256      4,456,448        656,384    6.79
+  2048     16     17,301,504     33,818,624    0.51
+  2048     64     17,301,504      8,652,800    2.00
+  2048    256     17,301,504      2,361,344    7.33
+   (tiled traffic ~ N*d + (N/Br)*2*N*d: larger Br cuts K/V re-reads; N^2 score traffic is gone.)
+   Elements, not seconds: NumPy has no fast on-chip memory, so this is the algorithm's I/O model.
+
+2. Peak Python/NumPy allocation (tracemalloc), 1 head, d=64
+     N   naive MB  tiled(64) MB
+   512       11.0          0.81
+  1024       43.6          1.61
+  2048      173.1          3.21
+   (naive also materialises probs and a mask; tiled holds q/k/v/out plus one 64x64 tile.)
+
+3. Executed tile-flops as a fraction of dense (N=1024, tile 32, 1 head)
+  causal                        0.516  (496/1024 tiles skipped)
+  causal, window 128            0.146  (874/1024 tiles skipped)
+  causal, window 32             0.062  (961/1024 tiles skipped)
+  bidirectional, window 128     0.262  (756/1024 tiles skipped)
+
+4. Numerics: max |error| vs float64 naive reference (causal, d=64, mean of 3 seeds)
+     N  score scale   tiled f32   naive f32
+   256          1.0    7.10e-07    6.53e-07
+   256          8.0    7.02e-06    7.04e-06
+  1024          1.0    5.04e-07    4.83e-07
+  1024          8.0    1.04e-05    1.05e-05
+   Both are float32 with max-subtraction, so both sit at float32 rounding; tiling does not
+   cost accuracy. Without the max subtraction float32 exp overflows once scores exceed ~88:
+  score scale   1.0: max score     3.7  unstabilised exp overflows: False  online softmax finite: True
+  score scale  10.0: max score    36.8  unstabilised exp overflows: False  online softmax finite: True
+  score scale  40.0: max score   147.1  unstabilised exp overflows: True   online softmax finite: True
+
+5. Split-KV decode: max |diff| vs one-pass attention, 1 query over 4096 cached tokens
+  splits   1: 2.64e-16
+  splits   4: 2.71e-16
+  splits  16: 2.64e-16
+  splits  64: 2.71e-16
+
+6. Paged cache vs contiguous reservation (block 16, max_len 512 reserved per sequence)
+  32 sequences, 7032 tokens: paged slots 7296, contiguous max_len slots 16384  (44.5%); internal waste 264 slots
+  8 forks of a 256-token prefix + 8 tokens each: +8 blocks (8 full copies would be +136); copy-on-write events 0
