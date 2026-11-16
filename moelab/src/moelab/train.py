@@ -45,6 +45,8 @@ def fit(net, x, y, x_test, y_test, z_train=None, steps: int = 300, lr: float = 3
             v[k] = b2 * v[k] + (1 - b2) * g * g
             mh, vh = m[k] / (1 - b1 ** t), v[k] / (1 - b2 ** t)
             p -= lr * mh / (np.sqrt(vh) + eps)       # in place: params() returns views
+        if hasattr(net.layer, "update_bias"):
+            net.layer.update_bias()
         if t % record_every == 0 or t == 1:
             st = getattr(net.layer, "last_stats", {})
             if st:

@@ -9,6 +9,16 @@ MoELayer routing modes
                   best tokens, so load is perfectly balanced by construction but a token may
                   get no expert at all, or several.
 
+Two DeepSeek-style extras (v0.2), both optional and off by default:
+
+``n_shared``      always-on shared experts whose outputs are added to every token (gate 1, not
+                  subject to capacity), so routed experts only need to learn what is *not*
+                  common to all tokens.
+``bias_rate``     auxiliary-loss-free balancing (Wang et al. 2024): a per-expert bias is added to
+                  the router logits for *selection only* (gate values still come from the
+                  unbiased softmax) and nudged by ``bias_rate`` after each step against the
+                  sign of that expert's load error.  No balance-loss gradient touches the router.
+
 Discrete decisions (which experts, which tokens survive the capacity limit) are treated as
 constants in the backward pass; gradients flow through the continuous gate weights, which is
 what real implementations do.  The finite-difference tests rely on routing being locally
@@ -80,12 +90,18 @@ class MoELayer:
     def __init__(self, d: int, f: int, n_experts: int = 8, k: int = 2,
                  capacity_factor: float | None = 1.25, routing: str = "topk",
                  aux_coef: float = 0.0, z_coef: float = 0.0, renorm: bool | None = None,
-                 jitter: float = 0.0, seed: int = 0):
+                 jitter: float = 0.0, seed: int = 0, n_shared: int = 0,
+                 bias_rate: float = 0.0):
         if routing not in ("topk", "expert_choice"):
             raise ValueError("routing must be 'topk' or 'expert_choice'")
         if not 1 <= k <= n_experts:
             raise ValueError("need 1 <= k <= n_experts")
+        if bias_rate and routing != "topk":
+            raise ValueError("bias_rate (aux-loss-free balancing) needs routing='topk'")
+        if n_shared < 0 or bias_rate < 0:
+            raise ValueError("n_shared and bias_rate must be >= 0")
         self.d, self.f, self.E, self.k = d, f, n_experts, k
+        self.n_shared, self.bias_rate = n_shared, bias_rate
         self.cf, self.routing = capacity_factor, routing
         self.aux_coef, self.z_coef, self.jitter = aux_coef, z_coef, jitter
         # k = 1 with renormalised gates would be a constant 1: the router would get no task gradient.
@@ -93,6 +109,9 @@ class MoELayer:
         rng = np.random.default_rng(seed)
         self.Wg = rng.normal(size=(d, n_experts)) * 0.02
         self.ex = Experts(n_experts, d, f, rng)
+        # created after the routed experts so n_shared=0 reproduces v0.1 initialisation exactly
+        self.sh = Experts(n_shared, d, f, rng) if n_shared else None
+        self.bias = np.zeros(n_experts)          # selection bias; not a gradient parameter
         self._rng = np.random.default_rng(seed + 1)
         self.aux_loss = 0.0
         self.last_stats: dict = {}
@@ -100,15 +119,30 @@ class MoELayer:
 
     # ------------------------------------------------------------------ params
     def params(self) -> dict:
-        return {"Wg": self.Wg, "W1": self.ex.W1, "b1": self.ex.b1,
-                "W2": self.ex.W2, "b2": self.ex.b2}
+        p = {"Wg": self.Wg, "W1": self.ex.W1, "b1": self.ex.b1,
+             "W2": self.ex.W2, "b2": self.ex.b2}
+        if self.sh is not None:
+            p.update({"sW1": self.sh.W1, "sb1": self.sh.b1, "sW2": self.sh.W2, "sb2": self.sh.b2})
+        return p
 
     def n_params(self) -> int:
         return sum(p.size for p in self.params().values())
 
     def active_params_per_token(self) -> int:
         per_expert = self.d * self.f * 2 + self.f + self.d
-        return self.d * self.E + self.k * per_expert
+        return self.d * self.E + (self.k + self.n_shared) * per_expert
+
+    def update_bias(self) -> None:
+        """One aux-loss-free balancing step from the last training forward's routing load.
+
+        ``bias_e += rate * sign(mean_load - load_e)``: overloaded experts become less likely to
+        be selected, starved ones more likely.  Uses the pre-drop selection share (what the
+        router *wanted*), as in DeepSeek-V3.  No-op when ``bias_rate == 0``.
+        """
+        if not self.bias_rate or "load" not in self.last_stats:
+            return
+        load = self.last_stats["load"]
+        self.bias += self.bias_rate * np.sign(load.mean() - load)
 
     def capacity(self, n_tokens: int) -> int:
         if self.cf is None:
@@ -127,7 +161,7 @@ class MoELayer:
         p = _softmax(logits)
         C = self.capacity(N)
         if self.routing == "topk":
-            asg = self._route_topk(p, C)
+            asg = self._route_topk(p, C, logits + self.bias if self.bias_rate else None)
         else:
             asg = self._route_expert_choice(p, C)
         # asg: boolean (N, E) of *kept* token->expert assignments
@@ -141,6 +175,12 @@ class MoELayer:
             S = np.ones((N, 1))
             g = p * asg["kept"]
         out = h.copy()
+        scache = []
+        if self.sh is not None:
+            for s_ in range(self.n_shared):
+                y, c = self.sh.forward(s_, h)
+                out += y
+                scache.append(c)
         ecache = {}
         eout = {}
         for e in range(self.E):
@@ -173,12 +213,12 @@ class MoELayer:
             "lb": lb, "z": zl, "capacity": C,
         }
         cache = {"h": h, "hin": hin, "p": p, "g": g, "S": S, "asg": asg, "ecache": ecache,
-                 "eout": eout, "jit": jit, "f_frac": f_frac, "lse": lse, "logits": logits}
+                 "eout": eout, "scache": scache, "jit": jit, "f_frac": f_frac, "lse": lse, "logits": logits}
         return out, cache
 
-    def _route_topk(self, p: np.ndarray, C: int) -> dict:
+    def _route_topk(self, p: np.ndarray, C: int, score: np.ndarray | None = None) -> dict:
         N = p.shape[0]
-        order = np.argsort(-p, axis=1, kind="stable")[:, : self.k]
+        order = np.argsort(-(p if score is None else score), axis=1, kind="stable")[:, : self.k]
         selected = np.zeros_like(p, dtype=bool)
         np.put_along_axis(selected, order, True, axis=1)
         kept = np.zeros_like(selected)
@@ -208,6 +248,13 @@ class MoELayer:
         grads = {k: np.zeros_like(v) for k, v in self.params().items()}
         dh = dout.copy()                                            # residual path
         dg = np.zeros_like(p)
+        if self.sh is not None:
+            sg = {"W1": np.zeros_like(self.sh.W1), "b1": np.zeros_like(self.sh.b1),
+                  "W2": np.zeros_like(self.sh.W2), "b2": np.zeros_like(self.sh.b2)}
+            for s_, c in enumerate(cache["scache"]):
+                dh += self.sh.backward(s_, c, dout, sg)
+            for name, v in sg.items():
+                grads["s" + name] = v
         for e, (idx, c) in cache["ecache"].items():
             y = cache["eout"][e]
             dg[idx, e] = (dout[idx] * y).sum(axis=1)
