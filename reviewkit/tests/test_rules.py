@@ -547,3 +547,10 @@ def test_iterate_dict_keys():
     assert any(r == "py-iterate-dict-keys" for _, r in rules("a.py", "def f(d):\n    return [k for k in d.keys()]\n"))
     ok = "def f(d):\n    for k in d:\n        print(k)\n    for k in other.items():\n        pass\n"
     assert all(r != "py-iterate-dict-keys" for _, r in rules("a.py", ok))
+
+
+def test_print_exc():
+    bad = "import traceback\ntry:\n    pass\nexcept ValueError:\n    traceback.print_exc()\n"
+    assert (5, "py-print-exc") in rules("a.py", bad)
+    ok = "import logging\nlog = logging.getLogger()\ntry:\n    pass\nexcept ValueError:\n    log.exception('x')\n"
+    assert all(r != "py-print-exc" for _, r in rules("a.py", ok))

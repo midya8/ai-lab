@@ -475,6 +475,12 @@ def ast_findings(ctx: FileContext, source: str, complexity_threshold: int = 10) 
             add(node.lineno, "py-len-compare-zero", "low",
                 "`len(x) == 0` / `len(x) > 0` is a verbose emptiness test.",
                 "Use `if not x:` / `if x:` (use an explicit length check only for numpy arrays or custom types).")
+        if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                and node.func.attr == "print_exc" and isinstance(node.func.value, ast.Name)
+                and node.func.value.id == "traceback"):
+            add(node.lineno, "py-print-exc", "low",
+                "`traceback.print_exc()` writes to stderr and bypasses logging config.",
+                "Use `logger.exception(...)` so the traceback reaches your log handlers.")
         if (isinstance(node, (ast.For, ast.comprehension))
                 and isinstance(node.iter, ast.Call) and isinstance(node.iter.func, ast.Attribute)
                 and node.iter.func.attr == "keys" and not node.iter.args and not node.iter.keywords):
@@ -862,6 +868,7 @@ RULE_TABLE.update({
     "py-default-evaluated-once": ("medium", "Default argument calls time/uuid/random once at def time."),
     "py-mutate-while-iterating": ("high", "List mutated (append/remove/insert/pop/extend) inside a `for` over itself."),
     "py-len-compare-zero": ("low", "`len(x) == 0` / `> 0` instead of truthiness."),
+    "py-print-exc": ("low", "`traceback.print_exc()` instead of `logger.exception`."),
     "py-iterate-dict-keys": ("low", "`for k in d.keys()` instead of `for k in d`."),
     "py-listcomp-in-any": ("low", "`any([...])`/`all([...])` with a list comprehension (use a generator)."),
     "py-get-none-default": ("low", "`.get(k, None)` with redundant None default."),
