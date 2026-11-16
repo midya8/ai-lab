@@ -167,3 +167,20 @@ Exact cost grows by 4.6x to 6.5x per doubling and is still approaching the cubic
 - `Periodic` is a product of 1-D periodic kernels with a shared period (the Euclidean-distance form is not PSD beyond 1-D).
 - Exact GP uses a dense inverse of the Cholesky factor for clarity, so it is for n of a few thousand at most.
 - Synthetic data only; the studies show behaviours of the methods, not benchmark rankings.
+
+## v0.2: GP classification (Laplace)
+
+`gplab.classify.LaplaceGPC` implements binary GP classification with a logistic likelihood
+(Rasmussen & Williams Algs. 3.1-3.2): damped Newton mode finding in the stable
+`B = I + W^1/2 K W^1/2` form, the Laplace approximate log marginal likelihood, and predictive
+probabilities via the probit approximation (checked against Gauss-Hermite quadrature).
+Hyper-parameters are fit with L-BFGS on central finite-difference gradients of the approximate
+marginal likelihood. `log_loss` and `expected_calibration_error` are included.
+
+```python
+from gplab import RBF, LaplaceGPC
+clf = LaplaceGPC(RBF(0.5, 2.0)).fit(X, y01)
+p = clf.predict_proba(Xs)
+```
+Tests (6 new, 68 total) verify the mode is a stationary point of the penalised likelihood, beats
+perturbations, the LML matches exact 1-D integration in the Gaussian limit, and that fitting improves LML on a synthetic two-moons set.
