@@ -134,3 +134,28 @@ class Coupling:
         g["b1"] += gpre.sum(0)
         gxa = gya + gpre @ p["W1"].T
         return np.concatenate([gxa, gxb], 1)
+
+
+class InvLinear:
+    """Glow-style invertible linear map y = x @ W (a learned generalisation of a permutation).
+
+    logdet = log|det W| for every example; initialised to a random orthogonal matrix
+    (logdet 0), so it starts as a random rotation/reflection.  dL/dW = x^T gy + sum(glogdet) W^{-T}.
+    """
+
+    def __init__(self, d: int, seed: int = 0):
+        q, r = np.linalg.qr(np.random.default_rng(seed).standard_normal((d, d)))
+        self.params = {"W": q * np.sign(np.diag(r))}
+        self.grads = {"W": np.zeros((d, d))}
+
+    def forward(self, x):
+        _, ld = np.linalg.slogdet(self.params["W"])
+        return x @ self.params["W"], np.full(x.shape[0], ld)
+
+    def inverse(self, y):
+        return y @ np.linalg.inv(self.params["W"])
+
+    def backward(self, x, gy, glogdet):
+        W = self.params["W"]
+        self.grads["W"] += x.T @ gy + glogdet.sum() * np.linalg.inv(W).T
+        return gy @ W.T

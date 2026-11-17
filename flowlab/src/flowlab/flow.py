@@ -3,14 +3,16 @@ from __future__ import annotations
 
 import numpy as np
 
-from .layers import ActNorm, Coupling, Permutation
+from .layers import ActNorm, Coupling, InvLinear, Permutation
 
 LOG2PI = float(np.log(2 * np.pi))
 
 
 class Flow:
     def __init__(self, d: int, n_layers: int = 6, hidden: int = 64, *, additive: bool = False,
-                 actnorm: bool = True, seed: int = 0, zero_init: bool = True, scale: float = 2.0):
+                 actnorm: bool = True, seed: int = 0, zero_init: bool = True, scale: float = 2.0, mixing: str = "perm"):
+        if mixing not in ("perm", "linear"):
+            raise ValueError("mixing must be 'perm' or 'linear'")
         self.d = d
         rng = np.random.default_rng(seed)
         self.layers: list = []
@@ -21,7 +23,8 @@ class Flow:
                                         seed=int(rng.integers(1 << 30)), zero_init=zero_init))
             # alternate which coordinates condition: reverse for d=2, random permutation otherwise
             perm = np.arange(d)[::-1] if d == 2 else rng.permutation(d)
-            self.layers.append(Permutation(perm))
+            self.layers.append(InvLinear(d, seed=int(rng.integers(1 << 30))) if mixing == "linear"
+                               else Permutation(perm))
 
     # ----- parameters as a flat dict for the optimiser -----
     def named_params(self) -> dict:

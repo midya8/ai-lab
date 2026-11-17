@@ -97,3 +97,19 @@ Run `python gallery.py` for the ring and checkerboard figures (stored in `experi
 * The gap is a Monte-Carlo estimate on 20,000 held-out points; it is finite on the checkerboard only because the flow assigns non-zero density outside the squares.
 * Seeds change data and initialisation together; three seeds give a rough spread, not a confidence interval.
 * No spline couplings, no autoregressive flows, no continuous-time flows yet (see the roadmap).
+
+## v0.2: learned invertible linear mixing (Glow-style)
+
+`InvLinear` (`Flow(..., mixing="linear")`) replaces each fixed permutation with a learned d x d matrix
+(orthogonal init, logdet = log|det W|, gradient `x^T gy + sum(glogdet) W^-T`, finite-difference checked).
+`mixing_study.py` compares it with permutations at equal depth (6 couplings, hidden 48, 1500 steps, 3 seeds,
+held-out NLL in nats, results in `results/mixing.txt`):
+
+| dataset | permutation | linear |
+|---|---|---|
+| moons | 1.165 ± 0.029 | 1.152 ± 0.026 |
+| spiral | 1.831 ± 0.064 | 1.998 ± 0.113 |
+| checker4 | 2.554 ± 0.019 | 2.573 ± 0.041 |
+
+Result: no consistent benefit in 2-D (within noise on moons/checker4, worse on spiral); with d=2 a permutation
+is already enough to mix coordinates, so Glow's advantage is expected only in higher dimensions.

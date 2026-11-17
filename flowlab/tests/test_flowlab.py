@@ -215,3 +215,46 @@ def test_ascii_density_shape_and_content():
     assert "@" not in ascii_density(np.zeros((0, 2)) + 99, 3.0, 20, 10)   # out-of-range points are ignored
     # y grows upward: a point at the top of the window lands in the first row
     assert ascii_density(np.array([[0.0, 2.9]]), 3.0, 20, 10).split("\n")[0].strip() != ""
+
+
+def test_invlinear_grad_and_logdet():
+    from flowlab import InvLinear
+    rng = np.random.default_rng(0)
+    l = InvLinear(3, seed=1)
+    l.params["W"] = l.params["W"] * 1.3 + 0.2 * rng.standard_normal((3, 3))
+    x = rng.standard_normal((5, 3)); gy = rng.standard_normal((5, 3)); gl = rng.standard_normal(5)
+    y, ld = l.forward(x)
+    assert np.allclose(l.inverse(y), x)
+    assert ld[0] == pytest.approx(np.log(abs(np.linalg.det(l.params["W"]))))
+    def f():
+        y, ld = l.forward(x)
+        return float((y * gy).sum() + (ld * gl).sum())
+    l.grads["W"][...] = 0
+    gx = l.backward(x, gy, gl)
+    W = l.params["W"]
+    for i in range(3):
+        for j in range(3):
+            W[i, j] += 1e-6; a = f(); W[i, j] -= 2e-6; b = f(); W[i, j] += 1e-6
+            assert l.grads["W"][i, j] == pytest.approx((a - b) / 2e-6, rel=1e-5, abs=1e-6)
+    assert gx[0, 0] == pytest.approx(gy[0] @ W[0], rel=1e-9)
+
+
+def test_linear_mixing_flow_roundtrip_and_trains():
+    f = Flow(2, 3, 16, seed=0, mixing="linear")
+    x = two_moons().sample(600, seed=0)
+    res = fit(f, x, steps=150, batch=128, seed=0)
+    z, _, _ = f.forward(x)
+    assert np.allclose(f.inverse(z), x, atol=1e-7)
+    assert res.losses[-1][1] < res.losses[0][1]
+    with pytest.raises(ValueError):
+        Flow(2, mixing="bogus")
+
+
+def test_broken_invlinear_backward_fails():
+    from flowlab import InvLinear
+    l = InvLinear(3, seed=0)
+    x = np.random.default_rng(0).standard_normal((4, 3))
+    l.grads["W"][...] = 0
+    l.backward(x, np.zeros((4, 3)), np.ones(4))
+    # with only a logdet signal the gradient must be 4*W^{-T}; zero would be a broken implementation
+    assert np.allclose(l.grads["W"], 4 * np.linalg.inv(l.params["W"]).T)

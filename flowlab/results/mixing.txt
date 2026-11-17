@@ -1,0 +1,3 @@
+moons         perm 1.165±0.029 (1168p)  linear 1.152±0.026 (1192p)
+spiral        perm 1.831±0.064 (1168p)  linear 1.998±0.113 (1192p)
+checker4      perm 2.554±0.019 (1168p)  linear 2.573±0.041 (1192p)
