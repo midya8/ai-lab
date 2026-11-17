@@ -221,3 +221,7 @@ leave-one-out residuals (closed-form LOO, bias-corrected by E[log chi2_1]) to es
 a sine with noise sd rising from 0.05 to 0.45 require log-noise correlation > 0.8 with the truth, lower
 held-out NLPD than a homoscedastic GP, and 95% coverage between 0.88 and 0.99. With constant noise the
 estimated noise stays roughly flat. Hyper-parameters are not learned; this is a point estimate of g, not a full posterior.
+
+## State-space GP (v0.8)
+
+`KalmanMatern(nu=1.5|2.5, lengthscale, variance, noise)` runs 1-D Matern GP regression as a Kalman filter plus RTS smoother: O(n) time instead of O(n^3). `log_marginal_likelihood(x, y)` and `predict(x, y, xs)` agree with `ExactGP` to 1e-6 (tests/test_kalman.py).
