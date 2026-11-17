@@ -1,4 +1,4 @@
-# ml-from-scratch
+# AI portfolio
 
 Where I build ML ideas myself to understand them. Mostly NumPy or plain Python, small enough to run on a laptop CPU, and each folder has its own README, tests and a few experiments. A second group is practical LLM tooling: evals, RAG, agents, routing, guardrails.
 
@@ -68,3 +68,7 @@ PYTHONPATH=src python -m pytest -q
 A few of these overlap on purpose. `rag-evals` only does retrieval and `ragkit` adds answers on top. `evalkit` and `llm-eval-harness` are two takes on the same idea.
 
 Nothing needs an API key. Where a real model is optional, it's opt-in through an environment variable. [ROADMAP.md](ROADMAP.md) has what I want to try next.
+
+## Repository name
+
+This repository is now `ai-portfolio` (formerly `ai-lab`). GitHub redirects the old repository and Git URLs. Use the current URL for new links.
