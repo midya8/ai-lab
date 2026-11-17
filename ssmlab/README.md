@@ -4,7 +4,7 @@
 
 ```bash
 pip install -r requirements.txt
-PYTHONPATH=src python -m pytest -q                                   # 31 tests, ~8 s
+PYTHONPATH=src python -m pytest -q                                   # 37 tests, ~8 s
 PYTHONPATH=src python -m ssmlab train --steps 1500 --seq-len 16 --save /tmp/sel.npz   # ~35 s
 PYTHONPATH=src python -m ssmlab train --lti --steps 1500 --seq-len 16                 # the fixed-dynamics baseline
 PYTHONPATH=src python -m ssmlab eval /tmp/sel.npz --seq-len 32                        # length generalisation
@@ -49,11 +49,23 @@ The associative scan is exact (max difference 4e-15) but **slower than the plain
 
 The recurrent state of the 4-layer, d_model-64 model is 77,824 bytes per sequence at any length. A transformer KV cache of the same width and depth would hold 524 KB at T=128 and 33.5 MB at T=8192 (6.7x and 431x larger); that comparison is arithmetic, not a measured transformer.
 
+## Experiment: what does delta learn? (`experiments/delta_probe.py`, `ssmlab/analysis.py`)
+
+Three selective 2-layer models (d_model 16, L=32, same setup as above, all at 1.000 token accuracy intact), probed on 500 fresh sequences. Channel-mean `delta` is compared on data vs noise tokens (AUC = P(delta at a data token > delta at a noise token)), then `delta` is forced to 0 (token neither written nor decaying the state) at the 4 data tokens, or at 4 random noise tokens as a control.
+
+| seed | layer-1 AUC | layer-2 AUC | acc, skip data tokens | acc, skip random noise tokens |
+|---|---|---|---|---|
+| 0 | 0.62 | 0.37 | 0.914 | 0.882 |
+| 1 | 0.79 | 0.95 | 0.615 | 0.954 |
+| 2 | 0.69 | 0.70 | 0.750 | 0.913 |
+
+Reading it honestly: the tidy story "delta spikes on data and is ~0 on noise" is only **partly** true. Delta is higher on data tokens in 5 of 6 layers (AUC 0.62-0.95), and for seeds 1 and 2 silencing the data tokens hurts far more than silencing random noise (0.62 / 0.75 vs 0.95 / 0.91), so the gate is causally used. Seed 0 is the counter-example: AUC below 0.5 in layer 2 and no difference between the two ablations, i.e. that model routes the information through `B`, the conv or the output gate instead. Channel-mean delta also hides per-channel specialisation, and 3 seeds with tiny models cannot say how common each solution is. Zeroing delta in all layers at once is a blunt ablation, and the ablated sequences are off-distribution for the trained model.
+
 ## Layout
 
 ```
-src/ssmlab/   scan.py layers.py model.py optim.py train.py tasks.py __main__.py
-tests/        scan, gradient checks, parity/causality/linearity, training, CLI
+src/ssmlab/   analysis.py scan.py layers.py model.py optim.py train.py tasks.py __main__.py
+tests/        scan, gradient checks, parity/causality/linearity, training, CLI, delta analysis
 experiments/  lti_vs_selective.py (+ json/logs), param_matched.py (+ jsonl), scan_benchmark.py (+ json)
 ```
 
