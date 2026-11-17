@@ -362,6 +362,7 @@
 - gplab v0.3 (2026-11-16): SpectralMixture kernel with analytic gradients, frequency recovery and extrapolation tests (73 tests)
 - gplab v0.5 (2026-11-17): RobustGP Student-t regression via EM scale mixture, outlier weights (4 tests)
 - gplab v0.6 (2026-11-17): HeteroGP most-likely heteroscedastic regression with LOO residual noise GP (3 tests)
+- gplab v0.7 (2026-11-17): ICMGP multi-output coregionalisation GP, B = WW^T + diag(kappa), marginal-likelihood fit, recovers output correlation sign/strength (5 tests)
 - ssmlab v0.2: delta analysis — gate AUC (delta on data vs noise tokens), causal skip-ablation by forcing delta to 0, 3 seeds: delta higher on data in 5/6 layers (AUC 0.62-0.95); ablating data tokens costs 0.62-0.91 acc vs 0.88-0.95 for random noise; seed 0 does not use the delta gate (reported) (6 new tests, synthetic)
 
 
