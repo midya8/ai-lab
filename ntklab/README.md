@@ -116,6 +116,18 @@ Analytic NTK on 64 circle points:
 
 Deeper ReLU NTKs correlate all inputs more, grow their top eigenvalue linearly (so the stable step shrinks), and flatten the spectrum - which is why deep nets in the kernel regime fit high frequencies relatively faster, at the price of a smaller usable learning rate.
 
+### 7. Closed-form LOO picks the ridge (`python -m ntklab.ridge`)
+
+`ntklab/ridge.py` does kernel ridge with leave-one-out error from the hat matrix (no refits; one eigendecomposition covers the whole lambda grid; checked against explicit refits). Noisy circle data (noise 0.3), analytic depth-2 NTK, 20 seeds, test MSE:
+
+| n | interpolation | LOO-chosen ridge | oracle ridge | median chosen lambda |
+|---|---|---|---|---|
+| 20 | 0.089 | 0.070 | 0.064 | 0.10 |
+| 40 | 0.062 | 0.033 | 0.031 | 0.18 |
+| 80 | 0.057 | 0.020 | 0.017 | 0.32 |
+
+Interpolating noisy data costs 2-3x test error at larger n; LOO lands within ~20% of the oracle without seeing test data. The chosen lambda grows with n here (the NTK sum scales with n). Synthetic, 20 seeds, no confidence intervals.
+
 ## Limits
 
 - Scalar output, full-batch GD on MSE, ReLU only, one input geometry; no CNN/attention kernels, no finite-width corrections beyond what is measured empirically.

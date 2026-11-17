@@ -366,6 +366,7 @@
 - ssmlab v0.2: delta analysis — gate AUC (delta on data vs noise tokens), causal skip-ablation by forcing delta to 0, 3 seeds: delta higher on data in 5/6 layers (AUC 0.62-0.95); ablating data tokens costs 0.62-0.91 acc vs 0.88-0.95 for random noise; seed 0 does not use the delta gate (reported) (6 new tests, synthetic)
 - flowlab v0.2 (2026-11-17): Glow-style InvLinear mixing layer (FD-checked) + permutation-vs-linear study: null result in 2-D (3 tests, 28 total)
 - gplab v0.8 (2026-11-17): KalmanMatern state-space GP, exact O(n) Matern-3/2 and 5/2 via Kalman filter + RTS smoother; lml and posterior match ExactGP to 1e-6 (5 tests)
+- ntklab v0.2 (2026-11-17): kernel ridge with closed-form LOO model selection (`ridge.py`), LOO within ~20% of oracle ridge, 4 tests (42 total)
 
 
 ## Next
