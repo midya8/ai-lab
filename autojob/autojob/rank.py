@@ -18,6 +18,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from .blocklist import is_blocked
 from .match import match_profile
 from .posting import parse_posting
 from .tracker import _norm
@@ -36,7 +37,7 @@ def _applied_map(entries):
 
 
 def rank_postings(profile, postings_dir, entries=(), min_score=None,
-                  include_applied=False):
+                  include_applied=False, blocklist=()):
     """Rank every posting file in ``postings_dir`` against ``profile``.
 
     Returns ``{"ranked": [...], "skipped": [...], ...}``. Each ranked row
@@ -46,7 +47,11 @@ def rank_postings(profile, postings_dir, entries=(), min_score=None,
     Rows already applied are dropped unless ``include_applied``; rows
     below ``min_score`` are dropped (an unmeasurable ``None`` score never
     passes a threshold). Unreadable files land in ``skipped`` with a
-    reason; they are not ranked and not silently ignored.
+    reason; they are not ranked and not silently ignored. Postings from
+    a company on the blocklist (``blocklist`` is the list
+    ``load_blocklist`` returns under "blocked") are skipped the same
+    way, with the recorded reason — a good score does not rank a
+    company you already ruled out.
     """
     postings_dir = Path(postings_dir)
     files = sorted(
@@ -60,6 +65,7 @@ def rank_postings(profile, postings_dir, entries=(), min_score=None,
     profile_skills = [s["name"] for s in profile.get("skills", [])]
     ranked, skipped = [], []
     n_scored = 0
+    n_blocked = 0
     for path in files:
         try:
             text = path.read_text(encoding="utf-8")
@@ -89,6 +95,17 @@ def rank_postings(profile, postings_dir, entries=(), min_score=None,
         }
         if row["applied"] and not include_applied:
             continue
+        blocked = is_blocked(blocklist, row["company"])
+        if blocked is not None:
+            reason = (f"blocked: {blocked['reason']}"
+                      if blocked.get("reason")
+                      else "blocked (no reason given)")
+            skipped.append({"file": path.name,
+                            "company": row["company"],
+                            "title": row["title"],
+                            "reason": reason})
+            n_blocked += 1
+            continue
         if min_score is not None:
             if row["score"] is None or row["score"] < min_score:
                 continue
@@ -112,6 +129,7 @@ def rank_postings(profile, postings_dir, entries=(), min_score=None,
         "n_scored": n_scored,
         "n_files": len(files),
         "n_skipped": len(skipped),
+        "n_blocked": n_blocked,
         "min_score": min_score,
         "include_applied": include_applied,
     }
@@ -141,9 +159,9 @@ def render_rank_markdown(data):
                      + ".")
         if data["skipped"]:
             lines.append("")
-            lines.append("Skipped files (could not be read):")
+            lines.append("Skipped:")
             for item in data["skipped"]:
-                lines.append(f"  {item['file']}: {item['reason']}")
+                lines.append(f"  {_skipped_text(item)}")
         return "\n".join(lines) + "\n"
     next_up = next((r for r in ranked if not r["applied"]), None)
     if next_up is not None:
@@ -166,7 +184,16 @@ def render_rank_markdown(data):
         lines.append(line)
     if data["skipped"]:
         lines.append("")
-        lines.append("Skipped files (could not be read):")
+        lines.append("Skipped:")
         for item in data["skipped"]:
-            lines.append(f"  {item['file']}: {item['reason']}")
+            lines.append(f"  {_skipped_text(item)}")
     return "\n".join(lines) + "\n"
+
+
+def _skipped_text(item):
+    """One skipped row: blocked postings name the company, unreadable
+    files name the file."""
+    if item.get("company"):
+        return (f"{item['company']} — {item.get('title', 'unknown role')} "
+                f"({item['file']}): {item['reason']}")
+    return f"{item['file']}: {item['reason']}"

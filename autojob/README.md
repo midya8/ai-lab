@@ -2,7 +2,7 @@
 
 A job-application assistant that prepares applications from your own
 profile — and refuses to invent anything about you. Pure standard-library
-Python, 642 tests, no API keys, fully offline.
+Python, 890 tests, no API keys, fully offline.
 
 Built in November 2026 as a portfolio project. It is not client work, it is
 not affiliated with any employer, and the example profile and posting in
@@ -506,6 +506,219 @@ it builds is a draft for a human to review and send.
     `autojob-backup-YYYY-MM-DD.zip` beside the log), `--goals` and
     `--answers` point at sidecars kept elsewhere, `--json` prints
     the summary as JSON, `--today` pins the date in the manifest.
+29. **Search** (`autojob/search.py`, v0.25) — `search --query TEXT`
+    finds the applications that mention something: a person you spoke
+    to, a skill a posting asked for, a question an interviewer asked,
+    a note you wrote after a call. Every word in the query has to
+    appear somewhere in the application, but the words can match in
+    different fields — "Priya dashboard" finds the application whose
+    hiring-manager round was with Priya Nair and whose debrief says
+    the dashboard story landed. The result names the fields each word
+    came from, so you can see why a row matched instead of trusting a
+    score: there is no ranking and no fuzzy match. It searches the
+    company and title, the status and source, the skills the posting
+    asked for and which ones you had, the closing date, the rejection
+    reason and note, and every contact, interview, offer, debrief,
+    and follow-up note already in the log. `--status` and `--source`
+    narrow the rows first, the same as `export`; a filter value that
+    is not a real status or channel is refused, not silently matched
+    to nothing. Search only reads: it records nothing, changes
+    nothing, and never touches the log. `--json` prints the results
+    as JSON, `--out` writes them.
+30. **Blocklist** (`autojob/blocklist.py`, v0.26) — `blocklist --record
+    --company NAME --reason TEXT --date YYYY-MM-DD` writes a company
+    down with the reason, in your own words: ghosted after a final
+    round, a salary band that will not move, a "remote" listing that
+    turned out to be hybrid. Once a company is on the list, `apply`
+    refuses it outright (exit 4, nothing written), and `rank` and
+    `batch` skip its postings with the reason shown — a good score
+    cannot talk you back into a place you already ruled out.
+    Matching ignores case and extra spaces, so "vector labs" and
+    "Vector Labs" are one entry, and re-blocking the same company
+    replaces the earlier reason and date instead of adding a second
+    row. `blocklist --remove --company NAME` takes a company off
+    again; the decision is yours to reverse. The list lives in a
+    small `blocklist.json` beside the log (`--blocklist` points
+    somewhere else), the same pattern as the weekly target and the
+    question bank: a setting, not an event, so recording or removing
+    one never touches the log, appears in no history, and resets no
+    clock. And it only gates future applications — it does not hide
+    or change the ones already logged, so if you blocked a company
+    after applying, that application stays in the log and still
+    shows up in `next`, `timeline`, and the rest. `--json` prints
+    the list as JSON, `--out` writes it.
+31. **Resume versions** (`autojob/resume.py`, v0.27) — `resume` records
+    which resume file each application was sent with: `apply --resume
+    PATH` at apply time, `batch --resume PATH` for a whole batch, or
+    `resume --record --id APP-001 --file PATH [--note TEXT]` later.
+    The list shows one row per application with the file it got (or
+    "no resume recorded") and a roll-up of how many applications
+    each version went to, so you can see whether the new version has
+    actually been sent anywhere yet. `--missing` shows only the
+    applications with nothing recorded; `--resume PATH` shows only
+    the ones that got that version; `--id` shows one application.
+    A resume is a label you supply — autojob never opens the file
+    and never checks it exists — and re-recording replaces it, the
+    same set-not-append rule as a closing date or a source. It is a
+    field on the entry, not a history event, so recording one does
+    not reset the follow-up or stale clocks and does not appear in
+    the timeline feed, and recording is refused on a terminal
+    application. The version name is searchable (`search --query
+    v3`) and shows up as a column in `export`. `--json` prints the
+    list as JSON, `--out` writes it.
+32. **Application notes** (`autojob/notes.py`, v0.28) — `notes` is
+    where the things you learn along the way go: a detail from a
+    call, something the careers page said, a reminder to yourself
+    before the next round. `notes --record --id APP-001 --date
+    YYYY-MM-DD --text "..." [--tag company]` writes one down; the
+    date is required and never defaulted, and a date in the future
+    is refused, because a note is about something already learned.
+    The list shows every note newest first, with a roll-up by tag,
+    and `--tag` / `--id` narrow it. A note is an event, like a
+    contact or a debrief: writing one counts as activity (it resets
+    the follow-up and stale clocks), it appears in the timeline feed
+    with its text underneath, and it never splits a stage stay in
+    the analytics. Recording is refused on a terminal application.
+    Notes are searchable (`search --query meetup`) and the export
+    counts them per application. `--json` prints the list as JSON,
+    `--out` writes it.
+33. **Company dossier** (`autojob/company.py`, v0.29) — `company NAME`
+    pulls together everything already recorded about one employer on
+    one page: its applications and how far each one got, the people
+    spoken to there, the interview rounds, the offers, the notes, the
+    debriefs, and why any of its applications were rejected — plus
+    whether the company is on the blocklist. `company` with no name
+    lists every company in the log instead, most applications first,
+    with the blocklisted ones flagged. A dossier is a record, not a
+    to-do list, so it shows applications in every status, including
+    rejected ones, and the people and notes on them; a company with
+    no applications shows only its blocklist record, and a name with
+    neither is an error, not an empty page. The match-score average
+    covers only the applications that recorded a score, with the
+    unscored count printed next to it, and the best stage reached
+    comes from the status history. Names match the way the blocklist
+    matches them — case and extra spaces ignored — and a debrief is
+    paired with its round by date and label, flagged unmatched when
+    no round was recorded. `--json` prints the dossier as JSON,
+    `--out` writes it. The command is read-only: it records nothing
+    and never touches the log.
+34. **Interview review** (`autojob/review.py`, v0.30) — `review
+    --profile my-profile.json --postings-dir postings/` reads the
+    debriefs already on file and checks them against the posting each
+    application went to: which skills the posting asked for actually
+    came up in the questions they asked, which never came up, and
+    whether the prep packet called the questions right. A skill counts
+    as probed when a debrief question names it, using the same
+    word-boundary matching the posting parser uses — "SQL" in a
+    question probes SQL, "MySQL" does not, and "stakeholder" on its
+    own does not probe "Stakeholder Management". A question that names
+    no posting skill is listed as off-script, verbatim. Prep coverage
+    is checked the same way: a skill-anchored likely question counts
+    as covered when any asked question names that skill, while the
+    walkthrough, why-this-role, and salary questions name no skill and
+    are listed as uncheckable, not scored as missed. A gap that came
+    up — a skill the posting asked for that the profile does not have,
+    named in a question — is flagged, because that is the question to
+    prepare an honest answer for next time. Applications with no
+    debriefs, or whose posting is not in the folder, are skipped with
+    the reason; `--id` reviews one application. The command is
+    read-only: it records nothing and never touches the log. `--json`
+    prints the review as JSON, `--out` writes it.
+35. **Log audit** (`autojob/audit.py`, v0.31) — `audit` is one
+    read-only pass over the log that says what the log itself is
+    missing, stale, or inconsistent about, so the other commands are
+    working from complete facts. Ten checks: a live application with
+    no source, no resume, or no closing date recorded; one with no
+    activity for more than `--stale-days` (default 14, exactly 14
+    days is not stale yet, the same boundary as the analytics stale
+    check); a past interview round with no write-up (a round dated
+    today already counts, the same rule as `debrief`); a rejected
+    application with no reason on file; an offer whose decision
+    deadline has passed while the application is still live; a
+    screening, interview, or offer application with nobody recorded
+    for it; a debrief whose round was never recorded as an interview;
+    and a posting that closed while the application is still live.
+    Each issue carries a severity — an error is a decision that is
+    overdue, a warning is something missing or gone quiet, a note is
+    worth knowing but not urgent — and names the command that fixes
+    it. Hired, rejected, and withdrawn applications are left alone,
+    except a rejected one with no reason recorded, the one thing
+    still worth fixing on a closed application. Dates that cannot be
+    parsed are skipped, never fatal. `--kind` and `--severity` narrow
+    the list, `--id` audits one application, `--json` prints the
+    audit as JSON, `--out` writes it. The command is read-only: it
+    records nothing and never touches the log.
+36. **Interview schedule** (`autojob/schedule.py`, v0.32) — `schedule`
+    is the week ahead as a calendar: the interview rounds, offer
+    decision deadlines, and posting closing dates the log already
+    holds, laid out one day at a time over the next 14 days, with the
+    days that do not work flagged on the line. Two interviews whose
+    times overlap are a clash; two rounds on the same day with less
+    than 30 minutes between them are tight; a day carrying three
+    things, or two all-day deadlines, is busy; and a round with no
+    start time recorded is flagged as uncheckable, not silently
+    treated as free. A round that ends exactly when the next one
+    starts is not an overlap — the two do not collide — and exactly
+    30 minutes between rounds is a full buffer, not a tight gap. A
+    round with a time but no recorded duration is shown as one hour,
+    the same display assumption `calendar` uses, and the item says so
+    rather than passing the hour off as a fact. All-day items are
+    deadlines, not meetings, so two of them on one day is a busy day
+    rather than a clash. Terminal applications are left out, the same
+    rule as `calendar`: a rejected application's interview cannot
+    clash with anything. Dates and times that cannot be parsed are
+    skipped, never fatal. `--days` moves the window (0 means today
+    only), `--kind` narrows it to one kind of item, `--json` prints
+    the schedule as JSON, `--out` writes it. The command is
+    read-only: it records nothing and never touches the log, and it
+    exits 0 even when it finds a clash — it is a report, the same as
+    `audit`.
+37. **Negotiation brief** (`autojob/negotiate.py`, v0.33) — `negotiate
+    --id APP-001` builds the brief for one recorded offer: the offer
+    as recorded, how it stands against the salary target in the
+    profile and against every other offer in the log, the posting's
+    stated range when the postings folder is given, the strengths to
+    cite (the matched skills with years and the verbatim bullets that
+    prove them), the gaps to never claim, the other live applications
+    still in play, and the days left to decide. The brief states
+    facts and suggests no number — there is no recommended ask
+    anywhere in it; the numbers to know are the offer's first-year
+    total, the target, the best comparable offer, and the posting's
+    range, and the ask is yours to choose from those. An offer on a
+    terminal application is refused, since there is nothing left to
+    negotiate, and so is an application with no offer recorded, with
+    the command that fixes it. Walk-away options are the other
+    applications at interview or offer stage — screening-stage
+    applications are not listed, because an application that has not
+    reached an interview is not leverage yet. The leverage section
+    reuses the tailor's skills matrix, built from the skills the
+    application recorded at apply time against the profile as it
+    stands today. `--json` prints the brief as JSON, `--out` writes
+    it. The command is read-only: it records nothing and never
+    touches the log.
+38. **Onboarding checklist** (`autojob/onboard.py`, v0.34) — `onboard
+    --record --id APP-001 --task "Complete I-9 paperwork" --category
+    paperwork --due 2026-11-10` writes down a first-week task on an
+    application that reached hired, and `onboard --done --id APP-001
+    --number 1` marks it finished. Tasks are numbered per application
+    starting at 1 and the number never changes, so a number you wrote
+    down still means the same task; the category is one of six fixed
+    words (paperwork, equipment, people, learning, logistics, other)
+    and a task with no category is simply "other". A due date may be
+    in the future — that is the point of a deadline — and a past date
+    is allowed and flagged overdue, not refused. Recording or
+    completing a task is refused on anything not hired, since a live
+    application has no onboarding yet and a rejected or withdrawn one
+    never will, and completing a task twice is refused too. Pending
+    tasks list first — overdue first, then due soonest, then no due
+    date — and done tasks last, most recently done first. Overdue
+    and due-soon tasks show up in `next` as their own kind of work,
+    after offer decisions and before follow-ups; a task with no due
+    date shows up there as an open item instead. Both the task being
+    written down and it being finished appear in the timeline feed,
+    the audit notes a hired application with no tasks on file, and
+    the tasks are searchable and counted in `export`. `--json` prints
+    the list as JSON, `--out` writes it.
 
 ## Quick start
 
@@ -612,6 +825,61 @@ python -m autojob export --format json --status rejected
 python -m autojob questions
 python -m autojob questions --record --question "Walk me through your most recent project." --answer "Most recent role first."
 python -m autojob questions --unanswered
+
+# find every application that mentions a person, a skill, or a note
+python -m autojob search --query "Priya Nair"
+python -m autojob search --query "dbt" --status screening --json
+
+# block a company you will not apply to again — apply refuses it,
+# rank and batch skip it; remove takes it back off the list
+python -m autojob blocklist --record --company "Vector Labs" \
+    --reason "Rejected over the ML-stack gap." --date 2026-11-08
+python -m autojob blocklist
+python -m autojob blocklist --remove --company "Vector Labs"
+
+# which resume file each application was sent with — record it at
+# apply time, or afterwards; --missing shows the ones with nothing
+# recorded
+python -m autojob apply --profile my-profile.json --posting job.md \
+    --resume resume-data-analyst-v3.pdf
+python -m autojob resume --record --id APP-001 \
+    --file resume-data-analyst-v3.pdf --note "shorter summary"
+python -m autojob resume
+python -m autojob resume --missing
+
+# write down what you learn about an application — a detail from a
+# call, a reminder before the next round; the date is required and
+# never defaulted
+python -m autojob notes --record --id APP-001 --date 2026-11-08 \
+    --text "Met the recruiter at the data meetup." --tag company
+python -m autojob notes
+python -m autojob notes --tag interview
+
+# everything about one company, on one page — or every company in
+# the log, most applications first, blocklisted ones flagged
+python -m autojob company
+python -m autojob company "Northwind Analytics"
+
+# what the interviews actually tested, against the postings — which
+# skills came up in the debrief questions, and whether prep called them
+python -m autojob review --profile my-profile.json --postings-dir postings/
+python -m autojob company "Northwind Analytics"
+python -m autojob company
+
+# one read-only pass over the log — what is missing, stale, or
+# inconsistent, with the command that fixes each issue
+python -m autojob audit
+python -m autojob audit --severity error
+
+# the week ahead as a calendar — interviews, offer deadlines and
+# closing dates, with clashes flagged
+python -m autojob schedule
+python -m autojob schedule --days 7 --kind interview
+
+# the brief for one recorded offer — target, other offers, posting
+# range, strengths to cite, gaps, and what else is still in play
+python -m autojob negotiate --id APP-001 --profile my-profile.json \
+    --postings-dir postings/
 ```
 
 ## Demo numbers
@@ -679,13 +947,18 @@ no follow-up is due, because both applications had activity recorded that
 day. The demo closes with two contacts 8 days on: Sam Chen, the Northwind recruiter (LinkedIn, spoke
 today), and Alex Rivera, the Harbour hiring manager (email, 8 days
 since last spoke — quiet at `--quiet-days 7`, not at the default 14).
+The demo closes with two notes 8 days on: the Northwind one about meeting Sam Chen at the Toronto data
+meetup (tagged company) and the Harbour one about the two-week ship
+cadence Priya mentioned (tagged interview); the `--tag company` view
+names just the Northwind one, and `search --query meetup` finds
+Northwind through the note.
 The demo closes with two closing dates 8 days on: the Northwind posting
 closes in 2 days and the Harbour posting in 22 days, nothing overdue;
 the Harbour listing is then updated to close in 17 days.
-The demo closes with a timeline 8 days on: 13 events, newest first,
+The demo closes with a timeline 8 days on: 15 events, newest first,
 from the day both applications were filed to the hiring-manager round
 two days out — 2 applied, 3 status moves, 1 follow-up, 2 offers,
-2 interviews, 2 contacts, 1 debrief; the filtered `--kind interview --kind offer
+2 interviews, 2 contacts, 1 debrief, 2 notes; the filtered `--kind interview --kind offer
 --oldest` view shows just those 4 events, chronologically.
 The demo closes with a weekly goal of 2 applications: both were filed
 this week, so the target is met and the streak is 1 week; 8 days on,
@@ -702,8 +975,13 @@ names Communication (required, on the Harbour rejection) and the ML
 stack — PyTorch, TensorFlow, Statistics, Machine Learning — on the
 Vector Labs one; the `--reason skills-gap` filter shows just the
 Vector Labs row.
+The demo closes with a company dossier 8 days on: the list shows all
+three companies, Vector Labs flagged blocked; the Vector Labs dossier
+shows its one rejected application and the block reason, and the
+Northwind Analytics dossier shows its screening application, Sam Chen (spoke
+today), the meetup note, and the offer's first year of 145,000.
 The demo closes with one prioritised list of what to do. Eight days on, `next` shows two actions: the Northwind posting closes in 2 days and its offer decision is due in 6. Eight days further on, the same list shows three — the closing date is 6 days overdue, the offer decision 2 days overdue, and the Northwind application has gone 8 days without a word, past the 7-day screening wait, so a follow-up is due too (a second nudge, one already sent). At a 7-day quiet bar Sam Chen joins the list as a fourth action, 8 days since the last word; `--kind deadline --kind offer` narrows it back to the two dated actions. The two rejected applications never appear — Harbour and Vector Labs both have their reasons recorded — and nothing is stale, because the last activity was 8 days ago against a 14-day bar.
-The demo finishes with a batch run over the three example postings against a fresh log: Northwind and Harbour get packets and Vector Labs is skipped below the 0.5 bar; run again and all three are skipped, the two as already applied; with `--limit 1` only Northwind lands and Harbour is skipped as beyond the limit; a dry run prints the same plan and writes nothing. The demo closes with an export of the main log, eight days on: three rows, newest applied first, with the Northwind offer's first-year total of 145,000 and the two rejection reasons; the rejected-only JSON view holds just Harbour and Vector Labs. The demo finishes with a backup of that log, eight days on: 3 applications with the goals and question-bank settings inside, checked back as valid, then restored into a fresh directory whose log lists the same three applications.
+The demo finishes with a batch run over the three example postings against a fresh log: Northwind and Harbour get packets and Vector Labs is skipped below the 0.5 bar; run again and all three are skipped, the two as already applied; with `--limit 1` only Northwind lands and Harbour is skipped as beyond the limit; a dry run prints the same plan and writes nothing. The demo closes with an export of the main log, eight days on: three rows, newest applied first, with the Northwind offer's first-year total of 145,000 and the two rejection reasons; the rejected-only JSON view holds just Harbour and Vector Labs. The demo finishes with a backup of that log, eight days on: 3 applications with the goals and question-bank settings inside, checked back as valid, then restored into a fresh directory whose log lists the same three applications. The demo finishes with an audit of that log, 16 days on: 2 issues on the Northwind application — its offer decision 2 days overdue and its posting closed 6 days ago, both while the application is still live; at a 7-day stale bar a third joins the list (no activity for 8 days), and `--severity error` narrows it to just the overdue decision. The two rejected applications are clean — both have their reasons recorded. The demo closes with a schedule check, eight days on: Northwind has two rounds on the same day — a hiring-manager round 14:30–15:15 and a panel 15:00–15:30, overlapping by 15 minutes — and the posting closes that same day, so the day carries three things and is flagged both as a clash and as busy; the offer decision falls six days out. (Harbour's rounds and offer are not on the schedule: that application was rejected, and there is nothing left to schedule for it.) The 3-day window shows just the clash day, and the JSON carries the same counts — 1 conflict. The demo closes with a negotiation brief for the Northwind offer, 8 days on: first year 145,000, above the 95,000–120,000 target on base alone, ranked 1 of the 2 comparable offers, with the posting's own range meeting the target and 6 days left to decide; the strengths to cite start with SQL (4 yrs, advanced) with a verbatim bullet, and Harbour — still at interview stage with its own offer (first year 110,000) — shows up as the other live option. The demo ends with the part after the offer: Northwind hires, and three first-week tasks go on the onboarding list — the I-9 paperwork due in 2 days, meeting the onboarding buddy in 5, and the laptop pickup in 10; sixteen days on, the paperwork and the buddy meeting are overdue, the paperwork gets done, and `next` names the buddy meeting as the overdue onboarding task and the laptop as due soon.
 
 ## Exit codes
 
@@ -712,8 +990,8 @@ The demo finishes with a batch run over the three example postings against a fre
 5 duplicate application, or batch stopped on a tracker write ·
 6 illegal status transition, follow-up refused,
 offer refused, interview refused, contact refused, deadline refused,
-rejection refused, source refused, debrief refused, or restore refused
-(target files already exist).
+rejection refused, source refused, debrief refused, resume refused,
+onboard refused, or restore refused (target files already exist).
 
 ## What it will not do
 

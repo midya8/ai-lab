@@ -67,7 +67,7 @@ def next_id(entries):
 
 def add_application(log_path, company, title, source=None, match_score=None,
                     packet_dir=None, today=None, deadline=None,
-                    referrer=None,
+                    referrer=None, resume=None,
                     required_matched=None, required_missing=None,
                     preferred_matched=None, preferred_missing=None):
     """Append an application. Refuses duplicates on (company, title).
@@ -82,7 +82,11 @@ def add_application(log_path, company, title, source=None, match_score=None,
     the posting was found, one of the fixed channels in sources.py,
     and ``referrer`` is the name of the person who referred you (or
     the recruiter who brought the role); both are stored as fields on
-    the entry, like ``deadline``.
+    the entry, like ``deadline``. ``resume`` (v0.27) is the (already
+    validated) ``{"path": ..., "note": ...}`` dict from
+    ``resume.validate_resume`` — the resume file sent with the
+    application — stored as the entry's ``resume`` field, like
+    ``deadline`` and ``source``.
     """
     entries = read_log(log_path)
     for entry in entries:
@@ -108,6 +112,8 @@ def add_application(log_path, company, title, source=None, match_score=None,
         entry["deadline"] = deadline
     if referrer is not None:
         entry["referrer"] = referrer
+    if resume is not None:
+        entry["resume"] = dict(resume)
     if required_matched is not None:
         entry["required_matched"] = list(required_matched)
     if required_missing is not None:
@@ -344,6 +350,156 @@ def record_debrief(log_path, app_id, debrief, today=None):
     raise TrackerError(f"no application with id {app_id!r}")
 
 
+def record_note(log_path, app_id, note, today=None):
+    """Record a dated note on an application.
+
+    Appends the (already validated) note dict to the entry's
+    ``notes`` list and a ``{"kind": "note", "at": date, "text":
+    text, "tag": tag}`` event to its history. The event carries the
+    text (and tag) so the timeline can render the note even when the
+    record is missing from a hand-edited log. Multiple notes per
+    application are allowed — a note is never deduplicated, and
+    re-recording the same text on the same day is a second note, not
+    an overwrite. Refuses terminal applications: there is nothing
+    left to note once an application is closed. Recording a note
+    does not move the application's status — that stays explicit
+    through ``set_status``, the same rule as offers, interviews, and
+    contacts. A note counts as activity, like a contact or a
+    debrief: the history event resets the follow-up and stale clocks
+    (see followup.last_activity), and it appears in the timeline
+    feed; it never splits a stage stay in the analytics, which
+    measure stays between status changes only. ``today`` defaults
+    to the real current date; pass an explicit date in tests.
+    """
+    if today is None:
+        today = datetime.date.today().isoformat()
+    entries = read_log(log_path)
+    for entry in entries:
+        if entry["id"] == app_id:
+            if entry.get("status") in TERMINAL:
+                raise TrackerError(
+                    f"cannot record a note for {app_id}: status is "
+                    f"{entry['status']!r} (terminal)"
+                )
+            _ensure_history(entry)
+            notes = entry.get("notes")
+            if not isinstance(notes, list):
+                notes = []
+                entry["notes"] = notes
+            notes.append(note)
+            entry["history"].append({
+                "kind": "note",
+                "at": note["date"],
+                "text": note.get("text"),
+                "tag": note.get("tag"),
+            })
+            _write_log(log_path, entries)
+            return entry
+    raise TrackerError(f"no application with id {app_id!r}")
+
+
+def record_onboard_task(log_path, app_id, task, today=None):
+    """Record an onboarding task on a hired application.
+
+    Appends the (already validated) task dict to the entry's
+    ``onboarding`` list and a ``{"kind": "onboarding", "at": today,
+    "task": text, "number": n, "done": False}`` event to its
+    history. The task number is one more than the highest number
+    already on the application, so numbers are never reused and a
+    number you wrote down still means the same task. Refuses
+    anything not hired: a live application has no onboarding to
+    track yet, and a rejected or withdrawn one never will. A task
+    is an event, like a contact or a debrief, so it appears in the
+    timeline feed; it carries no status, so it never splits a stage
+    stay in the analytics. ``today`` defaults to the real current
+    date; pass an explicit date in tests.
+    """
+    if today is None:
+        today = datetime.date.today().isoformat()
+    entries = read_log(log_path)
+    for entry in entries:
+        if entry["id"] == app_id:
+            if entry.get("status") != "hired":
+                raise TrackerError(
+                    f"cannot record an onboarding task for {app_id}: "
+                    f"status is {entry.get('status')!r} (not hired) — "
+                    f"move it with `status --id {app_id} --to hired` first"
+                )
+            _ensure_history(entry)
+            tasks = entry.get("onboarding")
+            if not isinstance(tasks, list):
+                tasks = []
+                entry["onboarding"] = tasks
+            numbers = [t.get("number") for t in tasks
+                       if isinstance(t, dict)
+                       and isinstance(t.get("number"), int)
+                       and not isinstance(t.get("number"), bool)]
+            number = (max(numbers) + 1) if numbers else 1
+            record = {"number": number, "task": task["task"],
+                      "category": task["category"], "due": task["due"],
+                      "added_at": today, "done": False, "done_at": None}
+            tasks.append(record)
+            entry["history"].append({
+                "kind": "onboarding",
+                "at": today,
+                "task": task["task"],
+                "number": number,
+                "done": False,
+            })
+            _write_log(log_path, entries)
+            return entry
+    raise TrackerError(f"no application with id {app_id!r}")
+
+
+def complete_onboard_task(log_path, app_id, number, today=None):
+    """Mark one onboarding task done.
+
+    Sets ``done`` and ``done_at`` on the task with that number and
+    appends a ``{"kind": "onboarding", "at": today, "task": text,
+    "number": n, "done": True}`` event to the history, so the
+    timeline shows both the task being written down and it being
+    finished. Refuses a task that is already done, an unknown
+    number, and anything not hired — the same rule as recording.
+    ``today`` defaults to the real current date; pass an explicit
+    date in tests.
+    """
+    if today is None:
+        today = datetime.date.today().isoformat()
+    entries = read_log(log_path)
+    for entry in entries:
+        if entry["id"] == app_id:
+            if entry.get("status") != "hired":
+                raise TrackerError(
+                    f"cannot complete an onboarding task for {app_id}: "
+                    f"status is {entry.get('status')!r} (not hired)"
+                )
+            tasks = entry.get("onboarding") or []
+            for record in tasks:
+                if not isinstance(record, dict):
+                    continue
+                if record.get("number") != number:
+                    continue
+                if record.get("done"):
+                    raise TrackerError(
+                        f"onboarding task {number} for {app_id} is "
+                        "already done")
+                record["done"] = True
+                record["done_at"] = today
+                _ensure_history(entry)
+                entry["history"].append({
+                    "kind": "onboarding",
+                    "at": today,
+                    "task": record.get("task"),
+                    "number": number,
+                    "done": True,
+                })
+                _write_log(log_path, entries)
+                return entry
+            raise TrackerError(
+                f"no onboarding task {number} on {app_id}")
+    raise TrackerError(f"no application with id {app_id!r}")
+
+
 def record_deadline(log_path, app_id, deadline, today=None):
     """Set (or move) the posting closing date on an application.
 
@@ -404,6 +560,35 @@ def record_source(log_path, app_id, source):
                 entry["referrer"] = source["referrer"]
             else:
                 entry.pop("referrer", None)
+            _write_log(log_path, entries)
+            return entry
+    raise TrackerError(f"no application with id {app_id!r}")
+
+
+def record_resume(log_path, app_id, resume):
+    """Set (or replace) which resume an application was sent with.
+
+    Stores the (already validated) ``{"path": ..., "note": ...}``
+    dict from ``resume.validate_resume`` as the entry's ``resume``
+    field. Re-recording replaces it: you may learn later that the
+    version you thought you sent was the older one, so this is a
+    set, not an append. Deliberately no history event: which file
+    you sent is a property of the application, not something that
+    happened to it, so recording one must not reset the follow-up
+    or stale clocks (see followup.last_activity, which takes the
+    latest date of any history event) and does not appear in the
+    timeline feed. Refuses terminal applications: there is nothing
+    left to submit for them.
+    """
+    entries = read_log(log_path)
+    for entry in entries:
+        if entry["id"] == app_id:
+            if entry.get("status") in TERMINAL:
+                raise TrackerError(
+                    f"cannot record a resume for {app_id}: status is "
+                    f"{entry['status']!r} (terminal)"
+                )
+            entry["resume"] = dict(resume)
             _write_log(log_path, entries)
             return entry
     raise TrackerError(f"no application with id {app_id!r}")

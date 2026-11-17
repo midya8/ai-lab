@@ -3,8 +3,9 @@
 ``autojob export`` gets your data out of the log in one row per
 application — company, title, status, dates, match score, the skills
 each posting asked for and which ones you had, source and referrer,
-closing date, rejection reason, latest offer figures, and counts of
-interviews, contacts, and follow-ups sent. The point is a file you
+the resume file sent, closing date, rejection reason, latest offer
+figures, and counts of interviews, contacts, notes, onboarding tasks,
+and follow-ups sent. The point is a file you
 can open in a spreadsheet or hand to another tool, not another view
 inside autojob.
 
@@ -18,8 +19,8 @@ The honest rules, carried over from the other modules:
   no parseable ``applied_at`` sorts last and carries no day counts.
 - Day counts come from the recorded history only. ``days_since_applied``
   is today minus ``applied_at``; ``days_in_current_stage`` is today
-  minus the last recorded status change — a follow-up, interview, or
-  contact recorded mid-stage does not restart the stage, the same
+  minus the last recorded status change — a follow-up, interview,
+  contact, or note recorded mid-stage does not restart the stage, the same
   rule analytics uses, so a nudge never makes a stage look shorter
   than it is.
 - The latest offer is the one ``offer.latest_offer`` picks (most
@@ -64,6 +65,7 @@ COLUMNS = (
     "preferred_missing",
     "source",
     "referrer",
+    "resume",
     "deadline",
     "rejection_reason",
     "latest_offer_base",
@@ -71,6 +73,8 @@ COLUMNS = (
     "latest_offer_first_year_total",
     "interviews",
     "contacts",
+    "notes",
+    "onboarding",
     "followups_sent",
     "last_activity_at",
 )
@@ -129,6 +133,9 @@ def _row(entry, today):
     rejection = entry.get("rejection")
     reason = (rejection.get("category")
               if isinstance(rejection, dict) else None)
+    resume = entry.get("resume")
+    resume_path = (resume.get("path")
+                   if isinstance(resume, dict) else None)
     last = last_activity(entry)
     row = {
         "id": entry.get("id"),
@@ -146,6 +153,7 @@ def _row(entry, today):
         "preferred_missing": entry.get("preferred_missing"),
         "source": entry.get("source"),
         "referrer": entry.get("referrer"),
+        "resume": resume_path,
         "deadline": entry.get("deadline"),
         "rejection_reason": reason,
         "latest_offer_base": base,
@@ -153,6 +161,8 @@ def _row(entry, today):
         "latest_offer_first_year_total": first_year,
         "interviews": _count(entry.get("interviews")),
         "contacts": _count(entry.get("contacts")),
+        "notes": _count(entry.get("notes")),
+        "onboarding": _count(entry.get("onboarding")),
         "followups_sent": followups_sent(entry),
         "last_activity_at": last.isoformat() if last is not None else None,
     }

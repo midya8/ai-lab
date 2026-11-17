@@ -10,14 +10,14 @@ is for a human to review before sending.
 
 A posting is skipped — never guessed at — when it cannot be read,
 when it has no recognisable skills (unmeasurable, not a zero), when
-it scores below ``--min-score``, when it is already in the log, or
-when ``--limit`` has been reached. Skips are reported with the
-reason, so a batch that applies nothing still tells you why. A
-second file for the same company and title in the same folder is
-skipped as already applied once the first one lands, and a tracker
-write failure stops the batch: the packets already written stay
-logged, the rest are reported as not attempted, and the error is
-in the result instead of being swallowed.
+it scores below ``--min-score``, when it is already in the log, when
+its company is on the blocklist, or when ``--limit`` has been
+reached. Skips are reported with the reason, so a batch that applies
+nothing still tells you why. A second file for the same company and
+title in the same folder is skipped as already applied once the first
+one lands, and a tracker write failure stops the batch: the packets
+already written stay logged, the rest are reported as not attempted,
+and the error is in the result instead of being swallowed.
 """
 
 from __future__ import annotations
@@ -31,6 +31,7 @@ from .posting import parse_posting
 from .prep import build_prep, render_prep_markdown
 from .rank import rank_postings
 from .report import match_json
+from .resume import ResumeError, validate_resume
 from .sources import validate_source, SourceError
 from .tailor import build_tailor, render_tailor_markdown
 from .tracker import TrackerError, add_application, read_log, slug
@@ -60,19 +61,24 @@ def build_packet_files(profile, posting, match):
 
 
 def batch_apply(profile, postings_dir, out_dir, log_path, min_score=0.0,
-                limit=None, source=None, referrer=None, dry_run=False,
-                today=None):
+                limit=None, source=None, referrer=None, resume=None,
+                dry_run=False, today=None, blocklist=()):
     """Apply to a folder of postings, best fit first.
 
     Returns ``{\"applied\": [...], \"skipped\": [...], \"counts\": {...},
     \"dry_run\": bool, \"error\": str | None}``. ``source``/``referrer``
     are validated before anything is written; a bad ``min_score`` or
     ``limit`` raises :class:`BatchError` before anything is read.
+    ``resume`` is the resume file sent with every application in
+    the batch (validated the same way, before anything is written).
     ``log_path`` is read up front for the already-applied check, and
     the in-memory map is updated after each successful apply, so a
     duplicate posting later in the same folder is skipped, not
-    double-logged. A tracker write failure stops the batch and is
-    reported in ``error``; packets already written stay logged.
+    double-logged. ``blocklist`` is the list ``load_blocklist``
+    returns under "blocked": postings from a blocked company are
+    skipped with the recorded reason, before any packet is built. A
+    tracker write failure stops the batch and is reported in
+    ``error``; packets already written stay logged.
     """
     if not 0.0 <= min_score <= 1.0:
         raise BatchError(f"--min-score must be between 0 and 1, got {min_score}")
@@ -85,9 +91,14 @@ def batch_apply(profile, postings_dir, out_dir, log_path, min_score=0.0,
             raise BatchError(str(exc)) from exc
         source = cleaned["source"]
         referrer = cleaned["referrer"]
+    if resume is not None:
+        try:
+            resume = validate_resume(resume)
+        except ResumeError as exc:
+            raise BatchError(str(exc)) from exc
     entries = read_log(log_path)
     ranked = rank_postings(profile, postings_dir, entries,
-                           include_applied=True)
+                           include_applied=True, blocklist=blocklist)
     profile_skills = [s["name"] for s in profile.get("skills", [])]
     applied, skipped = [], []
     applied_ids = {
@@ -142,6 +153,7 @@ def batch_apply(profile, postings_dir, out_dir, log_path, min_score=0.0,
                 packet_dir=str(packet),
                 today=today,
                 referrer=referrer,
+                resume=resume,
                 required_matched=match["required_matched"],
                 required_missing=match["required_missing"],
                 preferred_matched=match["preferred_matched"],
@@ -154,8 +166,10 @@ def batch_apply(profile, postings_dir, out_dir, log_path, min_score=0.0,
                         "packet_dir": str(packet)})
         applied_ids[key] = entry["id"]
     for row in ranked["skipped"]:
-        skipped.append({**row, "company": "unknown company",
-                        "title": "unknown role", "score": None,
+        skipped.append({**row,
+                        "company": row.get("company") or "unknown company",
+                        "title": row.get("title") or "unknown role",
+                        "score": None,
                         "reason": row["reason"]})
     result = {
         "applied": applied,

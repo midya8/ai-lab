@@ -2,8 +2,9 @@
 
 ``autojob next`` pulls together everything the other commands already
 know — follow-ups due, interviews coming up, posting closing dates,
-offer decision deadlines, contacts gone quiet, applications with no
-movement, and rejected applications still missing a reason — and
+offer decision deadlines, onboarding tasks on hired applications,
+contacts gone quiet, applications with no movement, and rejected
+applications still missing a reason — and
 orders them by urgency, so the first line is the thing to do first.
 It records nothing and changes nothing; it only reads the log.
 
@@ -19,18 +20,20 @@ The honest rules, carried over from the other modules:
   with no reason recorded — which has no date to be urgent about —
   last. Within the same urgency and date, interviews come first
   (they are fixed in someone else's calendar), then closing dates,
-  then offer decisions, then follow-ups, then contacts, then stale
-  applications, then recording a rejection reason.
+  then offer decisions, then onboarding tasks (a deadline you set
+  yourself, but a first-week one), then follow-ups, then contacts,
+  then stale applications, then recording a rejection reason.
 - The window is 7 days by default (``--days N`` changes it). Overdue
   actions are always shown, whatever the window: an overdue item does
   not stop being urgent because it fell outside the window. A dated
   action past the window is left out, not shown as later.
 - Terminal applications (hired / rejected / withdrawn) never produce
   a follow-up, interview, deadline, offer, contact, or stale action:
-  there is nothing left to do for them. The one exception is a
+  there is nothing left to do for them. The exceptions are a
   rejected application with no reason recorded, which produces a
   single action to record the reason — that is bookkeeping, not
-  chasing.
+  chasing — and a hired application, whose onboarding tasks are
+  still to do: the search is over, the first weeks are not.
 - A follow-up and a stale flag for the same application are two
   different actions, not a duplicate: one is a nudge to send, the
   other is a prompt to check whether the application is still live.
@@ -57,6 +60,7 @@ NEXT_KINDS = (
     "interview",
     "deadline",
     "offer",
+    "onboarding",
     "contact",
     "stale",
     "rejection-reason",
@@ -68,10 +72,11 @@ KIND_ORDER = {
     "interview": 0,
     "deadline": 1,
     "offer": 2,
-    "followup": 3,
-    "contact": 4,
-    "stale": 5,
-    "rejection-reason": 6,
+    "onboarding": 3,
+    "followup": 4,
+    "contact": 5,
+    "stale": 6,
+    "rejection-reason": 7,
 }
 
 URGENCY_ORDER = {
@@ -241,6 +246,60 @@ def _offer_actions(entries, today, days):
     return actions
 
 
+def _onboarding_actions(entries, today, days):
+    actions = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        if entry.get("status") != "hired":
+            continue
+        for task in entry.get("onboarding") or []:
+            if not isinstance(task, dict) or task.get("done"):
+                continue
+            text = task.get("task")
+            if not isinstance(text, str) or not text.strip():
+                continue
+            entry_dict = {"id": entry.get("id"),
+                          "company": entry.get("company"),
+                          "title": entry.get("title"),
+                          "status": entry.get("status")}
+            detail = ""
+            if task.get("category"):
+                detail += f"{task['category']}"
+            due = _parse_date(task.get("due"))
+            if due is None:
+                # No due date: an open item, anchored to when it was
+                # written down, the same rule as a rejection with no
+                # reason recorded.
+                if detail:
+                    detail += "; "
+                detail += "no due date recorded"
+                actions.append(_action(
+                    "onboarding", "open", _parse_date(task.get("added_at")),
+                    entry_dict, f"Onboarding: {text.strip()}", detail))
+                continue
+            days_left = (due - today).days
+            if days_left > days:
+                continue
+            if days_left < 0:
+                summary = (f"Onboarding overdue: {text.strip()}")
+            elif days_left == 0:
+                summary = f"Onboarding due today: {text.strip()}"
+            elif days_left == 1:
+                summary = f"Onboarding due tomorrow: {text.strip()}"
+            else:
+                summary = (f"Onboarding due in {days_left}d: "
+                           f"{text.strip()}")
+            if detail:
+                detail += f"; due {task['due']}"
+            else:
+                detail = f"due {task['due']}"
+            actions.append(_action(
+                "onboarding", _urgency_for(days_left), due, entry_dict,
+                summary, detail))
+    return actions
+
+
 def _contact_actions(entries, today, quiet_days):
     actions = []
     data = collect_contacts(entries, today=today, quiet_days=quiet_days)
@@ -302,6 +361,8 @@ _BUILDERS = {
     "deadline": lambda entries, today, opts: _deadline_actions(
         entries, today, opts["days"]),
     "offer": lambda entries, today, opts: _offer_actions(
+        entries, today, opts["days"]),
+    "onboarding": lambda entries, today, opts: _onboarding_actions(
         entries, today, opts["days"]),
     "contact": lambda entries, today, opts: _contact_actions(
         entries, today, opts["quiet_days"]),
@@ -403,8 +464,9 @@ def render_next_markdown(data):
         lines.append("")
         lines.append("Nothing due — no follow-ups due, no interviews, "
                      "closing dates or offer deadlines in the window, "
-                     "no quiet contacts, no stale applications, and "
-                     "every rejection has a reason recorded.")
+                     "no onboarding tasks due, no quiet contacts, no "
+                     "stale applications, and every rejection has a "
+                     "reason recorded.")
         return "\n".join(lines) + "\n"
     lines.append("")
     for action in data["actions"]:

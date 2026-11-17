@@ -20,11 +20,23 @@ from autojob.backup import (BackupError, backup_json, create_backup,
                             render_backup_markdown, restore_backup)
 from autojob.batch import (BatchError, batch_apply, batch_json,
                            render_batch_markdown)
+from autojob.blocklist import (BlocklistError, add_block, blocklist_json,
+                               collect_blocklist,
+                               default_blocklist_path, is_blocked,
+                               load_blocklist, remove_block,
+                               render_blocklist_markdown, save_blocklist,
+                               validate_block)
 from autojob.analytics import (analytics_json, analytics_report, by_company,
                                 compute_analytics, days_in_stage, funnel,
                                 history_of, reached_stages, score_stats,
                                 stale_applications)
+from autojob.audit import (AUDIT_KINDS, AuditError, audit_json,
+                           collect_audit, render_audit_markdown)
 from autojob.calendar import (build_calendar, calendar_json, render_ics)
+from autojob.company import (build_dossier, companies_json, company_json,
+                             list_companies, normalize_company,
+                             render_companies_markdown,
+                             render_company_markdown)
 from autojob.contacts import (ContactError, collect_contacts, contacts_for,
                               contacts_json, render_contacts_markdown,
                               validate_contact)
@@ -49,6 +61,8 @@ from autojob.interview import (InterviewError, collect_interviews,
                                validate_interview)
 from autojob.letter import draft_letter, review_notes
 from autojob.match import evidence_bullets, match_profile
+from autojob.negotiate import (NegotiationError, build_negotiation,
+                               negotiate_json, render_negotiation_markdown)
 from autojob.next import (NEXT_KINDS, NextError, collect_next, next_json,
                           render_next_markdown)
 from autojob.plan import (build_plan, evidence_list, plan_json,
@@ -66,22 +80,39 @@ from autojob.rejections import (REJECTION_REASONS, RejectionError,
                                 collect_rejections, rejections_json,
                                 render_rejections_markdown,
                                 validate_rejection)
+from autojob.resume import (ResumeError, collect_resumes, recorded_resume,
+                            render_resumes_markdown, resumes_json,
+                            validate_resume)
+from autojob.review import (ReviewError, collect_review,
+                            render_review_markdown, review_json)
 from autojob.salary import (analyze_salaries, render_salary_markdown,
                             salary_json, target_from_profile)
+from autojob.schedule import (SCHEDULE_KINDS, ScheduleError,
+                              collect_schedule, render_schedule_markdown,
+                              schedule_json)
+from autojob.search import (SearchError, render_search_markdown,
+                            search_entries, search_json, validate_query)
 from autojob.sources import (SOURCE_CHOICES, SourceError, collect_sources,
                              render_sources_markdown, sources_json,
                              validate_source)
+from autojob.notes import (NoteError, collect_notes, notes_for, notes_json,
+                           render_notes_markdown, validate_note)
 from autojob.offer import (OfferError, compare_offers, first_year_total,
                            latest_offer, offer_json, render_offer_markdown,
                            total_cash, validate_offer)
+from autojob.onboard import (ONBOARD_CATEGORIES, OnboardError,
+                             collect_onboard, onboard_json,
+                             render_onboard_markdown, validate_onboard_task)
 from autojob.tailor import build_tailor, render_tailor_markdown, tailor_json
 from autojob.timeline import (collect_timeline, render_timeline_markdown,
                               timeline_json)
 from autojob.tracker import (TrackerError, add_application, read_log,
-                             record_contact, record_deadline, record_debrief,
-                             record_followup, record_interview, record_offer,
-                             record_rejection, record_source, set_status,
-                             slug)
+                             complete_onboard_task, record_contact,
+                             record_deadline, record_debrief,
+                             record_followup, record_interview, record_note,
+                             record_offer, record_onboard_task,
+                             record_rejection, record_resume, record_source,
+                             set_status, slug)
 
 HERE = Path(__file__).resolve().parent
 EXAMPLE_PROFILE = HERE.parent / "examples" / "profile.example.json"
@@ -490,7 +521,7 @@ class TestCLI(unittest.TestCase):
 
     def test_version(self):
         self.assertTrue(__version__.startswith("0."))
-        self.assertEqual(__version__, "0.24.0")
+        self.assertEqual(__version__, "0.34.0")
 
 
 def _fixture_log(tmp):
@@ -5842,8 +5873,8 @@ class TestNext(unittest.TestCase):
             "total": 11, "overdue": 5, "today": 2, "soon": 3,
             "later": 0, "open": 1,
             "by_kind": {"followup": 2, "interview": 2, "deadline": 2,
-                        "offer": 2, "contact": 1, "stale": 1,
-                        "rejection-reason": 1},
+                        "offer": 2, "onboarding": 0, "contact": 1,
+                        "stale": 1, "rejection-reason": 1},
         })
 
     def test_followup_action_fields(self):
@@ -8175,7 +8206,7 @@ class TestBackupCLI(unittest.TestCase):
             code, output = self._run(["backup", "--check", str(out)])
             self.assertEqual(code, 0)
             self.assertIn("is valid — 2 applications, made 2026-11-08 "
-                          "with autojob 0.24.0", output)
+                          "with autojob 0.34.0", output)
             code, output = self._run(["backup", "--check", str(out),
                                       "--json"])
             self.assertEqual(code, 0)
@@ -8277,6 +8308,4058 @@ class TestBackupCLI(unittest.TestCase):
                 "--out", str(out), "--today", "2026-11-08"])
             self.assertEqual(code, 0)
             self.assertIn("0 applications", output)
+
+
+class TestSearch(unittest.TestCase):
+    def _entries(self):
+        return [
+            {"id": "APP-001", "company": "Northwind Analytics",
+             "title": "Data Analyst", "status": "screening",
+             "applied_at": "2026-10-28",
+             "history": [{"status": "applied", "at": "2026-10-28"},
+                         {"status": "screening", "at": "2026-10-30"},
+                         {"kind": "followup", "at": "2026-11-05",
+                          "note": "Nudged about the timeline."}],
+             "match_score": 0.625,
+             "required_matched": ["SQL", "Power BI"],
+             "required_missing": ["Communication"],
+             "preferred_matched": ["Tableau"],
+             "preferred_missing": ["dbt", "Snowflake"],
+             "source": "referral", "referrer": "Maya Patel",
+             "deadline": "2026-11-10",
+             "offers": [{"base": 130000, "currency": "CAD",
+                         "period": "annual", "base_annual": 130000,
+                         "bonus": 10000, "equity": 20000,
+                         "vesting_years": 4, "pto_days": None,
+                         "work_mode": "remote", "start_date": None,
+                         "deadline": "2026-11-11",
+                         "note": "Band tops out here.",
+                         "recorded_at": "2026-10-30"}],
+             "contacts": [{"name": "Sam Chen", "role": "Recruiter",
+                           "channel": "linkedin", "date": "2026-10-20",
+                           "note": "Met at the data meetup."}]},
+            {"id": "APP-002", "company": "Harbour Analytics",
+             "title": "Business Intelligence Analyst", "status": "interview",
+             "applied_at": "2026-11-01",
+             "history": [{"status": "applied", "at": "2026-11-01"},
+                         {"status": "screening", "at": "2026-11-02"},
+                         {"status": "interview", "at": "2026-11-05"}],
+             "match_score": 0.562, "source": "job-board",
+             "rejection": {"category": "salary",
+                           "note": "Their band topped out below the target "
+                                   "range.",
+                           "recorded_at": "2026-11-08"},
+             "interviews": [{"date": "2026-11-08",
+                            "round": "Recruiter screen", "mode": "phone"},
+                           {"date": "2026-11-12",
+                            "round": "Hiring manager",
+                            "interviewer": "Priya Nair", "mode": "video",
+                            "duration_minutes": 45, "time": "14:30",
+                            "note": "Bring the dashboard story."}],
+             "debriefs": [{"date": "2026-11-07",
+                           "round": "Recruiter screen", "rating": 4,
+                           "went_well": "Dashboard story landed.",
+                           "improve": "Tighter answer on stakeholder "
+                                      "pushback.",
+                           "questions": ["Walk me through your most recent "
+                                         "project.",
+                                         "How do you handle a stakeholder "
+                                         "who disagrees with the numbers?"]}]},
+            {"id": "APP-003", "company": "Vector Labs",
+             "title": "Machine Learning Engineer", "status": "rejected",
+             "applied_at": "2026-11-02",
+             "history": [{"status": "applied", "at": "2026-11-02"},
+                         {"status": "rejected", "at": "2026-11-07"}],
+             "match_score": 0.15, "source": "company-site",
+             "rejection": {"category": "skills-gap",
+                           "note": "Wanted PyTorch and TensorFlow; the "
+                                   "profile has neither.",
+                           "recorded_at": "2026-11-07"}},
+            {"id": "APP-004", "company": "Zeta Analytics",
+             "title": "Support Analyst", "status": "applied",
+             "applied_at": "not-a-date",
+             "history": [{"status": "applied", "at": "not-a-date"}],
+             "match_score": None, "source": None},
+        ]
+
+    def test_validate_query_ok_and_cleaned(self):
+        query, terms = validate_query("  Priya   Nair ")
+        self.assertEqual(query, "Priya Nair")
+        self.assertEqual(terms, ["priya", "nair"])
+
+    def test_validate_query_refuses_empty_and_non_text(self):
+        for bad in (None, "", "   "):
+            with self.assertRaises(SearchError):
+                validate_query(bad)
+        with self.assertRaises(SearchError):
+            validate_query(42)
+
+    def test_search_matches_company_case_insensitively(self):
+        data = search_entries(self._entries(), "HARBOUR")
+        self.assertEqual(data["summary"]["matched"], 1)
+        row = data["results"][0]
+        self.assertEqual(row["id"], "APP-002")
+        self.assertIn("company", row["fields"])
+        self.assertEqual(row["company"], "Harbour Analytics")
+
+    def test_search_matches_interviewer_and_round(self):
+        data = search_entries(self._entries(), "Priya")
+        self.assertEqual([row["id"] for row in data["results"]],
+                         ["APP-002"])
+        self.assertIn("interview", data["results"][0]["fields"])
+        snippet = [m for m in data["results"][0]["matches"]
+                   if m["field"] == "interview"][0]["text"]
+        self.assertIn("Priya Nair", snippet)
+
+    def test_search_terms_may_match_in_different_fields(self):
+        # Maya is the referrer, SQL is a matched skill — both on APP-001.
+        data = search_entries(self._entries(), "Maya SQL")
+        self.assertEqual([row["id"] for row in data["results"]],
+                         ["APP-001"])
+        self.assertIn("referrer", data["results"][0]["fields"])
+        self.assertIn("skills", data["results"][0]["fields"])
+
+    def test_search_requires_every_term(self):
+        # Priya is on APP-002, dbt on APP-001 — no one application has both.
+        data = search_entries(self._entries(), "Priya dbt")
+        self.assertEqual(data["summary"]["matched"], 0)
+        self.assertEqual(data["results"], [])
+
+    def test_search_matches_contact_and_followup_note(self):
+        data = search_entries(self._entries(), "meetup")
+        self.assertEqual([row["id"] for row in data["results"]],
+                         ["APP-001"])
+        self.assertIn("contact", data["results"][0]["fields"])
+        data = search_entries(self._entries(), "timeline")
+        self.assertEqual([row["id"] for row in data["results"]],
+                         ["APP-001"])
+        self.assertIn("followup", data["results"][0]["fields"])
+
+    def test_search_matches_skills_and_rejection(self):
+        data = search_entries(self._entries(), "dbt")
+        self.assertEqual([row["id"] for row in data["results"]],
+                         ["APP-001"])
+        self.assertIn("skills", data["results"][0]["fields"])
+        data = search_entries(self._entries(), "salary")
+        self.assertEqual([row["id"] for row in data["results"]],
+                         ["APP-002"])
+        self.assertIn("rejection", data["results"][0]["fields"])
+        # A hand-edited log may store the reason under "reason" instead
+        # of "category" — that spelling is searchable too.
+        hand_edited = [{"id": "APP-009", "company": "Hand Corp",
+                        "title": "Analyst", "status": "rejected",
+                        "applied_at": "2026-11-03",
+                        "rejection": {"reason": "ghosted", "note": None}}]
+        data = search_entries(hand_edited, "ghosted")
+        self.assertEqual([row["id"] for row in data["results"]],
+                         ["APP-009"])
+
+    def test_search_matches_debrief_question(self):
+        data = search_entries(self._entries(), "stakeholder")
+        self.assertEqual([row["id"] for row in data["results"]],
+                         ["APP-002"])
+        self.assertIn("debrief", data["results"][0]["fields"])
+
+    def test_search_newest_applied_first_unparseable_last(self):
+        data = search_entries(self._entries(), "Analytics")
+        self.assertEqual([row["id"] for row in data["results"]],
+                         ["APP-002", "APP-001", "APP-004"])
+
+    def test_search_status_and_source_filters(self):
+        data = search_entries(self._entries(), "Analytics",
+                              status="interview")
+        self.assertEqual([row["id"] for row in data["results"]],
+                         ["APP-002"])
+        data = search_entries(self._entries(), "Analytics",
+                              source="referral")
+        self.assertEqual([row["id"] for row in data["results"]],
+                         ["APP-001"])
+        self.assertEqual(data["summary"]["status"], None)
+        self.assertEqual(data["summary"]["source"], "referral")
+
+    def test_search_bad_filters_raise(self):
+        with self.assertRaises(SearchError):
+            search_entries(self._entries(), "Analytics", status="nope")
+        with self.assertRaises(SearchError):
+            search_entries(self._entries(), "Analytics", source="nope")
+
+    def test_search_skips_non_dict_entries(self):
+        entries = self._entries() + ["junk", None]
+        data = search_entries(entries, "Harbour")
+        self.assertEqual(data["summary"]["matched"], 1)
+        self.assertEqual(data["summary"]["total"], 4)
+
+    def test_search_json_round_trip(self):
+        data = search_entries(self._entries(), "Priya")
+        parsed = json.loads(search_json(data))
+        self.assertEqual(parsed["query"], "Priya")
+        self.assertEqual(parsed["summary"]["matched"], 1)
+        self.assertEqual(parsed["results"][0]["id"], "APP-002")
+
+    def test_render_search_markdown(self):
+        data = search_entries(self._entries(), "Priya")
+        text = render_search_markdown(data)
+        self.assertIn("Search — 1 of 4 application(s) matching 'Priya'",
+                      text)
+        self.assertIn("APP-002 — Harbour Analytics, Business Intelligence "
+                      "Analyst (interview; applied 2026-11-01; score 0.562)",
+                      text)
+        self.assertIn("interview: Hiring manager · Priya Nair · video · "
+                      "Bring the dashboard story.", text)
+        empty = render_search_markdown(
+            search_entries(self._entries(), "Zebra"))
+        self.assertIn("Search — 0 of 4 application(s) matching 'Zebra'",
+                      empty)
+        self.assertIn("No applications mention 'Zebra'", empty)
+
+    def test_snippet_truncates_long_text(self):
+        entries = self._entries()
+        entries[0]["contacts"][0]["note"] = "x" * 200
+        data = search_entries(entries, "meetup")
+        self.assertEqual(data["summary"]["matched"], 0)
+        entries[0]["contacts"][0]["note"] = "meetup " + "y" * 200
+        data = search_entries(entries, "meetup")
+        snippet = [m for m in data["results"][0]["matches"]
+                   if m["field"] == "contact"][0]["text"]
+        self.assertEqual(len(snippet), 160)
+        self.assertTrue(snippet.endswith("..."))
+
+
+class TestSearchCLI(unittest.TestCase):
+    def _run(self, argv):
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            code = main(argv)
+        return code, buf.getvalue()
+
+    def _logged(self, tmp):
+        log = Path(tmp) / "log.jsonl"
+        add_application(log, "Northwind Analytics", "Data Analyst",
+                        today="2026-11-01")
+        add_application(log, "Harbour Analytics",
+                        "Business Intelligence Analyst",
+                        today="2026-11-01")
+        set_status(log, "APP-002", "screening", today="2026-11-02")
+        set_status(log, "APP-002", "interview", today="2026-11-04")
+        record_interview(log, "APP-002",
+                         validate_interview(
+                             {"date": "2026-11-05",
+                              "round": "Recruiter screen", "mode": "phone",
+                              "duration_minutes": 30},
+                             today="2026-11-05"),
+                         today="2026-11-05")
+        record_interview(log, "APP-002",
+                         validate_interview(
+                             {"date": "2026-11-07",
+                              "round": "Hiring manager",
+                              "interviewer": "Priya Nair", "mode": "video",
+                              "duration_minutes": 45},
+                             today="2026-11-07"),
+                         today="2026-11-07")
+        record_contact(log, "APP-001",
+                       validate_contact(
+                           {"name": "Sam Chen", "role": "Recruiter",
+                            "channel": "linkedin", "date": "2026-11-01",
+                            "note": "Met at the data meetup."}),
+                       today="2026-11-01")
+        return log
+
+    def test_search_cli_list(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            code, out = self._run(["search", "--log", str(log),
+                                   "--query", "Priya"])
+            self.assertEqual(code, 0)
+            self.assertIn("Search — 1 of 2 application(s) matching 'Priya'",
+                          out)
+            self.assertIn("APP-002 — Harbour Analytics", out)
+            self.assertIn("interview: Hiring manager · Priya Nair · video",
+                          out)
+
+    def test_search_cli_json(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            code, out = self._run(["search", "--log", str(log),
+                                   "--query", "meetup", "--json"])
+            self.assertEqual(code, 0)
+            parsed = json.loads(out)
+            self.assertEqual(parsed["summary"]["matched"], 1)
+            self.assertEqual(parsed["results"][0]["id"], "APP-001")
+            self.assertIn("contact", parsed["results"][0]["fields"])
+
+    def test_search_cli_no_match(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            code, out = self._run(["search", "--log", str(log),
+                                   "--query", "Zebra"])
+            self.assertEqual(code, 0)
+            self.assertIn("No applications mention 'Zebra'", out)
+
+    def test_search_cli_status_filter(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            code, out = self._run(["search", "--log", str(log),
+                                   "--query", "Analytics",
+                                   "--status", "interview"])
+            self.assertEqual(code, 0)
+            self.assertIn("1 of 2 application(s)", out)
+            self.assertIn("APP-002", out)
+            self.assertNotIn("APP-001", out)
+
+    def test_search_cli_out_writes_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            out_file = Path(tmp) / "search.md"
+            code, out = self._run(["search", "--log", str(log),
+                                   "--query", "Priya",
+                                   "--out", str(out_file)])
+            self.assertEqual(code, 0)
+            self.assertIn(f"wrote {out_file}", out)
+            self.assertIn("Priya Nair", out_file.read_text(encoding="utf-8"))
+
+    def test_search_cli_bad_values_exit_1(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            code, _ = self._run(["search", "--log", str(log),
+                                 "--query", "   "])
+            self.assertEqual(code, 1)
+            code, _ = self._run(["search", "--log", str(log),
+                                 "--query", "Priya",
+                                 "--status", "nope"])
+            self.assertEqual(code, 1)
+            code, _ = self._run(["search", "--log", str(log),
+                                 "--query", "Priya",
+                                 "--source", "nope"])
+            self.assertEqual(code, 1)
+
+    def test_search_cli_missing_log_is_empty(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            code, out = self._run([
+                "search", "--log", str(Path(tmp) / "nope.jsonl"),
+                "--query", "Priya"])
+            self.assertEqual(code, 0)
+            self.assertIn("Search — 0 of 0 application(s) matching 'Priya'",
+                          out)
+
+    def test_search_cli_corrupt_log_exit_2(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = Path(tmp) / "log.jsonl"
+            log.write_text("not json\n", encoding="utf-8")
+            code, _ = self._run(["search", "--log", str(log),
+                                 "--query", "Priya"])
+            self.assertEqual(code, 2)
+
+
+class TestBlocklist(unittest.TestCase):
+    def test_default_blocklist_path_beside_log(self):
+        self.assertEqual(
+            default_blocklist_path("/work/apps/applications.jsonl"),
+            "/work/apps/blocklist.json")
+
+    def test_load_missing_file_is_empty(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            data = load_blocklist(Path(tmp) / "blocklist.json")
+            self.assertEqual(data, {"blocked": []})
+
+    def test_validate_block_reports_every_error_at_once(self):
+        with self.assertRaises(BlocklistError) as ctx:
+            validate_block("  ", 42, "not-a-date")
+        message = str(ctx.exception)
+        self.assertIn("company is required", message)
+        self.assertIn("reason must be text", message)
+        self.assertIn("date must be YYYY-MM-DD", message)
+
+    def test_validate_block_missing_date_is_refused(self):
+        with self.assertRaises(BlocklistError) as ctx:
+            validate_block("Vector Labs", "Ghosted.", None)
+        self.assertIn("date is required", str(ctx.exception))
+
+    def test_validate_block_cleans_whitespace_and_empty_reason(self):
+        record = validate_block("  Vector Labs  ", "  ", "2026-11-08")
+        self.assertEqual(record, {"company": "Vector Labs", "reason": None,
+                                  "blocked_on": "2026-11-08"})
+
+    def test_add_and_load_round_trip(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "blocklist.json"
+            record, replaced = add_block(path, "Vector Labs",
+                                         "Ghosted after the final round.",
+                                         "2026-11-08")
+            self.assertFalse(replaced)
+            self.assertEqual(record["company"], "Vector Labs")
+            data = load_blocklist(path)
+            self.assertEqual(len(data["blocked"]), 1)
+            self.assertEqual(data["blocked"][0]["blocked_on"], "2026-11-08")
+
+    def test_add_block_replaces_same_company_case_insensitively(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "blocklist.json"
+            add_block(path, "Vector Labs", "First reason.", "2026-11-01")
+            record, replaced = add_block(path, "  vector LABS ",
+                                         "Second reason.", "2026-11-08")
+            self.assertTrue(replaced)
+            self.assertEqual(record["reason"], "Second reason.")
+            data = load_blocklist(path)
+            self.assertEqual(len(data["blocked"]), 1)
+            self.assertEqual(data["blocked"][0]["blocked_on"], "2026-11-08")
+
+    def test_remove_block(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "blocklist.json"
+            add_block(path, "Vector Labs", None, "2026-11-08")
+            add_block(path, "Northwind Analytics", None, "2026-11-08")
+            removed = remove_block(path, "VECTOR labs")
+            self.assertEqual(removed["company"], "Vector Labs")
+            self.assertIsNone(remove_block(path, "Vector Labs"))
+            data = load_blocklist(path)
+            self.assertEqual([r["company"] for r in data["blocked"]],
+                             ["Northwind Analytics"])
+
+    def test_remove_block_missing_file_is_not_an_error(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertIsNone(remove_block(Path(tmp) / "blocklist.json",
+                                           "Vector Labs"))
+
+    def test_is_blocked_case_insensitive(self):
+        entries = [{"company": "Vector Labs", "reason": None,
+                    "blocked_on": "2026-11-08"}]
+        self.assertEqual(is_blocked(entries, "  VECTOR LABS "),
+                         entries[0])
+        self.assertIsNone(is_blocked(entries, "Harbour Analytics"))
+        self.assertIsNone(is_blocked(entries, None))
+        self.assertEqual(is_blocked({"blocked": entries}, "Vector Labs"),
+                         entries[0])
+
+    def test_collect_blocklist_sorts_by_company(self):
+        entries = [{"company": "Vector Labs", "reason": "Ghosted.",
+                    "blocked_on": "2026-11-08"},
+                   {"company": "Acme Corp", "reason": None,
+                    "blocked_on": "2026-11-01"}]
+        data = collect_blocklist(entries)
+        self.assertEqual(data["count"], 2)
+        self.assertEqual([r["company"] for r in data["blocked"]],
+                         ["Acme Corp", "Vector Labs"])
+
+    def test_load_corrupt_file_raises(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "blocklist.json"
+            path.write_text("{not json\n", encoding="utf-8")
+            with self.assertRaises(BlocklistError):
+                load_blocklist(path)
+            path.write_text(json.dumps({"blocked": [{"company": "  "}]}),
+                            encoding="utf-8")
+            with self.assertRaises(BlocklistError):
+                load_blocklist(path)
+            path.write_text(json.dumps(
+                {"blocked": [{"company": "X", "blocked_on": "yesterday"}]}),
+                encoding="utf-8")
+            with self.assertRaises(BlocklistError):
+                load_blocklist(path)
+
+    def test_save_creates_parent_directories(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "deep" / "blocklist.json"
+            save_blocklist(path, {"blocked": []})
+            self.assertTrue(path.exists())
+
+    def test_blocklist_json_round_trip(self):
+        data = collect_blocklist([{"company": "Vector Labs",
+                                   "reason": "Ghosted.",
+                                   "blocked_on": "2026-11-08"}])
+        self.assertEqual(json.loads(blocklist_json(data)), data)
+
+    def test_render_blocklist_markdown(self):
+        data = collect_blocklist([{"company": "Vector Labs",
+                                   "reason": "Ghosted after the final round.",
+                                   "blocked_on": "2026-11-08"},
+                                  {"company": "Acme Corp", "reason": None,
+                                   "blocked_on": "2026-11-01"}])
+        text = render_blocklist_markdown(data)
+        self.assertIn("Blocklist — 2 companies", text)
+        self.assertIn("Vector Labs — Ghosted after the final round. "
+                      "(blocked 2026-11-08)", text)
+        self.assertIn("Acme Corp — no reason given (blocked 2026-11-01)",
+                      text)
+
+    def test_render_blocklist_markdown_empty(self):
+        text = render_blocklist_markdown(collect_blocklist([]))
+        self.assertIn("Blocklist — 0 companies", text)
+        self.assertIn("No companies blocked", text)
+
+    def test_rank_skips_blocked_posting(self):
+        profile = example_profile()
+        blocked = [{"company": "Vector Labs",
+                    "reason": "Ghosted after the final round.",
+                    "blocked_on": "2026-11-08"}]
+        data = rank_postings(profile, EXAMPLES_DIR, include_applied=True,
+                             blocklist=blocked)
+        self.assertEqual(len(data["ranked"]), 2)
+        self.assertNotIn("Vector Labs",
+                         [r["company"] for r in data["ranked"]])
+        self.assertEqual(data["n_blocked"], 1)
+        self.assertEqual(data["n_skipped"], 1)
+        skipped = data["skipped"][0]
+        self.assertEqual(skipped["company"], "Vector Labs")
+        self.assertEqual(skipped["title"], "Machine Learning Engineer")
+        self.assertEqual(skipped["reason"],
+                         "blocked: Ghosted after the final round.")
+        self.assertIn("Best next application: Data Analyst",
+                      render_rank_markdown(data))
+
+    def test_rank_blocked_without_reason(self):
+        profile = example_profile()
+        data = rank_postings(profile, EXAMPLES_DIR, include_applied=True,
+                             blocklist=[{"company": "vector labs",
+                                         "reason": None,
+                                         "blocked_on": "2026-11-08"}])
+        self.assertEqual(data["skipped"][0]["reason"],
+                         "blocked (no reason given)")
+
+    def test_rank_blocked_applied_posting_still_skipped_when_included(self):
+        profile = example_profile()
+        with tempfile.TemporaryDirectory() as tmp:
+            log = Path(tmp) / "applications.jsonl"
+            add_application(log, "Vector Labs", "Machine Learning Engineer",
+                            today="2026-11-01")
+            entries = read_log(log)
+            data = rank_postings(profile, EXAMPLES_DIR, entries,
+                                 include_applied=True,
+                                 blocklist=[{"company": "Vector Labs",
+                                             "reason": "Ghosted.",
+                                             "blocked_on": "2026-11-08"}])
+            self.assertEqual(data["n_blocked"], 1)
+            self.assertNotIn("Vector Labs",
+                             [r["company"] for r in data["ranked"]])
+
+
+class TestBlocklistCLI(unittest.TestCase):
+    def _run(self, argv):
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            code = main(argv)
+        return code, buf.getvalue()
+
+    def test_blocklist_cli_record_and_list(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = Path(tmp) / "applications.jsonl"
+            blocklist = Path(tmp) / "blocklist.json"
+            code, out = self._run(["blocklist", "--log", str(log),
+                                   "--record", "--company", "Vector Labs",
+                                   "--reason", "Ghosted after the final round.",
+                                   "--date", "2026-11-08"])
+            self.assertEqual(code, 0)
+            self.assertIn("blocked 'Vector Labs'", out)
+            self.assertTrue(blocklist.exists())
+            code, out = self._run(["blocklist", "--log", str(log)])
+            self.assertEqual(code, 0)
+            self.assertIn("Blocklist — 1 company", out)
+            self.assertIn("Vector Labs — Ghosted after the final round. "
+                          "(blocked 2026-11-08)", out)
+
+    def test_blocklist_cli_record_replaces(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = Path(tmp) / "applications.jsonl"
+            args = ["blocklist", "--log", str(log), "--record",
+                    "--company", "Vector Labs", "--date", "2026-11-01"]
+            code, _ = self._run(args)
+            self.assertEqual(code, 0)
+            code, out = self._run(["blocklist", "--log", str(log),
+                                   "--record", "--company", "vector labs",
+                                   "--reason", "New reason.",
+                                   "--date", "2026-11-08"])
+            self.assertEqual(code, 0)
+            self.assertIn("updated the block for 'vector labs'", out)
+            code, out = self._run(["blocklist", "--log", str(log), "--json"])
+            parsed = json.loads(out)
+            self.assertEqual(parsed["count"], 1)
+            self.assertEqual(parsed["blocked"][0]["reason"], "New reason.")
+
+    def test_blocklist_cli_remove(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = Path(tmp) / "applications.jsonl"
+            self._run(["blocklist", "--log", str(log), "--record",
+                       "--company", "Vector Labs", "--date", "2026-11-08"])
+            code, out = self._run(["blocklist", "--log", str(log),
+                                   "--remove", "--company", "VECTOR LABS"])
+            self.assertEqual(code, 0)
+            self.assertIn("removed 'Vector Labs' from the blocklist", out)
+            code, out = self._run(["blocklist", "--log", str(log),
+                                   "--remove", "--company", "Vector Labs"])
+            self.assertEqual(code, 0)
+            self.assertIn("is not on the blocklist", out)
+            code, out = self._run(["blocklist", "--log", str(log)])
+            self.assertIn("No companies blocked", out)
+
+    def test_blocklist_cli_out_writes_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = Path(tmp) / "applications.jsonl"
+            out_file = Path(tmp) / "blocklist.md"
+            self._run(["blocklist", "--log", str(log), "--record",
+                       "--company", "Vector Labs", "--date", "2026-11-08"])
+            code, out = self._run(["blocklist", "--log", str(log),
+                                   "--out", str(out_file)])
+            self.assertEqual(code, 0)
+            self.assertIn(f"wrote {out_file}", out)
+            self.assertIn("Vector Labs", out_file.read_text(encoding="utf-8"))
+
+    def test_blocklist_cli_bad_values_exit_1(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = Path(tmp) / "applications.jsonl"
+            code, _ = self._run(["blocklist", "--log", str(log),
+                                 "--record", "--date", "2026-11-08"])
+            self.assertEqual(code, 1)
+            code, _ = self._run(["blocklist", "--log", str(log),
+                                 "--record", "--company", "Vector Labs"])
+            self.assertEqual(code, 1)
+            code, _ = self._run(["blocklist", "--log", str(log),
+                                 "--record", "--company", "Vector Labs",
+                                 "--date", "yesterday"])
+            self.assertEqual(code, 1)
+            code, _ = self._run(["blocklist", "--log", str(log),
+                                 "--record", "--remove",
+                                 "--company", "Vector Labs",
+                                 "--date", "2026-11-08"])
+            self.assertEqual(code, 1)
+            code, _ = self._run(["blocklist", "--log", str(log),
+                                 "--remove"])
+            self.assertEqual(code, 1)
+            code, _ = self._run(["blocklist", "--log", str(log),
+                                 "--company", "Vector Labs"])
+            self.assertEqual(code, 1)
+
+    def test_blocklist_cli_corrupt_file_exit_2(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = Path(tmp) / "applications.jsonl"
+            blocklist = Path(tmp) / "blocklist.json"
+            blocklist.write_text("{not json\n", encoding="utf-8")
+            code, _ = self._run(["blocklist", "--log", str(log)])
+            self.assertEqual(code, 2)
+            code, _ = self._run(["blocklist", "--log", str(log),
+                                 "--record", "--company", "Vector Labs",
+                                 "--date", "2026-11-08"])
+            self.assertEqual(code, 2)
+
+    def test_blocklist_cli_custom_path(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            custom = Path(tmp) / "elsewhere.json"
+            code, out = self._run(["blocklist", "--blocklist", str(custom),
+                                   "--record", "--company", "Vector Labs",
+                                   "--date", "2026-11-08"])
+            self.assertEqual(code, 0)
+            self.assertTrue(custom.exists())
+            code, out = self._run(["blocklist", "--blocklist", str(custom)])
+            self.assertIn("Vector Labs", out)
+
+    def test_apply_refuses_blocked_company(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out_dir = Path(tmp) / "applications"
+            log = out_dir / "applications.jsonl"
+            self._run(["blocklist", "--log", str(log), "--record",
+                       "--company", "vector labs",
+                       "--reason", "Ghosted after the final round.",
+                       "--date", "2026-11-08"])
+            code, _ = self._run(["apply", "--profile", str(EXAMPLE_PROFILE),
+                                 "--posting", str(EXAMPLE_JOB3),
+                                 "--out-dir", str(out_dir)])
+            self.assertEqual(code, 4)
+            self.assertFalse(log.exists())
+            self.assertFalse((out_dir / "vector-labs-machine-learning-engineer").exists())
+            # The same company under its real casing is refused too, and
+            # an unblocked company still applies.
+            code, _ = self._run(["apply", "--profile", str(EXAMPLE_PROFILE),
+                                 "--posting", str(EXAMPLE_JOB),
+                                 "--out-dir", str(out_dir)])
+            self.assertEqual(code, 0)
+            self.assertEqual(len(read_log(log)), 1)
+
+    def test_batch_skips_blocked_company(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            postings = Path(tmp) / "postings"
+            postings.mkdir()
+            for name in ("job.example.md", "job2.example.md",
+                         "job3.example.md"):
+                (postings / name).write_text(
+                    (EXAMPLES_DIR / name).read_text(encoding="utf-8"),
+                    encoding="utf-8")
+            out_dir = Path(tmp) / "applications"
+            log = out_dir / "applications.jsonl"
+            self._run(["blocklist", "--log", str(log), "--record",
+                       "--company", "Harbour Analytics",
+                       "--reason", "Band will not move.",
+                       "--date", "2026-11-08"])
+            code, out = self._run(["batch", "--profile",
+                                   str(EXAMPLE_PROFILE), "--postings-dir",
+                                   str(postings), "--min-score", "0.5",
+                                   "--out-dir", str(out_dir),
+                                   "--today", "2026-11-08"])
+            self.assertEqual(code, 0)
+            self.assertIn("Batch apply — 1 applied, 2 skipped", out)
+            self.assertIn("Harbour Analytics — Business Intelligence "
+                          "Analyst (job2.example.md): blocked: Band will "
+                          "not move.", out)
+            entries = read_log(log)
+            self.assertEqual(len(entries), 1)
+            self.assertEqual(entries[0]["company"], "Northwind Analytics")
+
+    def test_rank_cli_skips_blocked_company(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = Path(tmp) / "applications.jsonl"
+            self._run(["blocklist", "--log", str(log), "--record",
+                       "--company", "Vector Labs",
+                       "--reason", "Ghosted after the final round.",
+                       "--date", "2026-11-08"])
+            code, out = self._run(["rank", "--profile",
+                                   str(EXAMPLE_PROFILE), "--postings-dir",
+                                   str(EXAMPLES_DIR), "--log", str(log),
+                                   "--include-applied", "--json"])
+            self.assertEqual(code, 0)
+            data = json.loads(out)
+            self.assertEqual(len(data["ranked"]), 2)
+            self.assertEqual(data["n_blocked"], 1)
+            self.assertEqual(data["skipped"][0]["company"], "Vector Labs")
+            self.assertEqual(data["skipped"][0]["reason"],
+                             "blocked: Ghosted after the final round.")
+
+    def test_apply_with_corrupt_blocklist_exit_2(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out_dir = Path(tmp) / "applications"
+            blocklist = out_dir / "blocklist.json"
+            blocklist.parent.mkdir(parents=True)
+            blocklist.write_text("{not json\n", encoding="utf-8")
+            code, _ = self._run(["apply", "--profile", str(EXAMPLE_PROFILE),
+                                 "--posting", str(EXAMPLE_JOB),
+                                 "--out-dir", str(out_dir)])
+            self.assertEqual(code, 2)
+
+
+class TestResume(unittest.TestCase):
+    def _entries(self):
+        return [
+            {"id": "APP-001", "company": "Northwind Analytics",
+             "title": "Data Analyst", "status": "screening",
+             "applied_at": "2026-11-01",
+             "resume": {"path": "resume-data-analyst-v3.pdf",
+                        "note": "the one with the shorter summary"},
+             "history": [{"status": "applied", "at": "2026-11-01"},
+                         {"status": "screening", "at": "2026-11-03"}]},
+            {"id": "APP-002", "company": "Harbour Analytics",
+             "title": "Business Intelligence Analyst", "status": "rejected",
+             "applied_at": "2026-11-01",
+             "resume": {"path": "resume-data-analyst-v3.pdf",
+                        "note": None},
+             "history": [{"status": "applied", "at": "2026-11-01"},
+                         {"status": "screening", "at": "2026-11-02"},
+                         {"status": "interview", "at": "2026-11-04"},
+                         {"status": "rejected", "at": "2026-11-08"}]},
+            {"id": "APP-003", "company": "Vector Labs",
+             "title": "Machine Learning Engineer", "status": "hired",
+             "applied_at": "2026-11-02",
+             "resume": {"path": "resume-data-analyst-v2.pdf",
+                        "note": None},
+             "history": [{"status": "applied", "at": "2026-11-02"},
+                         {"status": "screening", "at": "2026-11-03"},
+                         {"status": "interview", "at": "2026-11-05"},
+                         {"status": "offer", "at": "2026-11-06"},
+                         {"status": "hired", "at": "2026-11-07"}]},
+            {"id": "APP-004", "company": "Acme Corp",
+             "title": "Analyst", "status": "applied",
+             "applied_at": "2026-11-03",
+             "history": [{"status": "applied", "at": "2026-11-03"}]},
+        ]
+
+    def test_validate_accepts_path_and_note(self):
+        self.assertEqual(
+            validate_resume("  resume-data-analyst-v3.pdf  ",
+                            "  the shorter summary  "),
+            {"path": "resume-data-analyst-v3.pdf",
+             "note": "the shorter summary"})
+        self.assertEqual(validate_resume("resume.pdf"),
+                         {"path": "resume.pdf", "note": None})
+        self.assertEqual(validate_resume("resume.pdf", "   "),
+                         {"path": "resume.pdf", "note": None})
+
+    def test_validate_missing_or_bad_path(self):
+        for bad in (None, "", "   ", 42):
+            with self.assertRaises(ResumeError):
+                validate_resume(bad)
+
+    def test_validate_reports_every_error_at_once(self):
+        with self.assertRaises(ResumeError) as caught:
+            validate_resume("", 42)
+        message = str(caught.exception)
+        self.assertIn("resume is required", message)
+        self.assertIn("note must be text", message)
+
+    def test_recorded_resume(self):
+        self.assertEqual(recorded_resume(self._entries()[0]),
+                         {"path": "resume-data-analyst-v3.pdf",
+                          "note": "the one with the shorter summary"})
+        self.assertIsNone(recorded_resume(self._entries()[3]))
+        self.assertIsNone(recorded_resume({"resume": "resume.pdf"}))
+        self.assertIsNone(recorded_resume({"resume": {"path": "  "}}))
+        self.assertEqual(recorded_resume(
+            {"resume": {"path": "  resume.pdf  ", "note": "  "}}),
+            {"path": "resume.pdf", "note": None})
+
+    def test_collect_rows_newest_first_with_days(self):
+        data = collect_resumes(self._entries(), today=TODAY)
+        self.assertEqual([row["id"] for row in data["rows"]],
+                         ["APP-004", "APP-003", "APP-001", "APP-002"])
+        self.assertEqual(data["rows"][0]["days_since_applied"], 5)
+        self.assertEqual(data["rows"][1]["days_since_applied"], 6)
+        self.assertEqual(data["rows"][2]["resume"]["path"],
+                         "resume-data-analyst-v3.pdf")
+        self.assertIsNone(data["rows"][0]["resume"])
+
+    def test_collect_counts_by_version(self):
+        data = collect_resumes(self._entries(), today=TODAY)
+        self.assertEqual(data["counts"]["total"], 4)
+        self.assertEqual(data["counts"]["no_resume"], 1)
+        self.assertEqual(data["counts"]["with_resume"], 3)
+        self.assertEqual(data["counts"]["by_resume"],
+                         {"resume-data-analyst-v3.pdf": 2,
+                          "resume-data-analyst-v2.pdf": 1})
+
+    def test_collect_filters(self):
+        entries = self._entries()
+        by_version = collect_resumes(entries, today=TODAY,
+                                     resume=" resume-data-analyst-v3.pdf ")
+        self.assertEqual([row["id"] for row in by_version["rows"]],
+                         ["APP-001", "APP-002"])
+        # The counts still describe the whole log, not the filter.
+        self.assertEqual(by_version["counts"]["total"], 4)
+        missing = collect_resumes(entries, today=TODAY, missing_only=True)
+        self.assertEqual([row["id"] for row in missing["rows"]], ["APP-004"])
+        one = collect_resumes(entries, today=TODAY, app_id="APP-003")
+        self.assertEqual([row["id"] for row in one["rows"]], ["APP-003"])
+        none = collect_resumes(entries, today=TODAY,
+                               resume="resume-never-sent.pdf")
+        self.assertEqual(none["rows"], [])
+
+    def test_collect_skips_bad_entries_and_dates(self):
+        entries = self._entries() + [
+            "not an entry",
+            {"id": "APP-005", "company": "No Date Co",
+             "title": "Analyst", "status": "applied",
+             "applied_at": "not-a-date"},
+        ]
+        data = collect_resumes(entries, today=TODAY)
+        self.assertEqual(data["counts"]["total"], 5)
+        self.assertEqual(data["rows"][-1]["id"], "APP-005")
+        self.assertIsNone(data["rows"][-1]["days_since_applied"])
+
+    def test_render(self):
+        text = render_resumes_markdown(
+            collect_resumes(self._entries(), today=TODAY))
+        self.assertIn("Resumes — 4 applications; 1 with no resume "
+                      "recorded", text)
+        self.assertIn("resume-data-analyst-v3.pdf: 2 applications", text)
+        self.assertIn("resume-data-analyst-v2.pdf: 1 application", text)
+        self.assertIn("APP-004 — Acme Corp, Analyst (applied; applied "
+                      "2026-11-03; 5d ago) — no resume recorded", text)
+        self.assertIn("APP-001 — Northwind Analytics, Data Analyst "
+                      "(screening; applied 2026-11-01; 7d ago) — "
+                      "resume-data-analyst-v3.pdf (the one with the "
+                      "shorter summary)", text)
+
+    def test_render_empty_state(self):
+        text = render_resumes_markdown(
+            collect_resumes([], today=TODAY))
+        self.assertIn("Resumes — 0 applications", text)
+        self.assertIn("record which resume went with one", text)
+
+    def test_json_round_trip(self):
+        data = collect_resumes(self._entries(), today=TODAY)
+        parsed = json.loads(resumes_json(data))
+        self.assertEqual(parsed["counts"]["total"], 4)
+        self.assertEqual(parsed["rows"][1]["resume"]["path"],
+                         "resume-data-analyst-v2.pdf")
+
+    def test_search_finds_resume_version(self):
+        results = search_entries(self._entries(), "v3")
+        self.assertEqual([row["id"] for row in results["results"]],
+                         ["APP-001", "APP-002"])
+        self.assertIn("resume", results["results"][0]["fields"])
+        self.assertEqual(search_entries(self._entries(), "v2")["results"][0]["id"],
+                         "APP-003")
+
+
+class TestRecordResume(unittest.TestCase):
+    def _logged(self, tmp):
+        log = Path(tmp) / "log.jsonl"
+        add_application(log, "Northwind Analytics", "Data Analyst",
+                        today="2026-11-01")
+        add_application(log, "Harbour Analytics",
+                        "Business Intelligence Analyst", today="2026-11-01")
+        set_status(log, "APP-001", "rejected", today="2026-11-08")
+        return log
+
+    def test_record_stores_path_and_note(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            entry = record_resume(
+                log, "APP-002",
+                validate_resume("resume-v3.pdf", "shorter summary"))
+            self.assertEqual(entry["resume"],
+                             {"path": "resume-v3.pdf",
+                              "note": "shorter summary"})
+            self.assertEqual(read_log(log)[1]["resume"]["path"],
+                             "resume-v3.pdf")
+
+    def test_record_replaces_and_clears_note(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            record_resume(log, "APP-002",
+                          validate_resume("resume-v3.pdf", "old note"))
+            entry = record_resume(log, "APP-002",
+                                  validate_resume("resume-v4.pdf"))
+            self.assertEqual(entry["resume"],
+                             {"path": "resume-v4.pdf", "note": None})
+
+    def test_record_refuses_terminal_application(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            with self.assertRaises(TrackerError):
+                record_resume(log, "APP-001",
+                              validate_resume("resume-v3.pdf"))
+
+    def test_record_unknown_id(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            with self.assertRaises(TrackerError):
+                record_resume(log, "APP-999",
+                              validate_resume("resume-v3.pdf"))
+
+    def test_record_adds_no_history_event_and_no_timeline_line(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            before = read_log(log)[1]
+            history_before = copy.deepcopy(before["history"])
+            activity_before = last_activity(before)
+            timeline_before = collect_timeline(read_log(log), today=TODAY)
+            record_resume(log, "APP-002", validate_resume("resume-v3.pdf"))
+            after = read_log(log)[1]
+            self.assertEqual(after["history"], history_before)
+            self.assertEqual(last_activity(after), activity_before)
+            timeline_after = collect_timeline(read_log(log), today=TODAY)
+            self.assertEqual(len(timeline_after["events"]),
+                             len(timeline_before["events"]))
+
+    def test_record_does_not_reset_followup_clock(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            later = datetime.date(2026, 11, 9)
+            before = due_followups(read_log(log), today=later)
+            self.assertEqual([row["id"] for row in before], ["APP-002"])
+            record_resume(log, "APP-002", validate_resume("resume-v3.pdf"))
+            after = due_followups(read_log(log), today=later)
+            self.assertEqual([row["id"] for row in after], ["APP-002"])
+
+    def test_add_application_stores_resume(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = Path(tmp) / "log.jsonl"
+            entry = add_application(
+                log, "Northwind Analytics", "Data Analyst",
+                resume=validate_resume("resume-v3.pdf"), today="2026-11-01")
+            self.assertEqual(entry["resume"],
+                             {"path": "resume-v3.pdf", "note": None})
+            plain = add_application(log, "Acme Corp", "Analyst",
+                                    today="2026-11-01")
+            self.assertNotIn("resume", plain)
+
+
+class TestResumeCLI(unittest.TestCase):
+    def _run(self, argv):
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            code = main(argv)
+        return code, buf.getvalue()
+
+    def _logged(self, tmp):
+        log = Path(tmp) / "log.jsonl"
+        add_application(log, "Northwind Analytics", "Data Analyst",
+                        resume=validate_resume("resume-v3.pdf",
+                                               "shorter summary"),
+                        today="2026-11-01")
+        add_application(log, "Harbour Analytics",
+                        "Business Intelligence Analyst", today="2026-11-01")
+        set_status(log, "APP-002", "screening", today="2026-11-02")
+        set_status(log, "APP-002", "interview", today="2026-11-04")
+        return log
+
+    def test_resume_cli_record_then_list(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            code, out = self._run(["resume", "--record", "--id",
+                                   "APP-002", "--log", str(log),
+                                   "--file", "resume-v2.pdf",
+                                   "--note", "the older one"])
+            self.assertEqual(code, 0)
+            self.assertIn("recorded a resume for APP-002", out)
+            self.assertIn("(resume-v2.pdf (the older one))", out)
+            code, out = self._run(["resume", "--log", str(log),
+                                   "--today", "2026-11-08"])
+            self.assertEqual(code, 0)
+            self.assertIn("Resumes — 2 applications", out)
+            self.assertIn("resume-v3.pdf: 1 application", out)
+            self.assertIn("resume-v2.pdf: 1 application", out)
+            self.assertIn("APP-002 — Harbour Analytics", out)
+
+    def test_resume_cli_filters(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            code, out = self._run(["resume", "--log", str(log),
+                                   "--today", "2026-11-08", "--missing"])
+            self.assertEqual(code, 0)
+            self.assertIn("APP-002", out)
+            self.assertNotIn("APP-001", out)
+            code, out = self._run(["resume", "--log", str(log),
+                                   "--today", "2026-11-08",
+                                   "--resume", "resume-v3.pdf"])
+            self.assertEqual(code, 0)
+            self.assertIn("APP-001", out)
+            self.assertNotIn("APP-002", out)
+            code, out = self._run(["resume", "--log", str(log),
+                                   "--today", "2026-11-08", "--id",
+                                   "APP-002"])
+            self.assertEqual(code, 0)
+            self.assertIn("APP-002", out)
+            self.assertNotIn("APP-001", out)
+
+    def test_resume_cli_json_and_out(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            code, out = self._run(["resume", "--log", str(log),
+                                   "--today", "2026-11-08", "--json"])
+            self.assertEqual(code, 0)
+            data = json.loads(out)
+            self.assertEqual(data["counts"]["no_resume"], 1)
+            self.assertEqual(data["rows"][0]["resume"]["path"],
+                             "resume-v3.pdf")
+            target = Path(tmp) / "resumes.md"
+            code, out = self._run(["resume", "--log", str(log),
+                                   "--today", "2026-11-08",
+                                   "--out", str(target)])
+            self.assertEqual(code, 0)
+            self.assertIn(f"wrote {target}", out)
+            self.assertIn("Resumes — 2 applications",
+                          target.read_text(encoding="utf-8"))
+
+    def test_resume_cli_empty_log(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = Path(tmp) / "missing.jsonl"
+            code, out = self._run(["resume", "--log", str(log)])
+            self.assertEqual(code, 0)
+            self.assertIn("Resumes — 0 applications", out)
+
+    def test_resume_cli_corrupt_log_exit_2(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = Path(tmp) / "log.jsonl"
+            log.write_text("{not json\n", encoding="utf-8")
+            code, _ = self._run(["resume", "--log", str(log)])
+            self.assertEqual(code, 2)
+
+    def test_resume_cli_record_needs_id(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            code, _ = self._run(["resume", "--record", "--log", str(log),
+                                 "--file", "resume-v3.pdf"])
+            self.assertEqual(code, 1)
+
+    def test_resume_cli_record_bad_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            code, _ = self._run(["resume", "--record", "--id", "APP-002",
+                                 "--log", str(log), "--file", "   "])
+            self.assertEqual(code, 1)
+
+    def test_resume_cli_file_needs_record(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            code, _ = self._run(["resume", "--log", str(log),
+                                 "--file", "resume-v3.pdf"])
+            self.assertEqual(code, 1)
+
+    def test_resume_cli_record_refuses_terminal(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            set_status(log, "APP-001", "rejected", today="2026-11-08")
+            code, _ = self._run(["resume", "--record", "--id", "APP-001",
+                                 "--log", str(log),
+                                 "--file", "resume-v3.pdf"])
+            self.assertEqual(code, 6)
+
+    def test_resume_cli_bad_today(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            code, _ = self._run(["resume", "--log", str(log),
+                                 "--today", "not-a-date"])
+            self.assertEqual(code, 1)
+
+    def test_apply_records_resume(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out_dir = Path(tmp) / "applications"
+            code, out = self._run(["apply", "--profile",
+                                   str(EXAMPLE_PROFILE), "--posting",
+                                   str(EXAMPLE_JOB), "--out-dir",
+                                   str(out_dir), "--resume",
+                                   "resume-v3.pdf"])
+            self.assertEqual(code, 0)
+            entries = read_log(out_dir / "applications.jsonl")
+            self.assertEqual(entries[0]["resume"],
+                             {"path": "resume-v3.pdf", "note": None})
+
+    def test_apply_bad_resume_writes_nothing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out_dir = Path(tmp) / "applications"
+            code, _ = self._run(["apply", "--profile",
+                                 str(EXAMPLE_PROFILE), "--posting",
+                                 str(EXAMPLE_JOB), "--out-dir",
+                                 str(out_dir), "--resume", "   "])
+            self.assertEqual(code, 1)
+            self.assertFalse((out_dir / "applications.jsonl").exists())
+            self.assertFalse(list(out_dir.glob("*"))
+                             if out_dir.exists() else False)
+
+    def test_batch_records_resume(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out_dir = Path(tmp) / "batch"
+            log = Path(tmp) / "log.jsonl"
+            code, _ = self._run(["batch", "--profile", str(EXAMPLE_PROFILE),
+                                 "--postings-dir", str(EXAMPLES_DIR),
+                                 "--min-score", "0.5", "--out-dir",
+                                 str(out_dir), "--log", str(log),
+                                 "--resume", "resume-v3.pdf",
+                                 "--today", "2026-11-01"])
+            self.assertEqual(code, 0)
+            entries = read_log(log)
+            self.assertEqual(len(entries), 2)
+            self.assertTrue(all(entry["resume"]["path"] == "resume-v3.pdf"
+                                for entry in entries))
+
+    def test_export_carries_resume(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            data = collect_export(read_log(log), today=TODAY)
+            self.assertIn("resume", COLUMNS)
+            self.assertEqual(data["rows"][0]["resume"], "resume-v3.pdf")
+            self.assertIsNone(data["rows"][1]["resume"])
+
+
+class TestNotes(unittest.TestCase):
+    def _entries(self):
+        return [
+            {"id": "APP-001", "company": "Northwind Analytics",
+             "title": "Data Analyst", "status": "applied",
+             "applied_at": "2026-11-01",
+             "notes": [
+                 {"date": "2026-11-05",
+                  "text": "Met Sam at the meetup.",
+                  "tag": "company"},
+                 {"date": "2026-11-05",
+                  "text": "Team is rebuilding the reporting platform.",
+                  "tag": None},
+                 {"date": "2026-11-02",
+                  "text": "Posting mentions on-call; ask about it.",
+                  "tag": "interview"},
+             ]},
+            {"id": "APP-002", "company": "Harbour Analytics",
+             "title": "BI Analyst", "status": "rejected",
+             "applied_at": "2026-11-01",
+             "notes": [{"date": "2026-11-06",
+                        "text": "Rejected over salary.", "tag": None}]},
+            {"id": "APP-003", "company": "Acme Corp", "title": "Analyst",
+             "status": "applied", "applied_at": "2026-11-01",
+             "notes": [{"date": "not-a-date", "text": "Bad date."},
+                       {"date": "2026-11-04", "text": "  "},
+                       "not a dict",
+                       {"date": "2026-11-03", "text": "Good note.",
+                        "tag": "  interview  "}]},
+        ]
+
+    def test_validate_note(self):
+        note = validate_note({"date": "2026-11-05",
+                              "text": "  Met Sam at the meetup.  ",
+                              "tag": "  company  "},
+                             today="2026-11-08")
+        self.assertEqual(note["date"], "2026-11-05")
+        self.assertEqual(note["text"], "Met Sam at the meetup.")
+        self.assertEqual(note["tag"], "company")
+        self.assertEqual(note["recorded_at"], "2026-11-08")
+
+    def test_validate_note_tag_is_optional(self):
+        note = validate_note({"date": "2026-11-05", "text": "No tag."},
+                             today="2026-11-08")
+        self.assertIsNone(note["tag"])
+
+    def test_validate_reports_every_error_at_once(self):
+        with self.assertRaises(NoteError) as caught:
+            validate_note({"date": "2026-13-40", "text": "  ", "tag": 7},
+                          today="2026-11-08")
+        message = str(caught.exception)
+        self.assertIn("date must be YYYY-MM-DD", message)
+        self.assertIn("text is required", message)
+        self.assertIn("tag must be text", message)
+
+    def test_validate_missing_date_and_text(self):
+        with self.assertRaises(NoteError) as caught:
+            validate_note({}, today="2026-11-08")
+        message = str(caught.exception)
+        self.assertIn("date is required", message)
+        self.assertIn("text is required", message)
+
+    def test_validate_refuses_future_date(self):
+        with self.assertRaises(NoteError) as caught:
+            validate_note({"date": "2026-11-09", "text": "Too soon."},
+                          today="2026-11-08")
+        self.assertIn("cannot be in the future", str(caught.exception))
+
+    def test_collect_notes_newest_first(self):
+        data = collect_notes(self._entries(), today=TODAY)
+        rows = data["notes"]
+        self.assertEqual([row["date"] for row in rows],
+                         ["2026-11-05", "2026-11-05", "2026-11-03",
+                          "2026-11-02"])
+        self.assertEqual(rows[0]["company"], "Northwind Analytics")
+        self.assertEqual(rows[0]["days_ago"], 3)
+        self.assertEqual(rows[-1]["days_ago"], 6)
+        self.assertEqual(data["summary"]["total"], 4)
+        self.assertEqual(data["summary"]["by_tag"],
+                         {"company": 1, "interview": 2})
+
+    def test_collect_notes_same_day_latest_first(self):
+        data = collect_notes(self._entries(), today=TODAY)
+        same_day = [row for row in data["notes"]
+                    if row["date"] == "2026-11-05"]
+        self.assertEqual(same_day[0]["text"],
+                         "Team is rebuilding the reporting platform.")
+        self.assertEqual(same_day[1]["text"], "Met Sam at the meetup.")
+
+    def test_collect_notes_tag_filter(self):
+        data = collect_notes(self._entries(), today=TODAY, tag="COMPANY")
+        self.assertEqual(len(data["notes"]), 1)
+        self.assertEqual(data["notes"][0]["text"], "Met Sam at the meetup.")
+        # The summary still counts the whole log, not the filter.
+        self.assertEqual(data["summary"]["total"], 4)
+        data = collect_notes(self._entries(), today=TODAY, tag="interview")
+        self.assertEqual(len(data["notes"]), 2)
+
+    def test_collect_notes_app_filter(self):
+        data = collect_notes(self._entries(), today=TODAY, app_id="APP-003")
+        self.assertEqual(len(data["notes"]), 1)
+        self.assertEqual(data["notes"][0]["text"], "Good note.")
+        self.assertEqual(data["summary"]["total"], 4)
+
+    def test_collect_notes_skips_terminal_and_bad_rows(self):
+        data = collect_notes(self._entries(), today=TODAY)
+        companies = {row["company"] for row in data["notes"]}
+        self.assertNotIn("Harbour Analytics", companies)
+        texts = [row["text"] for row in data["notes"]]
+        self.assertNotIn("Bad date.", texts)
+        self.assertNotIn("Rejected over salary.", texts)
+
+    def test_notes_for(self):
+        entry, rows = notes_for(self._entries(), "APP-001", today=TODAY)
+        self.assertEqual(entry["company"], "Northwind Analytics")
+        self.assertEqual(len(rows), 3)
+        entry, rows = notes_for(self._entries(), "APP-002", today=TODAY)
+        self.assertEqual(entry["company"], "Harbour Analytics")
+        self.assertEqual(rows, [])
+        self.assertEqual(notes_for(self._entries(), "APP-999",
+                                   today=TODAY), (None, []))
+
+    def test_render_notes_markdown(self):
+        data = collect_notes(self._entries(), today=TODAY)
+        text = render_notes_markdown(data)
+        self.assertIn("Notes — 4 recorded", text)
+        self.assertIn("2 interview, 1 company", text)
+        self.assertIn("Met Sam at the meetup.", text)
+        self.assertIn("[company]", text)
+        self.assertIn("— 3d ago", text)
+        parsed = json.loads(notes_json(data))
+        self.assertEqual(len(parsed["notes"]), 4)
+
+    def test_render_empty_state(self):
+        text = render_notes_markdown(collect_notes([], today=TODAY))
+        self.assertIn("Notes — 0 recorded", text)
+        self.assertIn("No notes recorded yet", text)
+
+
+class TestRecordNote(unittest.TestCase):
+    def _logged(self, tmp):
+        log = Path(tmp) / "log.jsonl"
+        add_application(log, "Northwind Analytics", "Data Analyst",
+                        today="2026-11-01")
+        add_application(log, "Harbour Analytics",
+                        "Business Intelligence Analyst", today="2026-11-01")
+        set_status(log, "APP-001", "rejected", today="2026-11-08")
+        return log
+
+    def test_record_stores_note_and_history_event(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            entry = record_note(
+                log, "APP-002",
+                validate_note({"date": "2026-11-05",
+                               "text": "Met Sam at the meetup.",
+                               "tag": "company"}, today="2026-11-08"))
+            self.assertEqual(entry["notes"],
+                             [{"date": "2026-11-05",
+                               "text": "Met Sam at the meetup.",
+                               "tag": "company",
+                               "recorded_at": "2026-11-08"}])
+            event = entry["history"][-1]
+            self.assertEqual(event["kind"], "note")
+            self.assertEqual(event["at"], "2026-11-05")
+            self.assertEqual(event["text"], "Met Sam at the meetup.")
+            self.assertEqual(event["tag"], "company")
+            self.assertEqual(read_log(log)[1]["notes"][0]["text"],
+                             "Met Sam at the meetup.")
+
+    def test_record_allows_several_notes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            record_note(log, "APP-002",
+                        validate_note({"date": "2026-11-05",
+                                       "text": "First note."},
+                                      today="2026-11-08"))
+            entry = record_note(log, "APP-002",
+                                validate_note({"date": "2026-11-05",
+                                               "text": "First note."},
+                                              today="2026-11-08"))
+            self.assertEqual(len(entry["notes"]), 2)
+            self.assertEqual(len([event for event in entry["history"]
+                                  if event.get("kind") == "note"]), 2)
+
+    def test_record_refuses_terminal_application(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            with self.assertRaises(TrackerError):
+                record_note(log, "APP-001",
+                            validate_note({"date": "2026-11-05",
+                                           "text": "Too late."},
+                                          today="2026-11-08"))
+
+    def test_record_unknown_id(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            with self.assertRaises(TrackerError):
+                record_note(log, "APP-999",
+                            validate_note({"date": "2026-11-05",
+                                           "text": "Nobody."},
+                                          today="2026-11-08"))
+
+    def test_record_does_not_move_status(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            entry = record_note(log, "APP-002",
+                                validate_note({"date": "2026-11-05",
+                                               "text": "Still screening."},
+                                              today="2026-11-08"))
+            self.assertEqual(entry["status"], "applied")
+
+    def test_record_resets_followup_clock(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            later = datetime.date(2026, 11, 9)
+            before = due_followups(read_log(log), today=later)
+            self.assertEqual([row["id"] for row in before], ["APP-002"])
+            record_note(log, "APP-002",
+                        validate_note({"date": "2026-11-09",
+                                       "text": "Heard back by email."},
+                                      today="2026-11-09"))
+            after = due_followups(read_log(log), today=later)
+            self.assertEqual(after, [])
+
+    def test_record_does_not_split_stage_stay(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = Path(tmp) / "log.jsonl"
+            add_application(log, "Northwind Analytics", "Data Analyst",
+                            today="2026-11-01")
+            set_status(log, "APP-001", "screening", today="2026-11-02")
+            set_status(log, "APP-001", "interview", today="2026-11-06")
+            before = days_in_stage(read_log(log))
+            self.assertEqual(before["screening"]["median_days"], 4.0)
+            record_note(log, "APP-001",
+                        validate_note({"date": "2026-11-04",
+                                       "text": "Mid-stage note."},
+                                      today="2026-11-08"))
+            after = days_in_stage(read_log(log))
+            self.assertEqual(after, before)
+
+
+class TestTimelineNote(unittest.TestCase):
+    def _logged(self, tmp):
+        log = Path(tmp) / "log.jsonl"
+        add_application(log, "Northwind Analytics", "Data Analyst",
+                        today="2026-11-01")
+        record_note(log, "APP-001",
+                    validate_note({"date": "2026-11-05",
+                                   "text": "Met Sam at the meetup.",
+                                   "tag": "company"}, today="2026-11-08"))
+        record_note(log, "APP-001",
+                    validate_note({"date": "2026-11-06",
+                                   "text": "No tag on this one."},
+                                  today="2026-11-08"))
+        return log
+
+    def test_timeline_shows_notes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            data = collect_timeline(read_log(log), today=TODAY)
+            notes = [event for event in data["events"]
+                     if event["kind"] == "note"]
+            self.assertEqual(len(notes), 2)
+            self.assertEqual(notes[0]["summary"], "Note")
+            self.assertEqual(notes[0]["note"], "No tag on this one.")
+            self.assertEqual(notes[1]["summary"], "Note [company]")
+            self.assertEqual(notes[1]["note"], "Met Sam at the meetup.")
+            self.assertEqual(data["counts"]["by_kind"]["note"], 2)
+            text = render_timeline_markdown(data)
+            self.assertIn("[note] Northwind Analytics", text)
+            self.assertIn("note: Met Sam at the meetup.", text)
+
+    def test_timeline_note_without_record_falls_back_to_event(self):
+        entries = [{
+            "id": "APP-001", "company": "Northwind Analytics",
+            "title": "Data Analyst", "status": "applied",
+            "applied_at": "2026-11-01",
+            "history": [
+                {"status": "applied", "at": "2026-11-01"},
+                {"kind": "note", "at": "2026-11-05",
+                 "text": "Hand-edited note.", "tag": "company"},
+            ],
+        }]
+        data = collect_timeline(entries, today=TODAY)
+        notes = [event for event in data["events"]
+                 if event["kind"] == "note"]
+        self.assertEqual(len(notes), 1)
+        self.assertEqual(notes[0]["summary"], "Note [company]")
+        self.assertEqual(notes[0]["note"], "Hand-edited note.")
+
+    def test_timeline_kind_filter_includes_note(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            data = collect_timeline(read_log(log), today=TODAY,
+                                    kinds=["note"])
+            self.assertEqual(len(data["events"]), 2)
+            self.assertTrue(all(event["kind"] == "note"
+                                for event in data["events"]))
+
+
+class TestNotesCLI(unittest.TestCase):
+    def _run(self, argv):
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            code = main(argv)
+        return code, buf.getvalue()
+
+    def _logged(self, tmp):
+        log = Path(tmp) / "log.jsonl"
+        add_application(log, "Northwind Analytics", "Data Analyst",
+                        today="2026-11-01")
+        add_application(log, "Harbour Analytics",
+                        "Business Intelligence Analyst", today="2026-11-01")
+        set_status(log, "APP-002", "screening", today="2026-11-02")
+        return log
+
+    def test_notes_cli_record_then_list(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            code, out = self._run(["notes", "--record", "--id", "APP-001",
+                                   "--log", str(log),
+                                   "--date", "2026-11-05",
+                                   "--text", "Met Sam at the meetup.",
+                                   "--tag", "company",
+                                   "--today", "2026-11-08"])
+            self.assertEqual(code, 0)
+            self.assertIn("recorded a note for APP-001", out)
+            self.assertIn("(2026-11-05 [company])", out)
+            code, out = self._run(["notes", "--log", str(log),
+                                   "--today", "2026-11-08"])
+            self.assertEqual(code, 0)
+            self.assertIn("Notes — 1 recorded", out)
+            self.assertIn("1 company", out)
+            self.assertIn("Met Sam at the meetup.", out)
+            self.assertIn("[company]", out)
+
+    def test_notes_cli_filters(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            self._run(["notes", "--record", "--id", "APP-001",
+                       "--log", str(log), "--date", "2026-11-05",
+                       "--text", "Met Sam at the meetup.",
+                       "--tag", "company", "--today", "2026-11-08"])
+            self._run(["notes", "--record", "--id", "APP-002",
+                       "--log", str(log), "--date", "2026-11-06",
+                       "--text", "Ask about on-call.",
+                       "--tag", "interview", "--today", "2026-11-08"])
+            code, out = self._run(["notes", "--log", str(log),
+                                   "--today", "2026-11-08",
+                                   "--tag", "COMPANY"])
+            self.assertEqual(code, 0)
+            self.assertIn("Met Sam at the meetup.", out)
+            self.assertNotIn("Ask about on-call.", out)
+            code, out = self._run(["notes", "--log", str(log),
+                                   "--today", "2026-11-08", "--id",
+                                   "APP-002"])
+            self.assertEqual(code, 0)
+            self.assertIn("Ask about on-call.", out)
+            self.assertNotIn("Met Sam at the meetup.", out)
+
+    def test_notes_cli_json_and_out(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            self._run(["notes", "--record", "--id", "APP-001",
+                       "--log", str(log), "--date", "2026-11-05",
+                       "--text", "Met Sam at the meetup.",
+                       "--today", "2026-11-08"])
+            out_path = Path(tmp) / "notes.md"
+            code, out = self._run(["notes", "--log", str(log),
+                                   "--today", "2026-11-08",
+                                   "--json", "--out", str(out_path)])
+            self.assertEqual(code, 0)
+            self.assertIn(f"wrote {out_path}", out)
+            parsed = json.loads(out_path.read_text(encoding="utf-8"))
+            self.assertEqual(len(parsed["notes"]), 1)
+            self.assertEqual(parsed["notes"][0]["text"],
+                             "Met Sam at the meetup.")
+
+    def test_notes_cli_empty_state(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            code, out = self._run(["notes", "--log", str(log),
+                                   "--today", "2026-11-08"])
+            self.assertEqual(code, 0)
+            self.assertIn("Notes — 0 recorded", out)
+            self.assertIn("No notes recorded yet", out)
+
+    def test_notes_cli_exit_codes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            code, _out = self._run(["notes", "--record", "--log", str(log),
+                                    "--date", "2026-11-05",
+                                    "--text", "No id."])
+            self.assertEqual(code, 1)
+            code, _out = self._run(["notes", "--record", "--id", "APP-001",
+                                    "--log", str(log),
+                                    "--date", "2026-13-40",
+                                    "--text", "Bad date."])
+            self.assertEqual(code, 1)
+            code, _out = self._run(["notes", "--record", "--id", "APP-001",
+                                    "--log", str(log),
+                                    "--date", "2026-11-09",
+                                    "--text", "Future note.",
+                                    "--today", "2026-11-08"])
+            self.assertEqual(code, 1)
+            code, _out = self._run(["notes", "--record", "--id", "APP-999",
+                                    "--log", str(log),
+                                    "--date", "2026-11-05",
+                                    "--text", "Unknown."])
+            self.assertEqual(code, 6)
+            code, _out = self._run(["notes", "--log", str(log),
+                                    "--date", "2026-11-05"])
+            self.assertEqual(code, 1)
+            code, _out = self._run(["notes", "--log", str(log),
+                                    "--today", "2026-11-08",
+                                    "--id", "APP-999"])
+            self.assertEqual(code, 1)
+            set_status(log, "APP-001", "rejected", today="2026-11-08")
+            code, _out = self._run(["notes", "--record", "--id", "APP-001",
+                                    "--log", str(log),
+                                    "--date", "2026-11-05",
+                                    "--text", "Too late."])
+            self.assertEqual(code, 6)
+
+
+class TestSearchNotes(unittest.TestCase):
+    def test_search_finds_note_text(self):
+        entries = [
+            {"id": "APP-001", "company": "Northwind Analytics",
+             "title": "Data Analyst", "status": "applied",
+             "applied_at": "2026-11-01",
+             "notes": [{"date": "2026-11-05",
+                        "text": "Met Sam at the meetup.",
+                        "tag": "company"}]},
+            {"id": "APP-002", "company": "Harbour Analytics",
+             "title": "BI Analyst", "status": "applied",
+             "applied_at": "2026-11-01", "notes": []},
+        ]
+        data = search_entries(entries, "meetup")
+        self.assertEqual(len(data["results"]), 1)
+        self.assertEqual(data["results"][0]["id"], "APP-001")
+        self.assertIn("note", data["results"][0]["fields"])
+        self.assertIn("meetup",
+                      data["results"][0]["matches"][0]["text"].lower())
+        data = search_entries(entries, "Sam company")
+        self.assertEqual(len(data["results"]), 1)
+
+
+class TestExportNotes(unittest.TestCase):
+    def test_export_counts_notes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = Path(tmp) / "log.jsonl"
+            add_application(log, "Northwind Analytics", "Data Analyst",
+                            today="2026-11-01")
+            add_application(log, "Harbour Analytics",
+                            "Business Intelligence Analyst",
+                            today="2026-11-01")
+            record_note(log, "APP-001",
+                        validate_note({"date": "2026-11-05",
+                                       "text": "Met Sam at the meetup."},
+                                      today="2026-11-08"))
+            data = collect_export(read_log(log), today=TODAY)
+            self.assertIn("notes", COLUMNS)
+            self.assertEqual(data["rows"][0]["notes"], 1)
+            self.assertEqual(data["rows"][1]["notes"], 0)
+
+
+class TestCompany(unittest.TestCase):
+    def _entries(self):
+        return [
+            {"id": "APP-001", "company": "Northwind Analytics",
+             "title": "Data Analyst", "status": "screening",
+             "applied_at": "2026-11-01", "match_score": 0.625,
+             "source": "referral", "referrer": "Maya Patel",
+             "deadline": "2026-11-11",
+             "resume": {"path": "resume-data-analyst-v3.pdf"},
+             "history": [{"status": "applied", "at": "2026-11-01"},
+                         {"status": "screening", "at": "2026-11-03"}],
+             "contacts": [
+                 {"name": "Sam Chen", "role": "Recruiter",
+                  "channel": "linkedin", "date": "2026-11-08",
+                  "note": "Met at the meetup."}],
+             "interviews": [], "offers": [],
+             "notes": [{"date": "2026-11-05",
+                        "text": "Team is rebuilding the reporting platform.",
+                        "tag": "company"}],
+             "debriefs": []},
+            {"id": "APP-002", "company": "Northwind Analytics",
+             "title": "Reporting Analyst", "status": "applied",
+             "applied_at": "2026-11-04", "match_score": None,
+             "source": "job-board",
+             "history": [{"status": "applied", "at": "2026-11-04"}],
+             "contacts": [
+                 {"name": "sam chen", "role": None, "channel": None,
+                  "date": "2026-11-02", "note": None}],
+             "interviews": [], "offers": [], "notes": [],
+             "debriefs": []},
+            {"id": "APP-003", "company": "Harbour Analytics",
+             "title": "BI Analyst", "status": "rejected",
+             "applied_at": "2026-11-01", "match_score": 0.562,
+             "source": "job-board",
+             "history": [{"status": "applied", "at": "2026-11-01"},
+                         {"status": "interview", "at": "2026-11-05"},
+                         {"status": "rejected", "at": "2026-11-08"}],
+             "rejection": {"category": "salary",
+                           "note": "Their band topped out below target.",
+                           "recorded_at": "2026-11-08"},
+             "contacts": [
+                 {"name": "Alex Rivera", "role": "Hiring manager",
+                  "channel": "email", "date": "2026-11-01",
+                  "note": "Sent the intro."}],
+             "interviews": [
+                 {"date": "2026-11-07", "round": "Recruiter screen",
+                  "mode": "phone", "duration_minutes": 30},
+                 {"date": "2026-11-10", "round": "Hiring manager",
+                  "interviewer": "Priya Nair", "mode": "video",
+                  "duration_minutes": 45, "time": "14:30",
+                  "notes": "Bring the dashboard story."}],
+             "offers": [{"base": 105000, "base_annual": 105000,
+                         "currency": "CAD", "period": "annual",
+                         "bonus": 5000, "equity": 0, "vesting_years": None,
+                         "deadline": "2026-11-15", "work_mode": "hybrid",
+                         "pto_days": None, "start_date": None,
+                         "note": None, "recorded_at": "2026-11-08"}],
+             "notes": [{"date": "2026-11-06",
+                        "text": "Priya mentioned the two-week ship cadence.",
+                        "tag": "interview"}],
+             "debriefs": [
+                 {"date": "2026-11-07", "round": "Recruiter screen",
+                  "rating": 4, "went_well": "Dashboard story landed.",
+                  "improve": "Tighter on pushback.",
+                  "questions": ["Walk me through your most recent project."]},
+                 {"date": "2026-11-09", "round": "Coffee chat",
+                  "rating": None, "went_well": None, "improve": None,
+                  "questions": []}]},
+            {"id": "APP-004", "company": "Vector Labs",
+             "title": "Machine Learning Engineer", "status": "rejected",
+             "applied_at": "not-a-date", "match_score": 0.150,
+             "source": "company-site",
+             "history": [{"status": "applied", "at": "2026-11-01"},
+                         {"status": "rejected", "at": "2026-11-08"}],
+             "rejection": {"category": "skills-gap",
+                           "note": "Wanted PyTorch and TensorFlow.",
+                           "recorded_at": "2026-11-08"},
+             "contacts": [], "interviews": [], "offers": [],
+             "notes": [], "debriefs": []},
+        ]
+
+    def test_normalize_company(self):
+        self.assertEqual(normalize_company("  Vector   Labs "), "vector labs")
+        self.assertEqual(normalize_company("Northwind Analytics"),
+                         "northwind analytics")
+
+    def test_dossier_matches_case_and_spaces(self):
+        data = build_dossier(self._entries(), "  northwind ANALYTICS ",
+                             today=TODAY)
+        self.assertTrue(data["found"])
+        self.assertEqual(data["company"], "Northwind Analytics")
+        self.assertEqual(data["summary"]["applications"], 2)
+        self.assertEqual(data["summary"]["live"], 2)
+        self.assertEqual(data["summary"]["terminal"], 0)
+        self.assertEqual(data["summary"]["best_stage"], "screening")
+        self.assertEqual(data["summary"]["sources"],
+                         {"job-board": 1, "referral": 1})
+        self.assertEqual(data["summary"]["referrers"], ["Maya Patel"])
+
+    def test_dossier_score_summary_counts_unscored(self):
+        data = build_dossier(self._entries(), "Northwind Analytics",
+                             today=TODAY)
+        scores = data["summary"]["scores"]
+        self.assertEqual(scores["count"], 1)
+        self.assertEqual(scores["unscored"], 1)
+        self.assertEqual(scores["average"], 0.625)
+        self.assertEqual(scores["lowest"], 0.625)
+        self.assertEqual(scores["highest"], 0.625)
+
+    def test_dossier_applications_newest_first_undated_last(self):
+        data = build_dossier(self._entries(), "Northwind Analytics",
+                             today=TODAY)
+        self.assertEqual([row["id"] for row in data["applications"]],
+                         ["APP-002", "APP-001"])
+        self.assertEqual(data["applications"][0]["best_stage"], "applied")
+        self.assertEqual(data["applications"][1]["best_stage"], "screening")
+        self.assertEqual(data["applications"][1]["resume"],
+                         "resume-data-analyst-v3.pdf")
+        data = build_dossier(self._entries(), "Vector Labs", today=TODAY)
+        self.assertEqual([row["id"] for row in data["applications"]],
+                         ["APP-004"])
+        self.assertEqual(data["applications"][0]["applied_at"],
+                         "not-a-date")
+
+    def test_dossier_people_grouped_across_applications(self):
+        data = build_dossier(self._entries(), "Northwind Analytics",
+                             today=TODAY)
+        self.assertEqual(len(data["people"]), 1)
+        person = data["people"][0]
+        self.assertEqual(person["name"], "Sam Chen")
+        self.assertEqual(person["touches"], 2)
+        self.assertEqual(person["first_contact"], "2026-11-02")
+        self.assertEqual(person["last_contact"], "2026-11-08")
+        self.assertEqual(person["role"], "Recruiter")
+        self.assertEqual(person["channel"], "linkedin")
+        self.assertEqual(person["note"], "Met at the meetup.")
+        self.assertEqual(person["days_since_touch"], 0)
+        self.assertFalse(person["quiet"])
+        self.assertEqual(person["applications"], ["APP-001", "APP-002"])
+
+    def test_dossier_people_quiet_bar(self):
+        data = build_dossier(self._entries(), "Harbour Analytics",
+                             today=TODAY, quiet_days=7)
+        self.assertEqual(len(data["people"]), 1)
+        self.assertEqual(data["people"][0]["name"], "Alex Rivera")
+        self.assertEqual(data["people"][0]["days_since_touch"], 7)
+        self.assertFalse(data["people"][0]["quiet"])
+        data = build_dossier(self._entries(), "Harbour Analytics",
+                             today=TODAY, quiet_days=6)
+        self.assertTrue(data["people"][0]["quiet"])
+
+    def test_dossier_interviews_split_upcoming_and_past(self):
+        data = build_dossier(self._entries(), "Harbour Analytics",
+                             today=TODAY)
+        upcoming = data["interviews"]["upcoming"]
+        past = data["interviews"]["past"]
+        self.assertEqual(len(upcoming), 1)
+        self.assertEqual(upcoming[0]["round"], "Hiring manager")
+        self.assertEqual(upcoming[0]["days_until"], 2)
+        self.assertEqual(len(past), 1)
+        self.assertEqual(past[0]["round"], "Recruiter screen")
+        self.assertEqual(past[0]["days_ago"], 1)
+
+    def test_dossier_offers_latest_with_first_year_total(self):
+        data = build_dossier(self._entries(), "Harbour Analytics",
+                             today=TODAY)
+        self.assertEqual(len(data["offers"]), 1)
+        offer = data["offers"][0]
+        self.assertEqual(offer["first_year_total"], 110000)
+        self.assertEqual(offer["days_to_deadline"], 7)
+        self.assertEqual(offer["work_mode"], "hybrid")
+
+    def test_dossier_offer_without_validated_shape_shows_no_total(self):
+        # A hand-edited offer with a raw base and no base_annual
+        # must not break the dossier: the total stays missing.
+        entries = self._entries()
+        entries[2]["offers"] = [{"base": 105000, "currency": "CAD"}]
+        data = build_dossier(entries, "Harbour Analytics", today=TODAY)
+        self.assertEqual(len(data["offers"]), 1)
+        self.assertIsNone(data["offers"][0]["first_year_total"])
+
+    def test_dossier_includes_terminal_notes(self):
+        # A dossier is a record, not a to-do list: the rejected
+        # application's note is part of the history.
+        data = build_dossier(self._entries(), "Harbour Analytics",
+                             today=TODAY)
+        self.assertEqual(len(data["notes"]), 1)
+        self.assertIn("two-week ship cadence", data["notes"][0]["text"])
+        self.assertEqual(data["notes"][0]["days_ago"], 2)
+
+    def test_dossier_debriefs_paired_and_unmatched_flagged(self):
+        data = build_dossier(self._entries(), "Harbour Analytics",
+                             today=TODAY)
+        self.assertEqual(len(data["debriefs"]), 2)
+        screen = data["debriefs"][1]
+        self.assertEqual(screen["round"], "Recruiter screen")
+        self.assertTrue(screen["matched"])
+        self.assertIsNone(screen["interviewer"])
+        self.assertEqual(screen["rating"], 4)
+        coffee = data["debriefs"][0]
+        self.assertEqual(coffee["round"], "Coffee chat")
+        self.assertFalse(coffee["matched"])
+
+    def test_dossier_rejections(self):
+        data = build_dossier(self._entries(), "Harbour Analytics",
+                             today=TODAY)
+        self.assertEqual(len(data["rejections"]), 1)
+        self.assertEqual(data["rejections"][0]["category"], "salary")
+        self.assertIn("band topped out",
+                      data["rejections"][0]["note"])
+
+    def test_dossier_blocked_only_company_is_found(self):
+        blocked = {"blocked": [{"company": "Vector Labs",
+                                "reason": "ML-stack gap; not re-applying.",
+                                "blocked_on": "2026-11-08"}]}
+        data = build_dossier([], "Vector Labs", today=TODAY,
+                             blocklist=blocked)
+        self.assertTrue(data["found"])
+        self.assertEqual(data["company"], "Vector Labs")
+        self.assertEqual(data["applications"], [])
+        self.assertEqual(data["blocked"]["reason"],
+                         "ML-stack gap; not re-applying.")
+        data = build_dossier(self._entries(), "Vector Labs", today=TODAY,
+                             blocklist=blocked)
+        self.assertTrue(data["found"])
+        self.assertEqual(len(data["applications"]), 1)
+        self.assertIsNotNone(data["blocked"])
+
+    def test_dossier_unknown_company_is_not_found(self):
+        data = build_dossier(self._entries(), "Nobody Inc", today=TODAY)
+        self.assertFalse(data["found"])
+        self.assertEqual(data["company"], "Nobody Inc")
+        self.assertEqual(data["applications"], [])
+
+    def test_list_companies_most_applications_first(self):
+        blocked = {"blocked": [{"company": "Blocked Co",
+                                "reason": "Nope.",
+                                "blocked_on": "2026-11-08"}]}
+        data = list_companies(self._entries(), blocklist=blocked)
+        self.assertEqual(data["count"], 4)
+        self.assertEqual([row["company"] for row in data["companies"]],
+                         ["Northwind Analytics", "Harbour Analytics",
+                          "Vector Labs", "Blocked Co"])
+        northwind = data["companies"][0]
+        self.assertEqual(northwind["applications"], 2)
+        self.assertEqual(northwind["best_stage"], "screening")
+        self.assertEqual(northwind["latest_applied"], "2026-11-04")
+        self.assertFalse(northwind["blocked"])
+        blocked_row = data["companies"][3]
+        self.assertEqual(blocked_row["applications"], 0)
+        self.assertIsNone(blocked_row["best_stage"])
+        self.assertIsNone(blocked_row["latest_applied"])
+        self.assertTrue(blocked_row["blocked"])
+        vector = data["companies"][2]
+        self.assertIsNone(vector["latest_applied"])
+
+    def test_render_company_markdown(self):
+        data = build_dossier(self._entries(), "Harbour Analytics",
+                             today=TODAY)
+        text = render_company_markdown(data)
+        self.assertIn("Company — Harbour Analytics", text)
+        self.assertIn("1 application (0 live, 1 closed)", text)
+        self.assertIn("furthest stage reached: interview", text)
+        self.assertIn("Match scores: 1 scored, average 0.562", text)
+        self.assertIn("APP-003: BI Analyst — rejected", text)
+        self.assertIn("Alex Rivera, Hiring manager (email)", text)
+        self.assertIn("Hiring manager — BI Analyst with Priya Nair",
+                      text)
+        self.assertIn("first year 110,000", text)
+        self.assertIn("two-week ship cadence", text)
+        self.assertIn("Recruiter screen — BI Analyst, rated 4 of 5", text)
+        self.assertIn("(no matching interview recorded)", text)
+        self.assertIn("salary (Their band topped out below target.)", text)
+        parsed = json.loads(company_json(data))
+        self.assertEqual(parsed["company"], "Harbour Analytics")
+        self.assertEqual(len(parsed["applications"]), 1)
+
+    def test_render_blocked_company_markdown(self):
+        blocked = {"blocked": [{"company": "Vector Labs",
+                                "reason": "ML-stack gap; not re-applying.",
+                                "blocked_on": "2026-11-08"}]}
+        data = build_dossier(self._entries(), "Vector Labs", today=TODAY,
+                             blocklist=blocked)
+        text = render_company_markdown(data)
+        self.assertIn("Blocked — ML-stack gap; not re-applying.", text)
+        self.assertIn("rejected: skills-gap", text)
+
+    def test_render_companies_markdown(self):
+        data = list_companies(self._entries())
+        text = render_companies_markdown(data)
+        self.assertIn("Companies — 3 companies in the log", text)
+        self.assertIn("Northwind Analytics — 2 applications", text)
+        self.assertIn("reached screening", text)
+        parsed = json.loads(companies_json(data))
+        self.assertEqual(parsed["count"], 3)
+        text = render_companies_markdown(list_companies([]))
+        self.assertIn("Companies — 0 companies in the log", text)
+        self.assertIn("No applications logged yet", text)
+
+
+class TestCompanyCLI(unittest.TestCase):
+    def _run(self, argv):
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            code = main(argv)
+        return code, buf.getvalue()
+
+    def _logged(self, tmp):
+        log = Path(tmp) / "log.jsonl"
+        add_application(log, "Northwind Analytics", "Data Analyst",
+                        today="2026-11-01")
+        add_application(log, "Harbour Analytics",
+                        "Business Intelligence Analyst",
+                        today="2026-11-01")
+        set_status(log, "APP-001", "screening", today="2026-11-03")
+        record_contact(log, "APP-001",
+                       {"name": "Sam Chen", "role": "Recruiter",
+                        "channel": "linkedin", "date": "2026-11-08"},
+                       today="2026-11-08")
+        record_interview(log, "APP-002",
+                         {"date": "2026-11-10", "round": "Hiring manager",
+                          "interviewer": "Priya Nair", "mode": "video",
+                          "duration_minutes": 45, "time": "14:30"},
+                         today="2026-11-08")
+        record_debrief(log, "APP-002",
+                       {"date": "2026-11-07", "round": "Recruiter screen",
+                        "rating": 4, "went_well": "Good.",
+                        "improve": "Tighter.", "questions": []},
+                       today="2026-11-08")
+        record_offer(log, "APP-002",
+                     {"base": 105000, "base_annual": 105000,
+                      "currency": "CAD", "period": "annual",
+                      "bonus": 5000, "equity": 0, "vesting_years": None,
+                      "deadline": "2026-11-15", "work_mode": "hybrid",
+                      "pto_days": None, "start_date": None,
+                      "note": None, "recorded_at": "2026-11-08"},
+                     today="2026-11-08")
+        set_status(log, "APP-002", "rejected", today="2026-11-08")
+        record_rejection(log, "APP-002",
+                         {"category": "salary", "note": "Band too low."},
+                         today="2026-11-08")
+        return log
+
+    def test_company_cli_list(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            code, out = self._run(["company", "--log", str(log),
+                                   "--today", "2026-11-08"])
+            self.assertEqual(code, 0)
+            self.assertIn("Companies — 2 companies in the log", out)
+            self.assertIn("Northwind Analytics — 1 application", out)
+            self.assertIn("Harbour Analytics — 1 application", out)
+            self.assertIn("reached screening", out)
+            # Harbour never moved to interview status — the round was
+            # recorded, the status went applied straight to rejected —
+            # so the furthest stage the history shows is applied.
+            self.assertIn("reached applied", out)
+
+    def test_company_cli_dossier(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            code, out = self._run(["company", "harbour analytics",
+                                   "--log", str(log),
+                                   "--today", "2026-11-08"])
+            self.assertEqual(code, 0)
+            self.assertIn("Company — Harbour Analytics", out)
+            self.assertIn("1 application (0 live, 1 closed)", out)
+            self.assertIn("Hiring manager — Business Intelligence Analyst "
+                          "with Priya Nair", out)
+            self.assertIn("first year 110,000", out)
+            self.assertIn("salary (Band too low.)", out)
+            code, out = self._run(["company", "Northwind Analytics",
+                                   "--log", str(log),
+                                   "--today", "2026-11-08"])
+            self.assertEqual(code, 0)
+            self.assertIn("Sam Chen, Recruiter (linkedin)", out)
+            self.assertIn("1 application (1 live, 0 closed)", out)
+
+    def test_company_cli_json_and_out(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            out_path = Path(tmp) / "harbour.md"
+            code, out = self._run(["company", "Harbour Analytics",
+                                   "--log", str(log),
+                                   "--today", "2026-11-08",
+                                   "--json", "--out", str(out_path)])
+            self.assertEqual(code, 0)
+            self.assertIn(f"wrote {out_path}", out)
+            parsed = json.loads(out_path.read_text(encoding="utf-8"))
+            self.assertTrue(parsed["found"])
+            self.assertEqual(len(parsed["applications"]), 1)
+            self.assertEqual(parsed["offers"][0]["first_year_total"],
+                             110000)
+
+    def test_company_cli_exit_codes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            code, _out = self._run(["company", "Nobody Inc",
+                                    "--log", str(log),
+                                    "--today", "2026-11-08"])
+            self.assertEqual(code, 1)
+            code, _out = self._run(["company", "--log", str(log),
+                                    "--today", "2026-13-40"])
+            self.assertEqual(code, 1)
+            code, _out = self._run(["company", "--log", str(log),
+                                    "--today", "2026-11-08",
+                                    "--quiet-days", "-1"])
+            self.assertEqual(code, 1)
+            # A missing log is an empty log by design, so it lists
+            # nothing; a corrupt log is the load error.
+            code, out = self._run(["company", "--log",
+                                   str(Path(tmp) / "missing.jsonl"),
+                                   "--today", "2026-11-08"])
+            self.assertEqual(code, 0)
+            self.assertIn("Companies — 0 companies in the log", out)
+            corrupt = Path(tmp) / "corrupt.jsonl"
+            corrupt.write_text("not json\n", encoding="utf-8")
+            code, _out = self._run(["company", "--log", str(corrupt),
+                                    "--today", "2026-11-08"])
+            self.assertEqual(code, 2)
+
+
+class TestReview(unittest.TestCase):
+    def _entries(self):
+        return [
+            {"id": "APP-001", "company": "Northwind Analytics",
+             "title": "Data Analyst", "status": "screening",
+             "applied_at": "2026-11-01", "match_score": 0.625,
+             "history": [{"status": "applied", "at": "2026-11-01"},
+                         {"status": "screening", "at": "2026-11-03"}],
+             "debriefs": [
+                 {"date": "2026-11-07", "round": "Recruiter screen",
+                  "rating": 4, "went_well": "Dashboard story landed.",
+                  "improve": "Tighter on pushback.",
+                  "questions": [
+                      "Tell me about a time you used SQL to answer a "
+                      "business question.",
+                      "Have you built anything in dbt?",
+                      "What do you do outside work?",
+                      "How much MySQL have you used?"]}]},
+            {"id": "APP-002", "company": "Harbour Analytics",
+             "title": "Business Intelligence Analyst", "status": "applied",
+             "applied_at": "2026-11-04", "match_score": 0.562,
+             "history": [{"status": "applied", "at": "2026-11-04"}],
+             "debriefs": []},
+            {"id": "APP-003", "company": "Vector Labs",
+             "title": "Machine Learning Engineer", "status": "rejected",
+             "applied_at": "2026-11-02", "match_score": 0.150,
+             "history": [{"status": "applied", "at": "2026-11-02"},
+                         {"status": "rejected", "at": "2026-11-08"}],
+             "debriefs": [
+                 {"date": "2026-11-07", "round": "Hiring manager",
+                  "rating": 3, "went_well": None, "improve": None,
+                  "questions": [
+                      "How do you approach a PyTorch model that will not "
+                      "converge?"]}]},
+            {"id": "APP-004", "company": "Nobody Inc",
+             "title": "Ghost Role", "status": "applied",
+             "applied_at": "not-a-date", "match_score": None,
+             "history": [{"status": "applied", "at": "2026-11-01"}],
+             "debriefs": [
+                 {"date": "2026-11-07", "round": "Call",
+                  "questions": ["Tell me about yourself."]}]},
+            {"id": "APP-005", "company": "Northwind Analytics",
+             "title": "Data Analyst", "status": "screening",
+             "applied_at": "not-a-date", "match_score": 0.625,
+             "history": [{"status": "applied", "at": "2026-11-01"}],
+             "debriefs": [
+                 {"date": "2026-11-07", "round": "Recruiter screen",
+                  "questions": [
+                      "Tell me about a time you used Python in your "
+                      "work."]}]},
+            {"id": "APP-006", "company": "Northwind Analytics",
+             "title": "Data Analyst", "status": "applied",
+             "applied_at": "2026-11-03", "match_score": 0.625,
+             "history": [{"status": "applied", "at": "2026-11-03"}],
+             "debriefs": [
+                 {"date": "2026-11-08", "round": "Coffee chat",
+                  "rating": None, "went_well": None, "improve": None,
+                  "questions": []}]},
+            "not a dict at all",
+        ]
+
+    def _review(self, **kwargs):
+        return collect_review(self._entries(), example_profile(),
+                              EXAMPLES_DIR, **kwargs)
+
+    def test_reviewed_rows_newest_first_unparseable_last(self):
+        data = self._review()
+        self.assertEqual([r["id"] for r in data["reviewed"]],
+                         ["APP-006", "APP-003", "APP-001", "APP-005"])
+        self.assertEqual(data["summary"]["reviewed"], 4)
+        self.assertEqual(data["summary"]["skipped"], 2)
+
+    def test_skill_probed_uses_word_boundaries(self):
+        data = self._review()
+        row = next(r for r in data["reviewed"] if r["id"] == "APP-001")
+        by_skill = {r["skill"]: r for r in row["skill_rows"]}
+        self.assertTrue(by_skill["SQL"]["probed"])
+        self.assertEqual(by_skill["SQL"]["asked_in"][0]["round"],
+                         "Recruiter screen")
+        # dbt is a preferred gap for Northwind, and it came up.
+        self.assertTrue(by_skill["dbt"]["probed"])
+        self.assertIn("dbt", row["gaps_probed"])
+        # "MySQL" in a question does not probe SQL, and "stakeholder"
+        # on its own would not probe "Stakeholder Management".
+        self.assertFalse(by_skill["Python"]["probed"])
+        self.assertFalse(by_skill["Power BI"]["probed"])
+        self.assertEqual((row["required_probed"], row["required_total"]),
+                         (1, 6))
+        self.assertEqual((row["preferred_probed"], row["preferred_total"]),
+                         (1, 3))
+
+    def test_off_script_questions_listed_verbatim(self):
+        data = self._review()
+        row = next(r for r in data["reviewed"] if r["id"] == "APP-001")
+        off = [item["question"] for item in row["off_script"]]
+        self.assertIn("What do you do outside work?", off)
+        self.assertIn("How much MySQL have you used?", off)
+        self.assertEqual(len(off), 2)
+        self.assertEqual(data["summary"]["off_script_total"], 2)
+
+    def test_prep_coverage_counts_skill_questions_only(self):
+        data = self._review()
+        row = next(r for r in data["reviewed"] if r["id"] == "APP-001")
+        prep = row["prep"]
+        # Five skill-anchored likely questions; only SQL came up.
+        self.assertEqual((prep["predicted"], prep["covered"]), (5, 1))
+        self.assertEqual(prep["coverage"], 0.2)
+        self.assertEqual(prep["covered_questions"],
+                         ["Tell me about a time you used SQL in your work."])
+        self.assertEqual(len(prep["not_covered"]), 4)
+        # Walkthrough, why-this-role, salary: no skill to check against.
+        self.assertEqual(len(prep["uncheckable"]), 3)
+        self.assertTrue(any("Walk me through your work" in q
+                            for q in prep["uncheckable"]))
+        self.assertTrue(any("salary expectations" in q
+                            for q in prep["uncheckable"]))
+
+    def test_gap_probed_rollup_and_summary(self):
+        data = self._review()
+        summary = data["summary"]
+        self.assertEqual(summary["skills_probed"], 4)
+        self.assertEqual(summary["skills_total"], 34)
+        self.assertEqual(summary["n_questions"], 6)
+        self.assertEqual(summary["gaps_probed"],
+                         {"PyTorch": ["Vector Labs"],
+                          "dbt": ["Northwind Analytics"]})
+        self.assertEqual((summary["prep_predicted"],
+                          summary["prep_covered"]), (16, 2))
+        self.assertEqual(summary["prep_coverage"], 0.125)
+
+    def test_debrief_with_no_questions_still_reviews(self):
+        data = self._review()
+        row = next(r for r in data["reviewed"] if r["id"] == "APP-006")
+        self.assertEqual(row["n_questions"], 0)
+        self.assertEqual(row["skills_probed"], 0)
+        self.assertEqual(row["prep"]["covered"], 0)
+        self.assertEqual(row["prep"]["predicted"], 5)
+
+    def test_skipped_reasons(self):
+        data = self._review()
+        skipped = {(item["id"]): item["reason"] for item in data["skipped"]}
+        self.assertEqual(skipped["APP-002"], "no debriefs recorded")
+        self.assertEqual(skipped["APP-004"], "no posting in the folder")
+        # The non-dict log line is skipped silently, never listed.
+        self.assertNotIn(None, skipped)
+
+    def test_only_id_and_unknown_id(self):
+        data = self._review(only_id="APP-003")
+        self.assertEqual([r["id"] for r in data["reviewed"]], ["APP-003"])
+        self.assertEqual(data["summary"]["gaps_probed"],
+                         {"PyTorch": ["Vector Labs"]})
+        with self.assertRaises(ReviewError):
+            self._review(only_id="APP-999")
+
+    def test_missing_postings_dir_is_an_error(self):
+        with self.assertRaises(ValueError):
+            collect_review(self._entries(), example_profile(),
+                           "/does/not/exist")
+
+    def test_render_marks_gaps_and_off_script(self):
+        text = render_review_markdown(self._review())
+        self.assertIn("Interview review — 4 applications reviewed", text)
+        self.assertIn("Posting skills probed: 4 of 34", text)
+        self.assertIn("Prep called 2 of 16 skill questions (12%)", text)
+        self.assertIn("Gaps that came up: PyTorch (Vector Labs), "
+                      "dbt (Northwind Analytics)", text)
+        self.assertIn("- SQL [required] — asked", text)
+        self.assertIn("- Communication [required] — not asked "
+                      "(gap — not in your profile)", text)
+        self.assertIn("Off-script questions (no posting skill named):",
+                      text)
+        self.assertIn("## Skipped", text)
+        self.assertIn("Harbour Analytics — Business Intelligence Analyst: "
+                      "no debriefs recorded", text)
+        parsed = json.loads(review_json(self._review()))
+        self.assertEqual(parsed["summary"]["reviewed"], 4)
+
+    def test_empty_log_reviews_nothing(self):
+        data = collect_review([], example_profile(), EXAMPLES_DIR)
+        self.assertEqual(data["reviewed"], [])
+        self.assertEqual(data["summary"]["reviewed"], 0)
+        self.assertIn("Nothing reviewed",
+                      render_review_markdown(data))
+
+
+class TestReviewCLI(unittest.TestCase):
+    def _run(self, argv):
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            code = main(argv)
+        return code, buf.getvalue()
+
+    def _logged(self, tmp):
+        log = Path(tmp) / "log.jsonl"
+        add_application(log, "Northwind Analytics", "Data Analyst",
+                        today="2026-11-01")
+        add_application(log, "Harbour Analytics",
+                        "Business Intelligence Analyst",
+                        today="2026-11-01")
+        set_status(log, "APP-001", "screening", today="2026-11-03")
+        record_debrief(log, "APP-001",
+                       {"date": "2026-11-07", "round": "Recruiter screen",
+                        "rating": 4, "went_well": "Dashboard story landed.",
+                        "improve": "Tighter on pushback.",
+                        "questions": [
+                            "Tell me about a time you used SQL to answer "
+                            "a business question.",
+                            "What do you do outside work?"]},
+                       today="2026-11-08")
+        return log
+
+    def test_review_cli(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            code, out = self._run(["review", "--profile",
+                                   str(EXAMPLE_PROFILE),
+                                   "--postings-dir", str(EXAMPLES_DIR),
+                                   "--log", str(log)])
+            self.assertEqual(code, 0)
+            self.assertIn("Interview review — 1 application reviewed", out)
+            self.assertIn("Northwind Analytics — Data Analyst (APP-001)",
+                          out)
+            self.assertIn("Skills probed: 1 of 9 — required 1/6, "
+                          "preferred 0/3", out)
+            self.assertIn("Prep: 1 of 5 skill questions came up (20%)",
+                          out)
+            self.assertIn("Off-script questions (no posting skill named):",
+                          out)
+            self.assertIn("Harbour Analytics — Business Intelligence "
+                          "Analyst: no debriefs recorded", out)
+
+    def test_review_cli_id_filter_and_json_out(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            out_path = Path(tmp) / "review.md"
+            code, out = self._run(["review", "--profile",
+                                   str(EXAMPLE_PROFILE),
+                                   "--postings-dir", str(EXAMPLES_DIR),
+                                   "--log", str(log), "--id", "APP-001",
+                                   "--json", "--out", str(out_path)])
+            self.assertEqual(code, 0)
+            self.assertIn(f"wrote {out_path}", out)
+            parsed = json.loads(out_path.read_text(encoding="utf-8"))
+            self.assertEqual(parsed["summary"]["reviewed"], 1)
+            row = parsed["reviewed"][0]
+            self.assertEqual(row["company"], "Northwind Analytics")
+            self.assertEqual(row["gaps_probed"], [])
+            self.assertEqual(row["prep"]["covered"], 1)
+
+    def test_review_cli_exit_codes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            code, _out = self._run(["review", "--profile",
+                                    str(EXAMPLE_PROFILE),
+                                    "--postings-dir", str(EXAMPLES_DIR),
+                                    "--log", str(log), "--id", "APP-999"])
+            self.assertEqual(code, 1)
+            code, _out = self._run(["review", "--profile",
+                                    str(EXAMPLE_PROFILE),
+                                    "--postings-dir", "/does/not/exist",
+                                    "--log", str(log)])
+            self.assertEqual(code, 2)
+            code, _out = self._run(["review", "--profile",
+                                    str(Path(tmp) / "nope.json"),
+                                    "--postings-dir", str(EXAMPLES_DIR),
+                                    "--log", str(log)])
+            self.assertEqual(code, 2)
+            # A missing log is an empty log by design, so it reviews
+            # nothing; a corrupt log is the load error.
+            code, out = self._run(["review", "--profile",
+                                   str(EXAMPLE_PROFILE),
+                                   "--postings-dir", str(EXAMPLES_DIR),
+                                   "--log", str(Path(tmp) / "missing.jsonl")])
+            self.assertEqual(code, 0)
+            self.assertIn("Nothing reviewed", out)
+            corrupt = Path(tmp) / "corrupt.jsonl"
+            corrupt.write_text("not json\n", encoding="utf-8")
+            code, _out = self._run(["review", "--profile",
+                                    str(EXAMPLE_PROFILE),
+                                    "--postings-dir", str(EXAMPLES_DIR),
+                                    "--log", str(corrupt)])
+            self.assertEqual(code, 2)
+
+
+class TestAudit(unittest.TestCase):
+    def _entries(self):
+        return [
+            # Clean: source, resume, closing date, contact, offer and
+            # round all recorded; nothing stale, nothing overdue.
+            {"id": "APP-001", "company": "Northwind Analytics",
+             "title": "Data Analyst", "status": "screening",
+             "applied_at": "2026-11-01", "source": "referral",
+             "referrer": "Maya Patel", "resume": {"path": "resume-v3.pdf"},
+             "deadline": "2026-11-20",
+             "history": [{"status": "applied", "at": "2026-11-01"},
+                         {"status": "screening", "at": "2026-11-03"},
+                         {"kind": "contact", "at": "2026-11-08",
+                          "name": "Sam Chen"}],
+             "contacts": [{"name": "Sam Chen", "date": "2026-11-08"}],
+             "interviews": [{"date": "2026-11-07",
+                             "round": "Recruiter screen"}],
+             "debriefs": [{"date": "2026-11-07", "round": "Recruiter screen",
+                           "rating": 4}],
+             "offers": [{"base": 130000, "currency": "CAD",
+                         "period": "annual", "base_annual": 130000,
+                         "bonus": 10000, "equity": None,
+                         "vesting_years": None, "deadline": "2026-11-22",
+                         "recorded_at": "2026-11-08"}]},
+            # Everything missing at once: no source, resume, or closing
+            # date; quiet 19 days; a past round with no write-up; a
+            # write-up for a round never recorded; nobody on file.
+            {"id": "APP-002", "company": "Harbour Analytics",
+             "title": "Business Intelligence Analyst", "status": "interview",
+             "applied_at": "2026-10-20",
+             "history": [{"status": "applied", "at": "2026-10-20"}],
+             "interviews": [{"date": "2026-11-05",
+                             "round": "Hiring manager"}],
+             "debriefs": [{"date": "2026-11-06", "round": "Coffee chat",
+                           "questions": []}]},
+            # Rejected with no reason: the one fixable thing on a
+            # closed application. The missing source/resume/deadline
+            # are not flagged — the application is over.
+            {"id": "APP-003", "company": "Vector Labs",
+             "title": "Machine Learning Engineer", "status": "rejected",
+             "applied_at": "2026-11-02",
+             "history": [{"status": "applied", "at": "2026-11-02"},
+                         {"status": "rejected", "at": "2026-11-08"}]},
+            # Offer decision 3 days overdue and the posting closed 7
+            # days ago, while the application is still at offer.
+            {"id": "APP-004", "company": "Zeta Corp",
+             "title": "Data Analyst", "status": "offer",
+             "applied_at": "2026-10-28", "source": "job-board",
+             "resume": {"path": "resume-v2.pdf"}, "deadline": "2026-11-01",
+             "history": [{"status": "applied", "at": "2026-10-28"},
+                         {"kind": "offer", "at": "2026-11-07"}],
+             "contacts": [{"name": "Jo Lee", "date": "2026-11-07"}],
+             "offers": [{"base": 120000, "currency": "CAD",
+                         "period": "annual", "base_annual": 120000,
+                         "bonus": None, "equity": None,
+                         "vesting_years": None, "deadline": "2026-11-05",
+                         "recorded_at": "2026-11-07"}]},
+            # Hired with nothing recorded: a closed application is left
+            # alone, even with no source, resume, or closing date.
+            {"id": "APP-005", "company": "Initech",
+             "title": "Support Analyst", "status": "hired",
+             "applied_at": "2026-10-15",
+             "history": [{"status": "applied", "at": "2026-10-15"},
+                         {"status": "hired", "at": "2026-11-02"}]},
+            # Boundary: last activity exactly 14 days ago is not stale
+            # yet, the same boundary as the analytics stale check.
+            {"id": "APP-006", "company": "Acme Corp",
+             "title": "Analyst", "status": "applied",
+             "applied_at": "2026-10-25", "source": "company-site",
+             "resume": {"path": "r.pdf"}, "deadline": "2026-12-01",
+             "history": []},
+            # A round dated today already counts as past for the
+            # missing-debrief check, the same rule as debriefs.
+            {"id": "APP-008", "company": "Northwind Analytics",
+             "title": "Data Analyst", "status": "screening",
+             "applied_at": "2026-11-01", "source": "job-board",
+             "resume": {"path": "r.pdf"}, "deadline": "2026-12-01",
+             "history": [{"status": "applied", "at": "2026-11-01"},
+                         {"status": "screening", "at": "2026-11-03"},
+                         {"kind": "contact", "at": "2026-11-08",
+                          "name": "Sam Chen"}],
+             "contacts": [{"name": "Sam Chen", "date": "2026-11-08"}],
+             "interviews": [{"date": "2026-11-08",
+                             "round": "Recruiter screen"}]},
+            # Boundary: a closing date and an offer deadline dated
+            # today are not overdue yet.
+            {"id": "APP-009", "company": "Beta Ltd",
+             "title": "Analyst", "status": "offer",
+             "applied_at": "2026-11-01", "source": "referral",
+             "referrer": "Maya Patel", "resume": {"path": "r.pdf"},
+             "deadline": "2026-11-08",
+             "history": [{"status": "applied", "at": "2026-11-01"},
+                         {"kind": "contact", "at": "2026-11-08",
+                          "name": "Sam Chen"}],
+             "contacts": [{"name": "Sam Chen", "date": "2026-11-08"}],
+             "offers": [{"base": 120000, "currency": "CAD",
+                         "period": "annual", "base_annual": 120000,
+                         "bonus": None, "equity": None,
+                         "vesting_years": None, "deadline": "2026-11-08",
+                         "recorded_at": "2026-11-08"}]},
+            "not a dict at all",
+        ]
+
+    def _audit(self, **kwargs):
+        return collect_audit(self._entries(), today=TODAY, **kwargs)
+
+    def test_clean_application_has_no_issues(self):
+        data = collect_audit([self._entries()[0]], today=TODAY)
+        self.assertEqual(data["counts"],
+                         {"checked": 1, "issues": 0, "error": 0, "warn": 0,
+                          "info": 0, "by_kind": {}})
+
+    def test_everything_missing_lists_each_kind_once(self):
+        data = collect_audit([self._entries()[1]], today=TODAY)
+        by_kind = {issue["kind"]: issue for issue in data["issues"]}
+        self.assertEqual(set(by_kind), {
+            "missing-source", "missing-resume", "missing-deadline",
+            "stale", "missing-debrief", "no-contacts",
+            "unmatched-debrief"})
+        self.assertEqual(by_kind["missing-source"]["severity"], "warn")
+        self.assertEqual(by_kind["missing-resume"]["severity"], "warn")
+        self.assertEqual(by_kind["missing-deadline"]["severity"], "info")
+        self.assertEqual(by_kind["stale"]["severity"], "warn")
+        self.assertEqual(by_kind["stale"]["days"], 19)
+        self.assertEqual(by_kind["missing-debrief"]["severity"], "warn")
+        self.assertEqual(by_kind["missing-debrief"]["days"], 3)
+        self.assertIn("Hiring manager",
+                      by_kind["missing-debrief"]["detail"])
+        self.assertEqual(by_kind["no-contacts"]["severity"], "info")
+        self.assertEqual(by_kind["unmatched-debrief"]["severity"], "info")
+        self.assertIn("Coffee chat",
+                      by_kind["unmatched-debrief"]["detail"])
+
+    def test_rejected_without_reason_is_flagged(self):
+        data = collect_audit([self._entries()[2]], today=TODAY)
+        self.assertEqual(len(data["issues"]), 1)
+        issue = data["issues"][0]
+        self.assertEqual(issue["kind"], "missing-rejection-reason")
+        self.assertEqual(issue["severity"], "warn")
+        self.assertEqual(issue["id"], "APP-003")
+
+    def test_offer_deadline_and_closing_overdue(self):
+        data = collect_audit([self._entries()[3]], today=TODAY)
+        by_kind = {issue["kind"]: issue for issue in data["issues"]}
+        self.assertEqual(set(by_kind),
+                         {"offer-deadline-passed", "closing-overdue"})
+        self.assertEqual(by_kind["offer-deadline-passed"]["severity"],
+                         "error")
+        self.assertEqual(by_kind["offer-deadline-passed"]["days"], 3)
+        self.assertEqual(by_kind["closing-overdue"]["severity"], "warn")
+        self.assertEqual(by_kind["closing-overdue"]["days"], 7)
+
+    def test_hired_without_onboarding_tasks_is_flagged(self):
+        data = collect_audit([self._entries()[4]], today=TODAY)
+        self.assertEqual(len(data["issues"]), 1)
+        issue = data["issues"][0]
+        self.assertEqual(issue["kind"], "missing-onboarding")
+        self.assertEqual(issue["severity"], "info")
+        self.assertEqual(issue["id"], "APP-005")
+        self.assertIn("onboard --record", issue["detail"])
+
+    def test_hired_with_onboarding_tasks_is_clean(self):
+        entry = copy.deepcopy(self._entries()[4])
+        entry["onboarding"] = [{"number": 1, "task": "Complete I-9",
+                                "category": "paperwork",
+                                "due": "2026-11-10", "done": False}]
+        data = collect_audit([entry], today=TODAY)
+        self.assertEqual(data["counts"]["issues"], 0)
+
+    def test_stale_boundary_exactly_n_days_not_stale(self):
+        entry = self._entries()[5]
+        data = collect_audit([entry], today=TODAY)
+        self.assertEqual(data["counts"]["issues"], 0)
+        # One day less on the bar and the same application is stale.
+        data = collect_audit([entry], today=TODAY, stale_days=13)
+        self.assertEqual([i["kind"] for i in data["issues"]], ["stale"])
+        self.assertEqual(data["issues"][0]["days"], 14)
+
+    def test_round_dated_today_counts_as_missing_debrief(self):
+        data = collect_audit([self._entries()[6]], today=TODAY)
+        self.assertEqual(len(data["issues"]), 1)
+        self.assertEqual(data["issues"][0]["kind"], "missing-debrief")
+        self.assertEqual(data["issues"][0]["days"], 0)
+
+    def test_deadline_today_is_not_overdue(self):
+        data = collect_audit([self._entries()[7]], today=TODAY)
+        self.assertEqual(data["counts"]["issues"], 0)
+
+    def test_unparseable_dates_are_skipped_never_fatal(self):
+        entry = {"id": "APP-099", "company": "Messy Co",
+                 "title": "Analyst", "status": "applied",
+                 "applied_at": "not-a-date", "source": "job-board",
+                 "resume": {"path": "r.pdf"}, "deadline": "not-a-date",
+                 "history": [{"status": "applied", "at": "not-a-date"}],
+                 "interviews": [{"date": "not-a-date",
+                                 "round": "Call"}]}
+        data = collect_audit([entry], today=TODAY)
+        self.assertEqual(data["counts"]["issues"], 0)
+
+    def test_counts_and_ordering(self):
+        data = self._audit()
+        counts = data["counts"]
+        self.assertEqual(counts["checked"], 8)
+        self.assertEqual(counts["issues"], 12)
+        self.assertEqual((counts["error"], counts["warn"], counts["info"]),
+                         (1, 7, 4))
+        self.assertEqual(counts["by_kind"], {
+            "missing-debrief": 2, "missing-resume": 1,
+            "missing-source": 1, "stale": 1,
+            "missing-rejection-reason": 1, "closing-overdue": 1,
+            "offer-deadline-passed": 1, "missing-deadline": 1,
+            "no-contacts": 1, "unmatched-debrief": 1,
+            "missing-onboarding": 1})
+        # Errors first, then warnings, then notes; within a severity,
+        # company, then kind.
+        self.assertEqual(
+            [(i["severity"], i["kind"]) for i in data["issues"]],
+            [("error", "offer-deadline-passed"),
+             ("warn", "missing-debrief"), ("warn", "missing-resume"),
+             ("warn", "missing-source"), ("warn", "stale"),
+             ("warn", "missing-debrief"),
+             ("warn", "missing-rejection-reason"),
+             ("warn", "closing-overdue"),
+             ("info", "missing-deadline"), ("info", "no-contacts"),
+             ("info", "unmatched-debrief"),
+             ("info", "missing-onboarding")])
+
+    def test_kind_and_severity_and_id_filters(self):
+        data = self._audit(kinds=["missing-debrief"])
+        self.assertEqual(data["counts"]["issues"], 2)
+        self.assertTrue(all(i["kind"] == "missing-debrief"
+                            for i in data["issues"]))
+        data = self._audit(severity="error")
+        self.assertEqual(data["counts"]["issues"], 1)
+        self.assertEqual(data["issues"][0]["kind"], "offer-deadline-passed")
+        data = self._audit(severity="info")
+        self.assertEqual(data["counts"]["issues"], 4)
+        data = self._audit(app_id="APP-002")
+        self.assertEqual(data["counts"]["checked"], 1)
+        self.assertEqual(data["counts"]["issues"], 7)
+        data = self._audit(kinds=["stale", "closing-overdue"],
+                           severity="warn")
+        self.assertEqual(data["counts"]["issues"], 2)
+
+    def test_bad_kind_severity_and_stale_days_raise(self):
+        with self.assertRaises(AuditError):
+            collect_audit(self._entries(), today=TODAY,
+                          kinds=["not-a-kind"])
+        with self.assertRaises(AuditError):
+            collect_audit(self._entries(), today=TODAY,
+                          severity="fatal")
+        with self.assertRaises(AuditError):
+            collect_audit(self._entries(), today=TODAY, stale_days=-1)
+
+    def test_json_round_trip(self):
+        data = self._audit()
+        parsed = json.loads(audit_json(data))
+        self.assertEqual(parsed["counts"], data["counts"])
+        self.assertEqual(len(parsed["issues"]), 12)
+
+    def test_markdown_render(self):
+        data = self._audit()
+        out = render_audit_markdown(data)
+        self.assertIn("Audit — 8 application(s) checked, 12 issue(s) "
+                      "(1 error(s), 7 warning(s), 4 note(s))", out)
+        self.assertIn("[error] APP-004", out)
+        self.assertIn("By kind: closing-overdue 1, missing-deadline 1, "
+                      "missing-debrief 2, missing-onboarding 1, "
+                      "missing-rejection-reason 1, "
+                      "missing-resume 1, missing-source 1, no-contacts 1, "
+                      "offer-deadline-passed 1, stale 1, "
+                      "unmatched-debrief 1", out)
+        clean = collect_audit([self._entries()[0]], today=TODAY)
+        self.assertIn("Nothing to fix", render_audit_markdown(clean))
+
+
+class TestAuditCLI(unittest.TestCase):
+    def _run(self, argv):
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            code = main(argv)
+        return code, buf.getvalue()
+
+    def _logged(self, tmp):
+        log = Path(tmp) / "log.jsonl"
+        add_application(log, "Northwind Analytics", "Data Analyst",
+                        source="referral", referrer="Maya Patel",
+                        resume={"path": "resume-v3.pdf"},
+                        deadline="2026-11-20", today="2026-11-01")
+        add_application(log, "Harbour Analytics",
+                        "Business Intelligence Analyst", today="2026-11-01")
+        set_status(log, "APP-001", "screening", today="2026-11-03")
+        record_offer(log, "APP-001",
+                     validate_offer({"base": 130000, "currency": "CAD",
+                                     "period": "annual", "bonus": 10000,
+                                     "deadline": "2026-11-15"}),
+                     today="2026-11-08")
+        record_interview(log, "APP-001",
+                         validate_interview(
+                             {"date": "2026-11-07",
+                              "round": "Recruiter screen", "mode": "phone",
+                              "duration_minutes": 30}),
+                         today="2026-11-08")
+        return log
+
+    def test_audit_cli(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            code, out = self._run(["audit", "--log", str(log),
+                                   "--today", "2026-11-08"])
+            self.assertEqual(code, 0)
+            self.assertIn("Audit — 2 application(s) checked, 5 issue(s) "
+                          "(0 error(s), 3 warning(s), 2 note(s))", out)
+            for kind in ("missing-debrief", "no-contacts",
+                         "missing-source", "missing-resume",
+                         "missing-deadline"):
+                self.assertIn(kind, out)
+            # The fix is named on the line: the debrief line names the
+            # command that records one.
+            self.assertIn("debrief --record --id APP-001", out)
+
+    def test_audit_cli_filters_and_json_out(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            code, out = self._run(["audit", "--log", str(log),
+                                   "--today", "2026-11-08",
+                                   "--kind", "missing-debrief"])
+            self.assertEqual(code, 0)
+            self.assertIn("1 issue(s)", out)
+            code, out = self._run(["audit", "--log", str(log),
+                                   "--today", "2026-11-08",
+                                   "--severity", "info"])
+            self.assertEqual(code, 0)
+            self.assertIn("2 issue(s)", out)
+            code, out = self._run(["audit", "--log", str(log),
+                                   "--today", "2026-11-08",
+                                   "--id", "APP-002"])
+            self.assertEqual(code, 0)
+            self.assertIn("1 application(s) checked, 3 issue(s)", out)
+            out_path = Path(tmp) / "audit.json"
+            code, out = self._run(["audit", "--log", str(log),
+                                   "--today", "2026-11-08",
+                                   "--json", "--out", str(out_path)])
+            self.assertEqual(code, 0)
+            self.assertIn(f"wrote {out_path}", out)
+            parsed = json.loads(out_path.read_text(encoding="utf-8"))
+            self.assertEqual(parsed["counts"]["issues"], 5)
+
+    def test_audit_cli_clean_log(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = Path(tmp) / "log.jsonl"
+            add_application(log, "Northwind Analytics", "Data Analyst",
+                            source="job-board",
+                            resume={"path": "resume-v3.pdf"},
+                            deadline="2026-11-20", today="2026-11-01")
+            code, out = self._run(["audit", "--log", str(log),
+                                   "--today", "2026-11-01"])
+            self.assertEqual(code, 0)
+            self.assertIn("Nothing to fix", out)
+
+    def test_audit_cli_exit_codes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            code, _out = self._run(["audit", "--log", str(log),
+                                    "--today", "2026-11-08",
+                                    "--id", "APP-999"])
+            self.assertEqual(code, 1)
+            code, _out = self._run(["audit", "--log", str(log),
+                                    "--today", "2026-11-08",
+                                    "--kind", "not-a-kind"])
+            self.assertEqual(code, 1)
+            code, _out = self._run(["audit", "--log", str(log),
+                                    "--today", "2026-11-08",
+                                    "--severity", "fatal"])
+            self.assertEqual(code, 1)
+            code, _out = self._run(["audit", "--log", str(log),
+                                    "--today", "not-a-date"])
+            self.assertEqual(code, 1)
+            code, _out = self._run(["audit", "--log", str(log),
+                                    "--today", "2026-11-08",
+                                    "--stale-days", "-1"])
+            self.assertEqual(code, 1)
+            # A missing log is an empty log by design, so it audits
+            # nothing; a corrupt log is the load error.
+            code, out = self._run(["audit", "--log",
+                                   str(Path(tmp) / "missing.jsonl")])
+            self.assertEqual(code, 0)
+            self.assertIn("0 application(s) checked", out)
+            corrupt = Path(tmp) / "corrupt.jsonl"
+            corrupt.write_text("not json\n", encoding="utf-8")
+            code, _out = self._run(["audit", "--log", str(corrupt)])
+            self.assertEqual(code, 2)
+
+
+class TestSchedule(unittest.TestCase):
+    def _entries(self):
+        def offer(deadline, base=130000, bonus=None, equity=None,
+                  vesting=None):
+            return {"base": base, "currency": "CAD", "period": "annual",
+                    "base_annual": base, "bonus": bonus, "equity": equity,
+                    "vesting_years": vesting, "deadline": deadline,
+                    "recorded_at": "2026-11-08"}
+
+        def rounds(*specs):
+            return [{"date": date, "round": label, "time": time,
+                     "duration_minutes": minutes, **extra}
+                    for date, label, time, minutes, extra in specs]
+
+        return [
+            {"id": "APP-001", "company": "Northwind Analytics",
+             "title": "Data Analyst", "status": "screening",
+             "applied_at": "2026-11-01", "deadline": "2026-11-18",
+             "offers": [offer("2026-11-22")],
+             "interviews": rounds(
+                 ("2026-11-18", "Panel", "15:00", 30,
+                  {"interviewer": "Dana Kim", "mode": "video"}))},
+            {"id": "APP-002", "company": "Harbour Analytics",
+             "title": "Business Intelligence Analyst", "status": "interview",
+             "applied_at": "2026-11-01", "deadline": "2026-11-30",
+             "offers": [offer("2026-11-22", base=105000, bonus=5000)],
+             "interviews": rounds(
+                 ("2026-11-18", "Hiring manager", "14:30", 45,
+                  {"interviewer": "Priya Nair", "mode": "video"}),
+                 ("2026-11-07", "Recruiter screen", None, 30,
+                  {"mode": "phone"}))},
+            {"id": "APP-003", "company": "Vector Labs",
+             "title": "Machine Learning Engineer", "status": "rejected",
+             "applied_at": "2026-11-01", "deadline": "2026-11-18",
+             "offers": [offer("2026-11-22")],
+             "interviews": rounds(
+                 ("2026-11-18", "Final", "14:00", 60, {}))},
+            {"id": "APP-004", "company": "Solo Corp",
+             "title": "Analyst", "status": "applied",
+             "applied_at": "2026-11-01",
+             "interviews": rounds(
+                 ("2026-11-12", "Call", "10:00", 30, {}),
+                 ("2026-11-12", "Team chat", "10:45", 30, {}),
+                 ("2026-11-13", "Coffee chat", None, None, {}))},
+            {"id": "APP-005", "company": "Nested Co",
+             "title": "Analyst", "status": "applied",
+             "applied_at": "2026-11-01",
+             "interviews": rounds(
+                 ("2026-11-14", "Long panel", "09:00", 120, {}),
+                 ("2026-11-14", "Short call", "09:30", 30, {}))},
+            {"id": "APP-006", "company": "Gap Co",
+             "title": "Analyst", "status": "applied",
+             "applied_at": "2026-11-01",
+             "interviews": rounds(
+                 ("2026-11-15", "First", "09:00", 60, {}),
+                 ("2026-11-15", "Second", "10:30", 30, {}))},
+            {"id": "APP-007", "company": "BackToBack Co",
+             "title": "Analyst", "status": "applied",
+             "applied_at": "2026-11-01",
+             "interviews": rounds(
+                 ("2026-11-16", "A", "09:00", 60, {}),
+                 ("2026-11-16", "B", "10:00", 30, {}))},
+            {"id": "APP-008", "company": "Assumed Co",
+             "title": "Analyst", "status": "applied",
+             "applied_at": "2026-11-01",
+             "interviews": [{"date": "2026-11-17", "round": "Screen",
+                             "time": "13:00"}]},
+            {"id": "APP-009", "company": "Messy Co",
+             "title": "Analyst", "status": "applied",
+             "applied_at": "not-a-date", "deadline": "not-a-date",
+             "offers": [offer("not-a-date")],
+             "interviews": [{"date": "not-a-date", "round": "Call",
+                             "time": "25:00"}]},
+            "not a dict at all",
+        ]
+
+    def _schedule(self, **kwargs):
+        return collect_schedule(self._entries(), today=TODAY, **kwargs)
+
+    def _day(self, data, date):
+        for day in data["days"]:
+            if day["date"] == date:
+                return day
+        self.fail(f"no day {date} in schedule")
+
+    def test_counts_and_days(self):
+        data = self._schedule()
+        self.assertEqual(data["window"],
+                         {"from": "2026-11-08", "to": "2026-11-22",
+                          "days": 14})
+        self.assertEqual(data["counts"],
+                         {"days": 8, "items": 15, "interviews": 12,
+                          "offer_deadlines": 2, "posting_deadlines": 1,
+                          "conflicts": 2, "tight": 2, "busy": 2,
+                          "time_not_set": 1})
+        self.assertEqual([day["date"] for day in data["days"]],
+                         ["2026-11-12", "2026-11-13", "2026-11-14",
+                          "2026-11-15", "2026-11-16", "2026-11-17",
+                          "2026-11-18", "2026-11-22"])
+        self.assertEqual(self._day(data, "2026-11-18")["days_until"], 10)
+        self.assertEqual(self._day(data, "2026-11-22")["days_until"], 14)
+
+    def test_conflict_overlap_minutes(self):
+        data = self._schedule()
+        day = self._day(data, "2026-11-18")
+        conflicts = [f for f in day["flags"] if f["kind"] == "conflict"]
+        self.assertEqual(len(conflicts), 1)
+        self.assertEqual(conflicts[0]["severity"], "error")
+        self.assertEqual(conflicts[0]["minutes"], 15)
+        self.assertIn("15:00–15:15", conflicts[0]["detail"])
+        self.assertIn("Hiring manager", conflicts[0]["detail"])
+        self.assertIn("Panel", conflicts[0]["detail"])
+        # A round nested inside a longer one overlaps by the short
+        # round, not by the long round's end.
+        nested = self._day(data, "2026-11-14")
+        conflicts = [f for f in nested["flags"] if f["kind"] == "conflict"]
+        self.assertEqual(len(conflicts), 1)
+        self.assertEqual(conflicts[0]["minutes"], 30)
+        self.assertIn("09:30–10:00", conflicts[0]["detail"])
+
+    def test_tight_gap_boundaries(self):
+        data = self._schedule()
+        tight_12 = [f for f in self._day(data, "2026-11-12")["flags"]
+                    if f["kind"] == "tight"]
+        self.assertEqual(len(tight_12), 1)
+        self.assertEqual(tight_12[0]["severity"], "warn")
+        self.assertEqual(tight_12[0]["minutes"], 15)
+        # Exactly 30 minutes is a full buffer, not tight.
+        self.assertEqual(self._day(data, "2026-11-15")["flags"], [])
+        # Back to back with no gap at all is tight, not a conflict.
+        day_16 = self._day(data, "2026-11-16")
+        self.assertEqual([f["kind"] for f in day_16["flags"]], ["tight"])
+        self.assertEqual(day_16["flags"][0]["minutes"], 0)
+
+    def test_busy_day_rules(self):
+        data = self._schedule()
+        # Three items on one day is busy; two all-day deadlines too.
+        self.assertEqual([f["kind"] for f in
+                          self._day(data, "2026-11-18")["flags"]],
+                         ["conflict", "busy"])
+        self.assertEqual([f["kind"] for f in
+                          self._day(data, "2026-11-22")["flags"]],
+                         ["busy"])
+        # Two timed interviews with a gap is a full day, not a busy one.
+        self.assertEqual([f["kind"] for f in
+                          self._day(data, "2026-11-12")["flags"]],
+                         ["tight"])
+        # With only interviews in view, the 18th is two rounds, not busy.
+        interviews_only = self._schedule(kinds=["interview"])
+        self.assertEqual([f["kind"] for f in
+                          self._day(interviews_only, "2026-11-18")["flags"]],
+                         ["conflict"])
+
+    def test_time_not_set_flag(self):
+        data = self._schedule()
+        day = self._day(data, "2026-11-13")
+        self.assertEqual(len(day["items"]), 1)
+        self.assertTrue(day["items"][0]["all_day"])
+        self.assertIsNone(day["items"][0]["start"])
+        self.assertEqual([f["kind"] for f in day["flags"]],
+                         ["time-not-set"])
+        self.assertEqual(day["flags"][0]["severity"], "info")
+        self.assertIn("Coffee chat at Solo Corp has no usable start time",
+                      day["flags"][0]["detail"])
+
+    def test_terminal_applications_excluded(self):
+        data = self._schedule()
+        companies = {item["company"] for day in data["days"]
+                     for item in day["items"]}
+        self.assertNotIn("Vector Labs", companies)
+        self.assertEqual(data["counts"]["posting_deadlines"], 1)
+
+    def test_window_and_days_zero(self):
+        data = self._schedule(days=4)
+        self.assertEqual([day["date"] for day in data["days"]],
+                         ["2026-11-12"])
+        self.assertEqual(data["counts"]["tight"], 1)
+        data = self._schedule(days=0)
+        self.assertEqual(data["days"], [])
+        self.assertEqual(data["counts"]["items"], 0)
+        # The 22nd is exactly 14 days out: the window end is inclusive.
+        self.assertIn("2026-11-22",
+                      [day["date"] for day in self._schedule()["days"]])
+        self.assertNotIn("2026-11-22",
+                         [day["date"]
+                          for day in self._schedule(days=13)["days"]])
+
+    def test_kinds_filter(self):
+        data = self._schedule(kinds=["offer_deadline"])
+        self.assertEqual(data["counts"]["items"], 2)
+        self.assertEqual(data["counts"]["busy"], 1)
+        self.assertEqual(data["counts"]["conflicts"], 0)
+        data = self._schedule(kinds=["posting_deadline"])
+        self.assertEqual(data["counts"]["items"], 1)
+        self.assertEqual(len(data["flags"]), 0)
+
+    def test_bad_inputs(self):
+        with self.assertRaises(ScheduleError):
+            collect_schedule(self._entries(), today=TODAY,
+                             kinds=["not-a-kind"])
+        with self.assertRaises(ScheduleError):
+            collect_schedule(self._entries(), today=TODAY, days=-1)
+        with self.assertRaises(ScheduleError):
+            collect_schedule(self._entries(), today=TODAY, days="14")
+
+    def test_duration_assumed(self):
+        data = self._schedule()
+        item = self._day(data, "2026-11-17")["items"][0]
+        self.assertEqual((item["start"], item["end"]), ("13:00", "14:00"))
+        self.assertTrue(item["duration_assumed"])
+        # A recorded duration is used as recorded, not assumed.
+        item = self._day(data, "2026-11-12")["items"][0]
+        self.assertEqual((item["start"], item["end"]), ("10:00", "10:30"))
+        self.assertFalse(item["duration_assumed"])
+
+    def test_unparseable_dates_skipped_never_fatal(self):
+        data = self._schedule()
+        ids = {item["id"] for day in data["days"] for item in day["items"]}
+        self.assertNotIn("APP-009", ids)
+        # The recruiter screen dated before today is past, not upcoming.
+        self.assertNotIn("2026-11-07",
+                         [day["date"] for day in data["days"]])
+
+    def test_item_order_within_day(self):
+        data = self._schedule()
+        items = self._day(data, "2026-11-18")["items"]
+        # All-day items first, then timed rounds in start order.
+        self.assertEqual([(i["kind"], i["start"]) for i in items],
+                         [("posting_deadline", None),
+                          ("interview", "14:30"),
+                          ("interview", "15:00")])
+
+    def test_json_round_trip(self):
+        data = self._schedule()
+        parsed = json.loads(schedule_json(data))
+        self.assertEqual(parsed["counts"], data["counts"])
+        self.assertEqual(len(parsed["days"]), 8)
+
+    def test_render(self):
+        data = self._schedule()
+        out = render_schedule_markdown(data)
+        self.assertIn("Schedule — 2026-11-08 to 2026-11-22 (14 days): "
+                      "8 day(s) with something on, 15 item(s) "
+                      "(12 interview(s), 2 offer deadline(s), "
+                      "1 closing date(s)) — 2 clash(es), 2 tight gap(s), "
+                      "2 busy day(s), 1 round(s) with no start time", out)
+        self.assertIn("2026-11-18 (in 10d) — 3 item(s)", out)
+        self.assertIn("[error] conflict: Interviews overlap 15:00–15:15",
+                      out)
+        self.assertIn("Coffee chat at Solo Corp has no usable start time",
+                      out)
+        self.assertIn("14:30–15:15  Hiring manager — Business "
+                      "Intelligence Analyst at Harbour Analytics with "
+                      "Priya Nair (video) 14:30–15:15", out)
+
+    def test_render_empty(self):
+        out = render_schedule_markdown(
+            collect_schedule([], today=TODAY))
+        self.assertIn("Nothing scheduled in this window", out)
+
+
+class TestScheduleCLI(unittest.TestCase):
+    def _run(self, argv):
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            code = main(argv)
+        return code, buf.getvalue()
+
+    def _logged(self, tmp):
+        log = Path(tmp) / "log.jsonl"
+        add_application(log, "Northwind Analytics", "Data Analyst",
+                        deadline="2026-11-18", today="2026-11-01")
+        add_application(log, "Harbour Analytics",
+                        "Business Intelligence Analyst", today="2026-11-01")
+        set_status(log, "APP-001", "screening", today="2026-11-03")
+        record_offer(log, "APP-001",
+                     validate_offer({"base": 130000, "currency": "CAD",
+                                     "period": "annual", "bonus": 10000,
+                                     "equity": 20000, "vesting_years": 4,
+                                     "deadline": "2026-11-22"}),
+                     today="2026-11-08")
+        record_offer(log, "APP-002",
+                     validate_offer({"base": 105000, "currency": "CAD",
+                                     "period": "annual", "bonus": 5000,
+                                     "deadline": "2026-11-22"}),
+                     today="2026-11-08")
+        record_interview(log, "APP-001",
+                         validate_interview(
+                             {"date": "2026-11-18", "round": "Panel",
+                              "interviewer": "Dana Kim", "mode": "video",
+                              "duration_minutes": 30, "time": "15:00"}),
+                         today="2026-11-08")
+        record_interview(log, "APP-002",
+                         validate_interview(
+                             {"date": "2026-11-18",
+                              "round": "Hiring manager",
+                              "interviewer": "Priya Nair", "mode": "video",
+                              "duration_minutes": 45, "time": "14:30"}),
+                         today="2026-11-08")
+        return log
+
+    def test_schedule_cli(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            code, out = self._run(["schedule", "--log", str(log),
+                                   "--today", "2026-11-08"])
+            self.assertEqual(code, 0)
+            self.assertIn("Schedule — 2026-11-08 to 2026-11-22 (14 days): "
+                          "2 day(s) with something on, 5 item(s) "
+                          "(2 interview(s), 2 offer deadline(s), "
+                          "1 closing date(s)) — 1 clash(es), 2 busy day(s)",
+                          out)
+            self.assertIn("[error] conflict: Interviews overlap "
+                          "15:00–15:15", out)
+            self.assertIn("2026-11-18 (in 10d) — 3 item(s)", out)
+            # A clash is a report, not a failure: exit 0.
+            self.assertEqual(code, 0)
+
+    def test_schedule_cli_window_and_kinds(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            code, out = self._run(["schedule", "--log", str(log),
+                                   "--today", "2026-11-08", "--days", "3"])
+            self.assertEqual(code, 0)
+            self.assertIn("Nothing scheduled in this window", out)
+            code, out = self._run(["schedule", "--log", str(log),
+                                   "--today", "2026-11-08",
+                                   "--kind", "interview"])
+            self.assertEqual(code, 0)
+            self.assertIn("2 item(s) (2 interview(s), 0 offer deadline(s), "
+                          "0 closing date(s)) — 1 clash(es)", out)
+            self.assertNotIn("busy day(s)", out)
+
+    def test_schedule_cli_json_and_out(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            code, out = self._run(["schedule", "--log", str(log),
+                                   "--today", "2026-11-08", "--json"])
+            self.assertEqual(code, 0)
+            parsed = json.loads(out)
+            self.assertEqual(parsed["counts"]["conflicts"], 1)
+            self.assertEqual(parsed["counts"]["busy"], 2)
+            out_path = Path(tmp) / "schedule.md"
+            code, out = self._run(["schedule", "--log", str(log),
+                                   "--today", "2026-11-08",
+                                   "--out", str(out_path)])
+            self.assertEqual(code, 0)
+            self.assertIn(f"wrote {out_path}", out)
+            self.assertIn("1 clash(es)",
+                          out_path.read_text(encoding="utf-8"))
+
+    def test_schedule_cli_exit_codes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            code, _out = self._run(["schedule", "--log", str(log),
+                                    "--today", "2026-11-08",
+                                    "--kind", "not-a-kind"])
+            self.assertEqual(code, 1)
+            code, _out = self._run(["schedule", "--log", str(log),
+                                    "--today", "2026-11-08",
+                                    "--days", "-1"])
+            self.assertEqual(code, 1)
+            code, _out = self._run(["schedule", "--log", str(log),
+                                    "--today", "not-a-date"])
+            self.assertEqual(code, 1)
+            # A missing log is an empty log by design, so it schedules
+            # nothing; a corrupt log is the load error.
+            code, out = self._run(["schedule", "--log",
+                                   str(Path(tmp) / "missing.jsonl")])
+            self.assertEqual(code, 0)
+            self.assertIn("Nothing scheduled in this window", out)
+            corrupt = Path(tmp) / "corrupt.jsonl"
+            corrupt.write_text("not json\n", encoding="utf-8")
+            code, _out = self._run(["schedule", "--log", str(corrupt)])
+            self.assertEqual(code, 2)
+
+
+class TestNegotiate(unittest.TestCase):
+    def _entries(self):
+        def offer(deadline, base=130000, bonus=None, equity=None,
+                  vesting=None, pto=None, mode=None):
+            return {"base": base, "currency": "CAD", "period": "annual",
+                    "base_annual": base, "bonus": bonus, "equity": equity,
+                    "vesting_years": vesting, "pto_days": pto,
+                    "work_mode": mode, "deadline": deadline,
+                    "recorded_at": "2026-11-08"}
+
+        return [
+            {"id": "APP-001", "company": "Northwind Analytics",
+             "title": "Data Analyst", "status": "screening",
+             "applied_at": "2026-11-01", "match_score": 0.625,
+             "required_matched": ["SQL", "Power BI", "Python",
+                                  "Stakeholder Management", "Tableau"],
+             "required_missing": ["Communication"],
+             "preferred_matched": [],
+             "preferred_missing": ["dbt", "Snowflake", "A/B Testing"],
+             "offers": [offer("2026-11-22", bonus=10000, equity=20000,
+                              vesting=4, pto=20, mode="remote")]},
+            {"id": "APP-002", "company": "Harbour Analytics",
+             "title": "Business Intelligence Analyst", "status": "interview",
+             "applied_at": "2026-11-01", "match_score": 0.562,
+             "required_matched": ["SQL", "Power BI", "Python"],
+             "required_missing": ["Communication"],
+             "preferred_matched": [],
+             "preferred_missing": ["Looker"],
+             "offers": [offer("2026-11-22", base=105000, bonus=5000,
+                              mode="hybrid")]},
+            {"id": "APP-003", "company": "Vector Labs",
+             "title": "Machine Learning Engineer", "status": "rejected",
+             "applied_at": "2026-11-01", "match_score": 0.150},
+            {"id": "APP-004", "company": "Solo Corp",
+             "title": "Analyst", "status": "applied",
+             "applied_at": "2026-11-01"},
+            {"id": "APP-005", "company": "Old Co",
+             "title": "Analyst", "status": "screening",
+             "applied_at": "2026-11-01",
+             "offers": [offer("2026-11-22", base=120000)]},
+            {"id": "APP-006", "company": "Faraway Inc",
+             "title": "Analyst", "status": "offer",
+             "applied_at": "2026-11-01",
+             "offers": [{"base": 130000, "currency": "USD",
+                         "period": "annual", "base_annual": 130000,
+                         "bonus": None, "equity": None,
+                         "vesting_years": None, "pto_days": None,
+                         "work_mode": None, "deadline": "2026-11-22",
+                         "recorded_at": "2026-11-08"}]},
+            "not a dict at all",
+        ]
+
+    def _brief(self, app_id="APP-001", **kwargs):
+        entries = self._entries()
+        entry = next(e for e in entries
+                     if isinstance(e, dict) and e["id"] == app_id)
+        return build_negotiation(entry, entries, profile=example_profile(),
+                                 today=TODAY, **kwargs)
+
+    def test_offer_figures_first_year_and_deadline(self):
+        data = self._brief()
+        self.assertEqual(data["id"], "APP-001")
+        self.assertEqual(data["total_cash"], 140000)
+        self.assertEqual(data["first_year_total"], 145000)
+        self.assertTrue(data["equity_counted"])
+        self.assertEqual(data["days_to_deadline"], 14)
+        self.assertFalse(data["deadline_passed"])
+
+    def test_verdict_above_target_and_excess(self):
+        data = self._brief()
+        self.assertEqual(data["verdict"], "above target")
+        self.assertEqual(data["excess_over_target_max"], 10000)
+        self.assertIsNone(data["gap_to_target_min"])
+
+    def test_below_target_gap(self):
+        profile = example_profile()
+        profile["preferences"]["salary_min"] = 150000
+        profile["preferences"]["salary_max"] = 160000
+        entries = self._entries()
+        entry = entries[0]
+        data = build_negotiation(entry, entries, profile=profile,
+                                 today=TODAY)
+        self.assertEqual(data["verdict"], "below target")
+        self.assertEqual(data["gap_to_target_min"], 20000)
+        self.assertIsNone(data["excess_over_target_max"])
+
+    def test_rank_and_gap_to_best(self):
+        data = self._brief()
+        self.assertEqual(data["rank"], 1)
+        self.assertEqual(data["n_comparable"], 3)
+        self.assertEqual(data["best"]["id"], "APP-001")
+        self.assertEqual(data["gap_to_best_first_year"], 0)
+        second = self._brief(app_id="APP-002")
+        self.assertEqual(second["rank"], 3)
+        self.assertEqual(second["gap_to_best_first_year"], 35000)
+        self.assertEqual(second["verdict"], "meets target")
+        self.assertEqual(second["best"]["id"], "APP-001")
+
+    def test_currency_mismatch_is_not_compared(self):
+        data = self._brief(app_id="APP-006")
+        self.assertEqual(data["verdict"], "not compared")
+        self.assertIn("USD", data["verdict_reason"])
+        self.assertIsNone(data["rank"])
+        self.assertIsNone(data["gap_to_best_first_year"])
+        self.assertFalse(data["comparable"])
+
+    def test_no_offer_raises(self):
+        entries = self._entries()
+        entry = next(e for e in entries
+                     if isinstance(e, dict) and e["id"] == "APP-004")
+        with self.assertRaises(NegotiationError) as ctx:
+            build_negotiation(entry, entries, profile=example_profile(),
+                              today=TODAY)
+        self.assertIn("no offer recorded", str(ctx.exception))
+
+    def test_terminal_application_refused(self):
+        entries = self._entries()
+        entry = next(e for e in entries
+                     if isinstance(e, dict) and e["id"] == "APP-003")
+        with self.assertRaises(NegotiationError) as ctx:
+            build_negotiation(entry, entries, profile=example_profile(),
+                              today=TODAY)
+        self.assertIn("rejected", str(ctx.exception))
+
+    def test_leverage_lists_skills_with_bullets_and_gaps(self):
+        data = self._brief()
+        leverage = data["leverage"]
+        self.assertIsNone(data["leverage_note"])
+        self.assertEqual(leverage["match_score"], 0.625)
+        self.assertEqual(leverage["match_verdict"], "strong")
+        self.assertEqual(leverage["n_lead_skills"], 5)
+        lead = leverage["skills_to_lead_with"]
+        self.assertEqual(lead[0]["skill"], "SQL")
+        self.assertEqual(lead[0]["years"], 4)
+        self.assertEqual(lead[0]["level"], "advanced")
+        self.assertEqual(len(lead[0]["bullets"]), 1)
+        self.assertIn("orders warehouse", lead[0]["bullets"][0]["bullet"])
+        stakeholder = next(r for r in lead
+                           if r["skill"] == "Stakeholder Management")
+        self.assertEqual(stakeholder["bullets"], [])
+        self.assertEqual(leverage["gaps"],
+                         ["Communication", "dbt", "Snowflake", "A/B Testing"])
+
+    def test_match_verdict_unknown_without_score(self):
+        entries = [{
+            "id": "APP-001", "company": "Northwind Analytics",
+            "title": "Data Analyst", "status": "screening",
+            "applied_at": "2026-11-01", "match_score": None,
+            "required_matched": ["SQL"], "required_missing": [],
+            "preferred_matched": [], "preferred_missing": [],
+            "offers": [{"base": 130000, "currency": "CAD",
+                        "period": "annual", "base_annual": 130000,
+                        "bonus": None, "equity": None,
+                        "vesting_years": None, "pto_days": None,
+                        "work_mode": None, "deadline": None,
+                        "recorded_at": "2026-11-08"}]},
+        ]
+        data = build_negotiation(entries[0], entries,
+                                 profile=example_profile(), today=TODAY)
+        self.assertEqual(data["leverage"]["match_verdict"], "unknown")
+
+    def test_no_skills_recorded_leverage_is_none(self):
+        data = self._brief(app_id="APP-005")
+        self.assertIsNone(data["leverage"])
+        self.assertIn("no skills", data["leverage_note"])
+
+    def test_walk_away_lists_interview_and_offer_only(self):
+        data = self._brief()
+        walk = data["walk_away"]
+        # Offer stage first, then interview; screening, applied, and
+        # rejected applications are not leverage yet.
+        self.assertEqual([row["id"] for row in walk],
+                         ["APP-006", "APP-002"])
+        self.assertEqual(walk[0]["status"], "offer")
+        self.assertEqual(walk[0]["first_year_total"], 130000)
+        self.assertEqual(walk[0]["currency"], "USD")
+        self.assertEqual(walk[1]["status"], "interview")
+        self.assertTrue(walk[1]["has_offer"])
+        self.assertEqual(walk[1]["first_year_total"], 110000)
+
+    def test_posting_range_found(self):
+        data = self._brief(postings_dir=str(EXAMPLES_DIR))
+        posting = data["posting"]
+        self.assertTrue(posting["found"])
+        self.assertEqual(posting["file"], "job.example.md")
+        self.assertEqual(posting["salary"]["min"], 95000)
+        self.assertEqual(posting["salary"]["max"], 120000)
+        self.assertEqual(posting["salary"]["currency"], "CAD")
+        self.assertEqual(posting["verdict"], "meets target")
+
+    def test_posting_range_not_found(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            data = self._brief(postings_dir=tmp)
+            self.assertFalse(data["posting"]["found"])
+
+    def test_no_postings_dir_posting_is_none(self):
+        data = self._brief()
+        self.assertIsNone(data["posting"])
+
+    def test_bad_postings_dir_raises(self):
+        with self.assertRaises(ValueError):
+            self._brief(postings_dir="/no/such/dir")
+
+    def test_deadline_passed(self):
+        data = build_negotiation(
+            self._entries()[0], self._entries(),
+            profile=example_profile(),
+            today=datetime.date(2026, 11, 25))
+        self.assertEqual(data["days_to_deadline"], -3)
+        self.assertTrue(data["deadline_passed"])
+
+    def test_json_round_trip(self):
+        data = self._brief(postings_dir=str(EXAMPLES_DIR))
+        parsed = json.loads(negotiate_json(data))
+        self.assertEqual(parsed["id"], "APP-001")
+        self.assertEqual(parsed["first_year_total"], 145000)
+        self.assertEqual(parsed["rank"], 1)
+        self.assertEqual(parsed["posting"]["file"], "job.example.md")
+
+    def test_render(self):
+        data = self._brief(postings_dir=str(EXAMPLES_DIR))
+        text = render_negotiation_markdown(data)
+        self.assertIn("Negotiation brief — Data Analyst at Northwind "
+                      "Analytics (APP-001)", text)
+        self.assertIn("first year 145,000", text)
+        self.assertIn("Target: CAD 95,000–120,000 — above target", text)
+        self.assertIn("the base is 10,000 over the target maximum", text)
+        self.assertIn("Rank: 1 of 3 comparable offers — this is the best "
+                      "comparable offer.", text)
+        self.assertIn("Posting range: CAD 95,000–120,000 (job.example.md) "
+                      "— meets target", text)
+        self.assertIn("Decision deadline: in 14d.", text)
+        self.assertIn("- SQL (4 yrs, advanced) [required]", text)
+        self.assertIn("orders warehouse", text)
+        self.assertIn("Do not claim", text)
+        self.assertIn("- Communication", text)
+        self.assertIn("Other live options", text)
+        self.assertIn("Harbour Analytics", text)
+        self.assertIn("does not suggest a number", text)
+
+    def test_render_without_postings_dir(self):
+        data = self._brief()
+        text = render_negotiation_markdown(data)
+        self.assertIn("no postings folder given", text)
+
+    def test_render_no_walk_away(self):
+        entries = [self._entries()[0]]
+        data = build_negotiation(entries[0], entries,
+                                 profile=example_profile(), today=TODAY)
+        text = render_negotiation_markdown(data)
+        self.assertIn("No other live applications at interview or offer "
+                      "stage.", text)
+
+
+class TestNegotiateCLI(unittest.TestCase):
+    def _run(self, argv):
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            code = main(argv)
+        return code, buf.getvalue()
+
+    def _logged(self, tmp):
+        log = Path(tmp) / "log.jsonl"
+        add_application(
+            log, "Northwind Analytics", "Data Analyst",
+            match_score=0.625,
+            required_matched=["SQL", "Power BI", "Python",
+                              "Stakeholder Management", "Tableau"],
+            required_missing=["Communication"],
+            preferred_matched=[],
+            preferred_missing=["dbt", "Snowflake", "A/B Testing"],
+            deadline="2026-11-18", today="2026-11-01")
+        add_application(
+            log, "Harbour Analytics", "Business Intelligence Analyst",
+            match_score=0.562,
+            required_matched=["SQL", "Power BI", "Python"],
+            required_missing=["Communication"],
+            preferred_matched=[], preferred_missing=["Looker"],
+            today="2026-11-01")
+        set_status(log, "APP-001", "screening", today="2026-11-03")
+        set_status(log, "APP-002", "interview", today="2026-11-05")
+        record_offer(log, "APP-001",
+                     validate_offer({"base": 130000, "currency": "CAD",
+                                     "period": "annual", "bonus": 10000,
+                                     "equity": 20000, "vesting_years": 4,
+                                     "pto_days": 20, "mode": "remote",
+                                     "deadline": "2026-11-22"}),
+                     today="2026-11-08")
+        record_offer(log, "APP-002",
+                     validate_offer({"base": 105000, "currency": "CAD",
+                                     "period": "annual", "bonus": 5000,
+                                     "mode": "hybrid",
+                                     "deadline": "2026-11-22"}),
+                     today="2026-11-08")
+        return log
+
+    def _args(self, log, extra=()):
+        return ["negotiate", "--id", "APP-001", "--profile",
+                str(EXAMPLE_PROFILE), "--postings-dir", str(EXAMPLES_DIR),
+                "--log", str(log), "--today", "2026-11-08", *extra]
+
+    def test_negotiate_cli(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            before = log.read_bytes()
+            code, out = self._run(self._args(log))
+            self.assertEqual(code, 0)
+            self.assertIn("Negotiation brief — Data Analyst at Northwind "
+                          "Analytics (APP-001)", out)
+            self.assertIn("first year 145,000", out)
+            self.assertIn("above target", out)
+            self.assertIn("Rank: 1 of 2 comparable offers", out)
+            self.assertIn("Posting range: CAD 95,000–120,000 "
+                          "(job.example.md) — meets target", out)
+            self.assertIn("Decision deadline: in 14d.", out)
+            self.assertIn("- SQL (4 yrs, advanced) [required]", out)
+            self.assertIn("Harbour Analytics", out)
+            # Read-only: the log is untouched.
+            self.assertEqual(log.read_bytes(), before)
+
+    def test_negotiate_cli_json_and_out(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            code, out = self._run(self._args(log, ["--json"]))
+            self.assertEqual(code, 0)
+            parsed = json.loads(out)
+            self.assertEqual(parsed["rank"], 1)
+            self.assertEqual(parsed["first_year_total"], 145000)
+            self.assertEqual(parsed["walk_away"][0]["id"], "APP-002")
+            out_path = Path(tmp) / "brief.md"
+            code, out = self._run(self._args(log, ["--out", str(out_path)]))
+            self.assertEqual(code, 0)
+            self.assertIn(f"wrote {out_path}", out)
+            self.assertIn("Negotiation brief",
+                          out_path.read_text(encoding="utf-8"))
+
+    def test_negotiate_cli_exit_codes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            code, _out = self._run(["negotiate", "--id", "APP-999",
+                                    "--profile", str(EXAMPLE_PROFILE),
+                                    "--log", str(log),
+                                    "--today", "2026-11-08"])
+            self.assertEqual(code, 1)
+            add_application(log, "Solo Corp", "Analyst", today="2026-11-01")
+            code, _out = self._run(["negotiate", "--id", "APP-003",
+                                    "--profile", str(EXAMPLE_PROFILE),
+                                    "--log", str(log),
+                                    "--today", "2026-11-08"])
+            self.assertEqual(code, 1)  # no offer recorded
+            set_status(log, "APP-002", "rejected", today="2026-11-08")
+            code, _out = self._run(["negotiate", "--id", "APP-002",
+                                    "--profile", str(EXAMPLE_PROFILE),
+                                    "--log", str(log),
+                                    "--today", "2026-11-08"])
+            self.assertEqual(code, 1)  # terminal: offer no longer live
+            code, _out = self._run(self._args(log, ["--today", "not-a-date"]))
+            self.assertEqual(code, 1)
+            code, _out = self._run(["negotiate", "--id", "APP-001",
+                                    "--profile", str(Path(tmp) / "nope.json"),
+                                    "--log", str(log),
+                                    "--today", "2026-11-08"])
+            self.assertEqual(code, 2)
+            code, _out = self._run(["negotiate", "--id", "APP-001",
+                                    "--profile", str(EXAMPLE_PROFILE),
+                                    "--postings-dir", "/no/such/dir",
+                                    "--log", str(log),
+                                    "--today", "2026-11-08"])
+            self.assertEqual(code, 2)
+            corrupt = Path(tmp) / "corrupt.jsonl"
+            corrupt.write_text("not json\n", encoding="utf-8")
+            code, _out = self._run(["negotiate", "--id", "APP-001",
+                                    "--profile", str(EXAMPLE_PROFILE),
+                                    "--log", str(corrupt),
+                                    "--today", "2026-11-08"])
+            self.assertEqual(code, 2)
+
+
+class TestOnboard(unittest.TestCase):
+    def _entries(self):
+        return [
+            {"id": "APP-001", "company": "Northwind Analytics",
+             "title": "Data Analyst", "status": "hired",
+             "applied_at": "2026-11-01",
+             "onboarding": [
+                 {"number": 1, "task": "Complete I-9 paperwork",
+                  "category": "paperwork", "due": "2026-11-10",
+                  "added_at": "2026-11-08", "done": False,
+                  "done_at": None},
+                 {"number": 2, "task": "Pick up laptop",
+                  "category": "equipment", "due": "2026-11-06",
+                  "added_at": "2026-11-08", "done": False,
+                  "done_at": None},
+                 {"number": 3, "task": "Meet your onboarding buddy",
+                  "category": "people", "due": None,
+                  "added_at": "2026-11-08", "done": False,
+                  "done_at": None},
+                 {"number": 4, "task": "Read the data handbook",
+                  "category": "learning", "due": "2026-11-12",
+                  "added_at": "2026-11-08", "done": True,
+                  "done_at": "2026-11-08"}]},
+            # Live applications have no onboarding to show, even when a
+            # hand-edited log carries a task on one.
+            {"id": "APP-002", "company": "Harbour Analytics",
+             "title": "Business Intelligence Analyst", "status": "screening",
+             "applied_at": "2026-11-01",
+             "onboarding": [{"number": 1, "task": "Should not appear",
+                             "category": "other", "due": "2026-11-09",
+                             "added_at": "2026-11-08", "done": False,
+                             "done_at": None}]},
+            # Hired with nothing recorded yet.
+            {"id": "APP-003", "company": "Vector Labs",
+             "title": "Machine Learning Engineer", "status": "hired",
+             "applied_at": "2026-11-01"},
+            "not a dict at all",
+        ]
+
+    def test_validate_task(self):
+        cleaned = validate_onboard_task(
+            {"task": "Complete I-9 paperwork", "category": "paperwork",
+             "due": "2026-11-10"}, today="2026-11-08")
+        self.assertEqual(cleaned, {"task": "Complete I-9 paperwork",
+                                   "category": "paperwork",
+                                   "due": "2026-11-10"})
+
+    def test_validate_defaults_category_other_and_no_due(self):
+        cleaned = validate_onboard_task({"task": "Say hello to the team"},
+                                        today="2026-11-08")
+        self.assertEqual(cleaned["category"], "other")
+        self.assertIsNone(cleaned["due"])
+
+    def test_validate_category_normalised(self):
+        cleaned = validate_onboard_task(
+            {"task": "Meet the team", "category": " People "},
+            today="2026-11-08")
+        self.assertEqual(cleaned["category"], "people")
+
+    def test_validate_reports_every_error_at_once(self):
+        with self.assertRaises(OnboardError) as ctx:
+            validate_onboard_task(
+                {"task": "  ", "category": "admin", "due": "Nov 10"},
+                today="2026-11-08")
+        message = str(ctx.exception)
+        self.assertIn("task is required", message)
+        self.assertIn("category must be one of", message)
+        self.assertIn("due must be YYYY-MM-DD", message)
+
+    def test_validate_past_due_is_allowed(self):
+        # A task can already be late when you write it down.
+        cleaned = validate_onboard_task(
+            {"task": "Late paperwork", "due": "2026-11-01"},
+            today="2026-11-08")
+        self.assertEqual(cleaned["due"], "2026-11-01")
+
+    def test_validate_blank_category_and_due_are_errors(self):
+        with self.assertRaises(OnboardError) as ctx:
+            validate_onboard_task({"task": "Do it", "category": "  ",
+                                   "due": "  "}, today="2026-11-08")
+        self.assertIn("category cannot be blank", str(ctx.exception))
+        self.assertIn("due cannot be blank", str(ctx.exception))
+
+    def test_collect_order_pending_first_done_last(self):
+        data = collect_onboard(self._entries(), today=TODAY)
+        self.assertEqual([row["number"] for row in data["tasks"]],
+                         [2, 1, 3, 4])
+        self.assertEqual([row["state"] for row in data["tasks"]],
+                         ["overdue", "soon", "no-date", "done"])
+        self.assertEqual(data["tasks"][0]["days_left"], -2)
+        self.assertEqual(data["tasks"][1]["days_left"], 2)
+        self.assertIsNone(data["tasks"][2]["days_left"])
+        self.assertEqual(data["tasks"][3]["done_at"], "2026-11-08")
+
+    def test_collect_summary(self):
+        data = collect_onboard(self._entries(), today=TODAY)
+        self.assertEqual(data["summary"], {
+            "total": 4, "done": 1, "pending": 3, "overdue": 1,
+            "due_soon": 1, "hired_applications": 2, "without_tasks": 1,
+            "by_category": {"equipment": 1, "learning": 1,
+                            "paperwork": 1, "people": 1}})
+
+    def test_collect_live_applications_excluded(self):
+        data = collect_onboard(self._entries(), today=TODAY)
+        self.assertTrue(all(row["id"] != "APP-002"
+                            for row in data["tasks"]))
+        self.assertNotIn("Should not appear",
+                         " ".join(row["task"] for row in data["tasks"]))
+
+    def test_collect_app_id_filter(self):
+        data = collect_onboard(self._entries(), today=TODAY,
+                               app_id="APP-001")
+        self.assertEqual(len(data["tasks"]), 4)
+        # The summary still counts the whole log, not the filter.
+        self.assertEqual(data["summary"]["hired_applications"], 2)
+        data = collect_onboard(self._entries(), today=TODAY,
+                               app_id="APP-003")
+        self.assertEqual(data["tasks"], [])
+        self.assertEqual(data["summary"]["without_tasks"], 1)
+
+    def test_collect_unparseable_due_kept_with_no_state(self):
+        entries = self._entries()
+        entries[0]["onboarding"].append(
+            {"number": 5, "task": "Mystery task", "category": "other",
+             "due": "not-a-date", "added_at": "2026-11-08",
+             "done": False, "done_at": None})
+        data = collect_onboard(entries, today=TODAY)
+        row = next(r for r in data["tasks"] if r["number"] == 5)
+        self.assertEqual(row["due"], "not-a-date")
+        self.assertIsNone(row["days_left"])
+        self.assertEqual(row["state"], "no-date")
+
+    def test_collect_non_dict_tasks_skipped(self):
+        entries = self._entries()
+        entries[0]["onboarding"].append("not a task")
+        entries[0]["onboarding"].append({"task": "   "})
+        data = collect_onboard(entries, today=TODAY)
+        self.assertEqual(data["summary"]["total"], 4)
+
+    def test_json_round_trip(self):
+        data = collect_onboard(self._entries(), today=TODAY)
+        parsed = json.loads(onboard_json(data))
+        self.assertEqual(parsed["summary"]["total"], 4)
+        self.assertEqual(parsed["tasks"][0]["number"], 2)
+
+    def test_render(self):
+        data = collect_onboard(self._entries(), today=TODAY)
+        text = render_onboard_markdown(data)
+        self.assertIn("Onboarding — 4 tasks (1 done, 3 pending, "
+                      "1 overdue) across 2 hired applications", text)
+        self.assertIn("1 equipment, 1 learning, 1 paperwork, 1 people",
+                      text)
+        self.assertIn("1 hired application with no onboarding tasks "
+                      "recorded yet", text)
+        self.assertIn("Pick up laptop [equipment] — due 2026-11-06, "
+                      "overdue by 2d", text)
+        self.assertIn("Complete I-9 paperwork [paperwork] — due "
+                      "2026-11-10, in 2d", text)
+        self.assertIn("Meet your onboarding buddy [people] — no due "
+                      "date", text)
+        self.assertIn("Done:", text)
+        self.assertIn("Read the data handbook [learning] — done "
+                      "2026-11-08 (was due 2026-11-12)", text)
+
+    def test_render_empty(self):
+        data = collect_onboard([], today=TODAY)
+        text = render_onboard_markdown(data)
+        self.assertIn("Onboarding — 0 tasks (0 done, 0 pending) across "
+                      "0 hired applications", text)
+        self.assertIn("No onboarding tasks recorded yet", text)
+
+
+class TestOnboardTracker(unittest.TestCase):
+    def _logged(self, tmp):
+        log = Path(tmp) / "log.jsonl"
+        add_application(log, "Northwind Analytics", "Data Analyst",
+                        today="2026-11-01")
+        add_application(log, "Harbour Analytics",
+                        "Business Intelligence Analyst", today="2026-11-01")
+        set_status(log, "APP-001", "screening", today="2026-11-03")
+        set_status(log, "APP-001", "interview", today="2026-11-05")
+        set_status(log, "APP-001", "offer", today="2026-11-06")
+        set_status(log, "APP-001", "hired", today="2026-11-08")
+        return log
+
+    def _task(self, text, category="other", due=None):
+        return validate_onboard_task(
+            {"task": text, "category": category, "due": due},
+            today="2026-11-08")
+
+    def test_record_assigns_numbers_and_history(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            record_onboard_task(
+                log, "APP-001",
+                self._task("Complete I-9 paperwork", "paperwork",
+                           "2026-11-10"), today="2026-11-08")
+            entry = record_onboard_task(
+                log, "APP-001", self._task("Pick up laptop", "equipment"),
+                today="2026-11-08")
+            tasks = entry["onboarding"]
+            self.assertEqual([t["number"] for t in tasks], [1, 2])
+            self.assertEqual(tasks[0]["task"], "Complete I-9 paperwork")
+            self.assertEqual(tasks[0]["category"], "paperwork")
+            self.assertEqual(tasks[0]["due"], "2026-11-10")
+            self.assertEqual(tasks[0]["added_at"], "2026-11-08")
+            self.assertFalse(tasks[0]["done"])
+            self.assertIsNone(tasks[0]["done_at"])
+            events = [e for e in entry["history"]
+                      if e.get("kind") == "onboarding"]
+            self.assertEqual(len(events), 2)
+            self.assertEqual(events[0]["task"], "Complete I-9 paperwork")
+            self.assertEqual(events[0]["number"], 1)
+            self.assertFalse(events[0]["done"])
+            self.assertEqual(entry["status"], "hired")
+
+    def test_record_refuses_non_hired(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            before = log.read_bytes()
+            with self.assertRaises(TrackerError) as ctx:
+                record_onboard_task(
+                    log, "APP-002", self._task("Too early"),
+                    today="2026-11-08")
+            self.assertIn("not hired", str(ctx.exception))
+            self.assertIn("status --id APP-002 --to hired",
+                          str(ctx.exception))
+            self.assertEqual(log.read_bytes(), before)
+
+    def test_record_unknown_id(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            with self.assertRaises(TrackerError):
+                record_onboard_task(log, "APP-999", self._task("Nope"),
+                                    today="2026-11-08")
+
+    def test_complete_marks_done_and_records_event(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            record_onboard_task(
+                log, "APP-001",
+                self._task("Complete I-9 paperwork", "paperwork",
+                           "2026-11-10"), today="2026-11-08")
+            record_onboard_task(
+                log, "APP-001", self._task("Pick up laptop", "equipment"),
+                today="2026-11-08")
+            entry = complete_onboard_task(log, "APP-001", 1,
+                                          today="2026-11-09")
+            self.assertTrue(entry["onboarding"][0]["done"])
+            self.assertEqual(entry["onboarding"][0]["done_at"],
+                             "2026-11-09")
+            self.assertFalse(entry["onboarding"][1]["done"])
+            events = [e for e in entry["history"]
+                      if e.get("kind") == "onboarding"]
+            self.assertEqual(len(events), 3)
+            self.assertTrue(events[2]["done"])
+            self.assertEqual(events[2]["number"], 1)
+            with self.assertRaises(TrackerError) as ctx:
+                complete_onboard_task(log, "APP-001", 1,
+                                      today="2026-11-09")
+            self.assertIn("already done", str(ctx.exception))
+            with self.assertRaises(TrackerError) as ctx:
+                complete_onboard_task(log, "APP-001", 9,
+                                      today="2026-11-09")
+            self.assertIn("no onboarding task 9", str(ctx.exception))
+
+    def test_complete_refuses_non_hired(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            with self.assertRaises(TrackerError) as ctx:
+                complete_onboard_task(log, "APP-002", 1,
+                                      today="2026-11-09")
+            self.assertIn("not hired", str(ctx.exception))
+
+    def test_numbers_never_reused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            record_onboard_task(log, "APP-001", self._task("One"),
+                                today="2026-11-08")
+            record_onboard_task(log, "APP-001", self._task("Two"),
+                                today="2026-11-08")
+            complete_onboard_task(log, "APP-001", 1, today="2026-11-09")
+            entry = record_onboard_task(log, "APP-001",
+                                        self._task("Three"),
+                                        today="2026-11-09")
+            self.assertEqual(entry["onboarding"][2]["number"], 3)
+
+    def test_record_and_complete_do_not_split_stage_stay(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = Path(tmp) / "log.jsonl"
+            add_application(log, "Northwind Analytics", "Data Analyst",
+                            today="2026-11-01")
+            set_status(log, "APP-001", "screening", today="2026-11-02")
+            set_status(log, "APP-001", "interview", today="2026-11-06")
+            set_status(log, "APP-001", "offer", today="2026-11-07")
+            set_status(log, "APP-001", "hired", today="2026-11-08")
+            before = days_in_stage(read_log(log))
+            self.assertEqual(before["screening"]["median_days"], 4.0)
+            record_onboard_task(
+                log, "APP-001",
+                self._task("Complete I-9 paperwork", "paperwork",
+                           "2026-11-10"), today="2026-11-08")
+            complete_onboard_task(log, "APP-001", 1, today="2026-11-09")
+            after = days_in_stage(read_log(log))
+            self.assertEqual(after, before)
+
+
+class TestOnboardCLI(unittest.TestCase):
+    def _run(self, argv):
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            code = main(argv)
+        return code, buf.getvalue()
+
+    def _logged(self, tmp):
+        log = Path(tmp) / "log.jsonl"
+        add_application(log, "Northwind Analytics", "Data Analyst",
+                        today="2026-11-01")
+        add_application(log, "Harbour Analytics",
+                        "Business Intelligence Analyst", today="2026-11-01")
+        set_status(log, "APP-001", "screening", today="2026-11-03")
+        set_status(log, "APP-001", "interview", today="2026-11-05")
+        set_status(log, "APP-001", "offer", today="2026-11-06")
+        set_status(log, "APP-001", "hired", today="2026-11-08")
+        return log
+
+    def _args(self, log, extra=()):
+        return ["onboard", "--log", str(log), "--today", "2026-11-08",
+                *extra]
+
+    def test_record_and_list(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            code, out = self._run(self._args(log, [
+                "--record", "--id", "APP-001",
+                "--task", "Complete I-9 paperwork",
+                "--category", "paperwork", "--due", "2026-11-10"]))
+            self.assertEqual(code, 0)
+            self.assertIn("recorded onboarding task #1", out)
+            self.assertIn("Complete I-9 paperwork [paperwork]", out)
+            code, out = self._run(self._args(log))
+            self.assertEqual(code, 0)
+            self.assertIn("Onboarding — 1 task (0 done, 1 pending)", out)
+            self.assertIn("Complete I-9 paperwork [paperwork] — due "
+                          "2026-11-10, in 2d", out)
+
+    def test_done(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            self._run(self._args(log, [
+                "--record", "--id", "APP-001",
+                "--task", "Complete I-9 paperwork",
+                "--category", "paperwork", "--due", "2026-11-10"]))
+            self._run(self._args(log, [
+                "--record", "--id", "APP-001",
+                "--task", "Pick up laptop", "--category", "equipment"]))
+            code, out = self._run(self._args(
+                log, ["--done", "--id", "APP-001", "--number", "1",
+                      "--today", "2026-11-09"]))
+            self.assertEqual(code, 0)
+            self.assertIn("completed onboarding task #1", out)
+            code, out = self._run(self._args(log, ["--today", "2026-11-09"]))
+            self.assertIn("1 done, 1 pending", out)
+            self.assertIn("Done:", out)
+            self.assertIn("done 2026-11-09", out)
+
+    def test_list_json_and_out(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            self._run(self._args(log, [
+                "--record", "--id", "APP-001",
+                "--task", "Complete I-9 paperwork",
+                "--category", "paperwork", "--due", "2026-11-10"]))
+            code, out = self._run(self._args(log, ["--json"]))
+            self.assertEqual(code, 0)
+            parsed = json.loads(out)
+            self.assertEqual(parsed["summary"]["total"], 1)
+            self.assertEqual(parsed["tasks"][0]["task"],
+                             "Complete I-9 paperwork")
+            out_path = Path(tmp) / "onboard.md"
+            code, out = self._run(self._args(log, ["--out", str(out_path)]))
+            self.assertEqual(code, 0)
+            self.assertIn("Complete I-9 paperwork",
+                          out_path.read_text(encoding="utf-8"))
+
+    def test_list_id_filter_and_empty_state(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            code, out = self._run(self._args(log, ["--id", "APP-002"]))
+            self.assertEqual(code, 0)
+            self.assertIn("0 tasks", out)
+            fresh = Path(tmp) / "fresh.jsonl"
+            code, out = self._run(["onboard", "--log", str(fresh),
+                                   "--today", "2026-11-08"])
+            self.assertEqual(code, 0)
+            self.assertIn("No onboarding tasks recorded yet", out)
+
+    def test_exit_codes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            code, _out = self._run(self._args(log, [
+                "--record", "--task", "No id"]))
+            self.assertEqual(code, 1)
+            code, _out = self._run(self._args(log, [
+                "--record", "--id", "APP-002", "--task", "Too early"]))
+            self.assertEqual(code, 6)
+            code, _out = self._run(self._args(log, [
+                "--record", "--id", "APP-001", "--task", "Bad date",
+                "--due", "tomorrow"]))
+            self.assertEqual(code, 1)
+            code, _out = self._run(self._args(log, [
+                "--record", "--done", "--id", "APP-001",
+                "--task", "Both"]))
+            self.assertEqual(code, 1)
+            code, _out = self._run(self._args(log, [
+                "--done", "--id", "APP-001"]))
+            self.assertEqual(code, 1)
+            code, _out = self._run(self._args(log, [
+                "--done", "--id", "APP-001", "--number", "9"]))
+            self.assertEqual(code, 6)
+            code, _out = self._run(self._args(log, ["--id", "APP-999"]))
+            self.assertEqual(code, 1)
+            code, _out = self._run(self._args(log, [
+                "--task", "Needs --record"]))
+            self.assertEqual(code, 1)
+            with self.assertRaises(SystemExit):
+                self._run(self._args(log, [
+                    "--record", "--id", "APP-001", "--task", "Bad kind",
+                    "--category", "admin"]))
+
+
+class TestTimelineOnboarding(unittest.TestCase):
+    def _logged(self, tmp):
+        log = Path(tmp) / "log.jsonl"
+        add_application(log, "Northwind Analytics", "Data Analyst",
+                        today="2026-11-01")
+        set_status(log, "APP-001", "screening", today="2026-11-03")
+        set_status(log, "APP-001", "interview", today="2026-11-05")
+        set_status(log, "APP-001", "offer", today="2026-11-06")
+        set_status(log, "APP-001", "hired", today="2026-11-08")
+        record_onboard_task(
+            log, "APP-001",
+            validate_onboard_task(
+                {"task": "Complete I-9 paperwork",
+                 "category": "paperwork", "due": "2026-11-10"},
+                today="2026-11-08"), today="2026-11-08")
+        record_onboard_task(
+            log, "APP-001",
+            validate_onboard_task(
+                {"task": "Pick up laptop", "category": "equipment",
+                 "due": "2026-11-13"}, today="2026-11-08"),
+            today="2026-11-08")
+        complete_onboard_task(log, "APP-001", 1, today="2026-11-09")
+        return log
+
+    def test_onboarding_events_in_feed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            data = collect_timeline(read_log(log))
+            rows = [e for e in data["events"]
+                    if e["kind"] == "onboarding"]
+            self.assertEqual(len(rows), 3)
+            self.assertEqual(data["counts"]["by_kind"]["onboarding"], 3)
+            added = next(e for e in rows if e["date"] == "2026-11-08"
+                         and "I-9" in e["summary"])
+            self.assertEqual(added["summary"],
+                             "Onboarding task: Complete I-9 paperwork "
+                             "[paperwork] (due 2026-11-10)")
+            done = next(e for e in rows if e["date"] == "2026-11-09")
+            self.assertEqual(done["summary"],
+                             "Onboarding done: Complete I-9 paperwork "
+                             "[paperwork] (due 2026-11-10)")
+
+    def test_kind_filter(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = self._logged(tmp)
+            data = collect_timeline(read_log(log), kinds=["onboarding"])
+            self.assertEqual(data["counts"]["total"], 3)
+            self.assertTrue(all(e["kind"] == "onboarding"
+                                for e in data["events"]))
+
+    def test_missing_record_falls_back_to_event(self):
+        entries = [{
+            "id": "APP-001", "company": "Northwind Analytics",
+            "title": "Data Analyst", "status": "hired",
+            "applied_at": "2026-11-01",
+            "history": [{"kind": "onboarding", "at": "2026-11-08",
+                         "task": "Ghost task", "number": 9,
+                         "done": False}]}]
+        data = collect_timeline(entries)
+        self.assertEqual(len(data["events"]), 1)
+        self.assertEqual(data["events"][0]["summary"],
+                         "Onboarding task: Ghost task")
+
+
+class TestNextOnboarding(unittest.TestCase):
+    def _entries(self):
+        def task(number, text, due=None, done=False, added="2026-11-08"):
+            return {"number": number, "task": text, "category": "other",
+                    "due": due, "added_at": added, "done": done,
+                    "done_at": "2026-11-07" if done else None}
+
+        return [
+            {"id": "APP-001", "company": "Northwind Analytics",
+             "title": "Data Analyst", "status": "hired",
+             "applied_at": "2026-11-01",
+             "onboarding": [
+                 task(1, "Complete I-9 paperwork", due="2026-11-06"),
+                 task(2, "Pick up laptop", due="2026-11-10"),
+                 task(3, "Read the handbook", due="2026-11-30"),
+                 task(4, "Meet the team"),
+                 task(5, "Already done", due="2026-11-06", done=True)]},
+            {"id": "APP-002", "company": "Harbour Analytics",
+             "title": "Business Intelligence Analyst", "status": "offer",
+             "applied_at": "2026-11-01",
+             "offers": [{"base": 120000, "currency": "CAD",
+                         "period": "annual", "base_annual": 120000,
+                         "bonus": None, "equity": None,
+                         "vesting_years": None, "deadline": "2026-11-08",
+                         "recorded_at": "2026-11-08"}]},
+        ]
+
+    def test_onboarding_actions(self):
+        data = collect_next(self._entries(), today=TODAY,
+                            kinds=["onboarding"])
+        kinds = [(a["kind"], a["urgency"], a["id"])
+                 for a in data["actions"]]
+        self.assertEqual(kinds, [
+            ("onboarding", "overdue", "APP-001"),
+            ("onboarding", "soon", "APP-001"),
+            ("onboarding", "open", "APP-001")])
+        overdue = data["actions"][0]
+        self.assertIn("Complete I-9 paperwork", overdue["summary"])
+        self.assertEqual(overdue["date"], "2026-11-06")
+        soon = data["actions"][1]
+        self.assertIn("Pick up laptop", soon["summary"])
+        undated = data["actions"][2]
+        self.assertIn("Meet the team", undated["summary"])
+        self.assertIn("no due date", undated["detail"])
+        # The later task (22 days out) and the done task never appear.
+        summaries = " ".join(a["summary"] for a in data["actions"])
+        self.assertNotIn("Read the handbook", summaries)
+        self.assertNotIn("Already done", summaries)
+
+    def test_kind_order_offer_before_onboarding(self):
+        entries = self._entries()
+        entries[0]["onboarding"][1]["due"] = "2026-11-08"
+        data = collect_next(entries, today=TODAY,
+                            kinds=["offer", "onboarding"])
+        today_actions = [(a["kind"], a["urgency"]) for a in data["actions"]
+                         if a["urgency"] == "today"]
+        # Both due today; the offer decision (fixed by the employer)
+        # comes before the onboarding task (a deadline you set).
+        self.assertEqual(today_actions, [("offer", "today"),
+                                         ("onboarding", "today")])
+
+
+class TestOnboardSearchExport(unittest.TestCase):
+    def _entries(self):
+        return [
+            {"id": "APP-001", "company": "Northwind Analytics",
+             "title": "Data Analyst", "status": "hired",
+             "applied_at": "2026-11-01",
+             "onboarding": [
+                 {"number": 1, "task": "Complete I-9 paperwork",
+                  "category": "paperwork", "due": "2026-11-10",
+                  "added_at": "2026-11-08", "done": False,
+                  "done_at": None},
+                 {"number": 2, "task": "Pick up laptop",
+                  "category": "equipment", "due": "2026-11-13",
+                  "added_at": "2026-11-08", "done": True,
+                  "done_at": "2026-11-09"}]},
+            {"id": "APP-002", "company": "Harbour Analytics",
+             "title": "Business Intelligence Analyst", "status": "screening",
+             "applied_at": "2026-11-01"},
+        ]
+
+    def test_search_finds_onboarding_tasks(self):
+        data = search_entries(self._entries(), "laptop")
+        self.assertEqual(len(data["results"]), 1)
+        self.assertEqual(data["results"][0]["id"], "APP-001")
+        self.assertIn("onboarding", data["results"][0]["fields"])
+        data = search_entries(self._entries(), "paperwork")
+        self.assertEqual(len(data["results"]), 1)
+        self.assertIn("onboarding", data["results"][0]["fields"])
+
+    def test_export_counts_onboarding_tasks(self):
+        data = collect_export(self._entries(), today=TODAY)
+        by_id = {row["id"]: row for row in data["rows"]}
+        self.assertEqual(by_id["APP-001"]["onboarding"], 2)
+        self.assertEqual(by_id["APP-002"]["onboarding"], 0)
 
 
 if __name__ == "__main__":

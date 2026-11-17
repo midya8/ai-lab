@@ -70,6 +70,41 @@ def _story_bank(profile):
              "bullets": list(job.get("bullets", []))} for job in ordered]
 
 
+def likely_questions_with_skills(profile, posting, match=None):
+    """Likely interview questions, each paired with the skill it tests.
+
+    Skill-anchored questions come from the matched required skills; the
+    walkthrough, why-this-role, and salary questions name no skill, so
+    they pair with ``None`` — a review cannot check them against the
+    questions an interviewer actually asked, and must say so instead of
+    scoring them as missed.
+    """
+    if match is None:
+        match = match_profile(profile, posting)
+    paired = []
+    for skill in match["required_matched"]:
+        paired.append((f"Tell me about a time you used {skill} in your work.",
+                       skill))
+    stories = _story_bank(profile)
+    if stories:
+        recent = stories[0]
+        paired.append(
+            (f"Walk me through your work as {recent['title']} at "
+             f"{recent['company']}.", None))
+    title = posting.get("title")
+    company = posting.get("company")
+    if title and company:
+        paired.append((f"Why are you interested in the {title} role at "
+                       f"{company}?", None))
+    elif title:
+        paired.append((f"Why are you interested in the {title} role?",
+                       None))
+    if posting.get("salary"):
+        paired.append(("What are your salary expectations for this role?",
+                       None))
+    return paired
+
+
 def build_prep(profile, posting, match=None):
     """Build the interview-prep packet. Returns a prep dict."""
     if match is None:
@@ -99,28 +134,14 @@ def build_prep(profile, posting, match=None):
     for skill in match["preferred_missing"]:
         gap_prep.append({"skill": skill, "kind": "preferred"})
 
-    questions = []
-    for skill in match["required_matched"]:
-        questions.append(f"Tell me about a time you used {skill} in your work.")
-    stories = _story_bank(profile)
-    if stories:
-        recent = stories[0]
-        questions.append(
-            f"Walk me through your work as {recent['title']} at {recent['company']}.")
-    title = posting.get("title")
-    company = posting.get("company")
-    if title and company:
-        questions.append(f"Why are you interested in the {title} role at {company}?")
-    elif title:
-        questions.append(f"Why are you interested in the {title} role?")
-    if posting.get("salary"):
-        questions.append("What are your salary expectations for this role?")
+    questions = [q for q, _ in
+                 likely_questions_with_skills(profile, posting, match)]
 
     salary = posting.get("salary")
     return {
         "role": {
-            "title": title,
-            "company": company,
+            "title": posting.get("title"),
+            "company": posting.get("company"),
             "location": posting.get("location"),
             "remote": posting.get("remote"),
             "salary_raw": salary["raw"] if salary else None,
@@ -142,7 +163,7 @@ def build_prep(profile, posting, match=None):
             "currency": prefs.get("currency"),
             "remote_preference": prefs.get("remote"),
         },
-        "story_bank": stories,
+        "story_bank": _story_bank(profile),
     }
 
 

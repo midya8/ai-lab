@@ -2,7 +2,7 @@
 
 ``autojob timeline`` reads the history every other command already
 records — applications, status moves, follow-ups, interviews, contacts,
-offers, debriefs — and lays them out as a single chronological feed across all
+offers, debriefs, notes, onboarding tasks — and lays them out as a single chronological feed across all
 applications, instead of making you open each one to see what happened
 when.
 
@@ -20,7 +20,13 @@ The honest rules, carried over from the modules that write the history:
   carries its date and round label, so it is paired with the first
   still-unpaired round with that date and label; a contact event the
   same way by date and name, and a debrief event the same way as an
-  interview, by date and round label. An offer event carries no figures of its
+  interview, by date and round label. A note event carries its date
+  and text, so it is paired with the first still-unpaired note with
+  that date and text. An onboarding event carries its task number,
+  which is unique on the application, so it is paired with that
+  task directly — the added event and the done event for one task
+  both pair to the same record, and the line says which of the two
+  it is. An offer event carries no figures of its
   own, so the n-th offer event on an application is the n-th offer in
   its offers list — they are appended in the same order by
   ``tracker.record_offer``, and the pairing is only ever used to
@@ -44,7 +50,7 @@ import datetime
 import json
 
 KINDS = ("applied", "status", "followup", "interview", "contact", "offer",
-         "debrief")
+         "debrief", "note", "onboarding")
 
 
 class TimelineError(ValueError):
@@ -179,18 +185,54 @@ def _summary_debrief(round_label, record):
     return text
 
 
+def _summary_note(event, record):
+    """The note line: "Note" plus its tag, the text goes underneath."""
+    tag = (record or {}).get("tag") or event.get("tag")
+    text = "Note"
+    if isinstance(tag, str) and tag.strip():
+        text += f" [{tag.strip()}]"
+    return text
+
+
+def _summary_onboarding(event, record):
+    """The onboarding line: added or done, with category and due date.
+
+    The event says which of the two it is — the added event and the
+    done event for one task are different lines — and the record
+    supplies the category and due date. When the record is missing
+    from a hand-edited log, the line falls back to the event's own
+    text.
+    """
+    task = event.get("task") or (record or {}).get("task")
+    verb = "Onboarding done" if event.get("done") else "Onboarding task"
+    text = f"{verb}: {task}" if task else verb
+    if not record:
+        return text
+    category = record.get("category")
+    if isinstance(category, str) and category.strip():
+        text += f" [{category.strip()}]"
+    due = record.get("due")
+    if isinstance(due, str) and due.strip():
+        text += f" (due {due.strip()})"
+    return text
+
+
 def _note_of(kind, event, record):
     """A stored note worth showing under the line, or None.
 
     Follow-up notes live on the event itself; interview and contact
     notes live on the record. Offer notes are left out — an offer
     line already carries its figures. A debrief shows what went well
-    first, falling back to what to improve.
+    first, falling back to what to improve. A note's text lives on
+    the record when one was paired, and on the event itself as a
+    fallback (see ``tracker.record_note``).
     """
     if kind == "followup":
         note = event.get("note")
     elif kind in ("interview", "contact") and record:
         note = record.get("note") or record.get("notes")
+    elif kind == "note":
+        note = (record.get("text") if record else None) or event.get("text")
     elif kind == "debrief" and record:
         went_well = record.get("went_well")
         improve = record.get("improve")
@@ -207,14 +249,15 @@ def _note_of(kind, event, record):
 
 
 def _resolve(entry, event, used_interviews, used_contacts, used_debriefs,
-             offer_index):
+             used_notes, offer_index):
     """Turn one history event into a timeline row, or None to skip it.
 
-    ``used_interviews`` / ``used_contacts`` / ``used_debriefs`` are
-    sets of record indexes already paired, so two rounds with the same
-    date and label — or two touches with the same person on the same
-    day — pair in log order instead of both pointing at the first
-    record. ``offer_index`` counts the offer events seen so far on
+    ``used_interviews`` / ``used_contacts`` / ``used_debriefs`` /
+    ``used_notes`` are sets of record indexes already paired, so two
+    rounds with the same date and label — or two touches with the same
+    person on the same day, or two notes with the same date and text —
+    pair in log order instead of both pointing at the first record.
+    ``offer_index`` counts the offer events seen so far on
     this entry; the n-th offer event pairs with the n-th offer in the
     entry's offers list.
     """
@@ -263,6 +306,28 @@ def _resolve(entry, event, used_interviews, used_contacts, used_debriefs,
                 record = candidate
                 used_debriefs.add(i)
                 break
+    elif kind == "note":
+        notes = entry.get("notes") or []
+        for i, candidate in enumerate(notes):
+            if i in used_notes or not isinstance(candidate, dict):
+                continue
+            if (candidate.get("date") == event.get("at")
+                    and candidate.get("text") == event.get("text")):
+                record = candidate
+                used_notes.add(i)
+                break
+    elif kind == "onboarding":
+        # The task number is unique on the application, so the added
+        # event and the done event for one task both pair to the same
+        # record — no used-set, unlike the date+label pairings above.
+        tasks = entry.get("onboarding") or []
+        for candidate in tasks:
+            if not isinstance(candidate, dict):
+                continue
+            if (candidate.get("number") == event.get("number")
+                    and event.get("number") is not None):
+                record = candidate
+                break
 
     if kind == "applied":
         summary = _summary_applied(entry)
@@ -276,6 +341,10 @@ def _resolve(entry, event, used_interviews, used_contacts, used_debriefs,
         summary = _summary_contact(event.get("name"), record)
     elif kind == "debrief":
         summary = _summary_debrief(event.get("round"), record)
+    elif kind == "note":
+        summary = _summary_note(event, record)
+    elif kind == "onboarding":
+        summary = _summary_onboarding(event, record)
     else:  # offer
         summary = _summary_offer(record)
 
@@ -320,12 +389,14 @@ def collect_timeline(entries, today=None, since=None, until=None,
         used_interviews = set()
         used_contacts = set()
         used_debriefs = set()
+        used_notes = set()
         offer_index = 0
         for event in history:
             if not isinstance(event, dict):
                 continue
             resolved = _resolve(entry, event, used_interviews,
-                                used_contacts, used_debriefs, offer_index)
+                                used_contacts, used_debriefs, used_notes,
+                                offer_index)
             if resolved is None:
                 continue
             row, when = resolved

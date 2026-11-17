@@ -51,6 +51,13 @@ Subcommands (all offline, stdlib only):
   next      [--log L] [--days N] [--kind KIND ...] [--wait-days N]
             [--quiet-days N] [--stale-days N] [--json] [--out F]
             [--today YYYY-MM-DD]
+  audit     [--log L] [--id APP-001] [--kind KIND ...]
+            [--severity error|warn|info] [--stale-days N] [--json]
+            [--out F] [--today YYYY-MM-DD]
+  schedule  [--log L] [--days N] [--kind KIND ...] [--json] [--out F]
+            [--today YYYY-MM-DD]
+  negotiate --id APP-001 --profile P [--postings-dir D] [--log L] [--json]
+            [--out F] [--today YYYY-MM-DD]
   export    [--log L] [--format csv|json] [--status S] [--source CHANNEL]
             [--out F] [--today YYYY-MM-DD]
   debrief   [--log L] [--id APP-001] [--json] [--out F] [--today YYYY-MM-DD]
@@ -67,14 +74,32 @@ Subcommands (all offline, stdlib only):
             [--today YYYY-MM-DD]
   backup    --check FILE [--json]
   restore   --in FILE --out-dir D [--force] [--json]
+  search    --query TEXT [--log L] [--status S] [--source CHANNEL]
+            [--json] [--out F]
+  blocklist [--log L] [--blocklist B] [--json] [--out F]
+  blocklist --record --company NAME [--reason TEXT] --date YYYY-MM-DD
+            [--blocklist B]
+  blocklist --remove --company NAME [--blocklist B]
+  resume    [--log L] [--id APP-001] [--resume PATH] [--missing]
+            [--json] [--out F] [--today YYYY-MM-DD]
+  resume    --record --id APP-001 --file PATH [--note TEXT]
+            [--today YYYY-MM-DD]
+  company   [NAME] [--log L] [--blocklist B] [--quiet-days N] [--json]
+            [--out F] [--today YYYY-MM-DD]
+  onboard   [--log L] [--id APP-001] [--json] [--out F] [--today YYYY-MM-DD]
+  onboard   --record --id APP-001 --task TEXT [--category C] [--due YYYY-MM-DD] [--today YYYY-MM-DD]
+  onboard   --done --id APP-001 --number N [--today YYYY-MM-DD]
+  apply     ... [--resume PATH]
+  batch     ... [--resume PATH]
 
 Exit codes: 0 ok · 1 usage error · 2 profile/posting load error ·
-3 match below --fail-under · 4 draft/apply refused below --min-coverage ·
+3 match below --fail-under · 4 draft/apply refused below --min-coverage,
+or apply refused for a company on the blocklist ·
 5 duplicate application, or batch stopped on a tracker write ·
 6 illegal status transition, follow-up refused,
 offer refused, interview refused, contact refused, deadline refused,
-rejection refused, source refused, debrief refused, or restore refused
-(target files already exist).
+rejection refused, source refused, debrief refused, resume refused,
+onboard refused, or restore refused (target files already exist).
 
 autojob prepares application packets for a human to review and submit. It
 never submits anything and never invents experience: every fact in a draft
@@ -91,12 +116,21 @@ from pathlib import Path
 
 from . import __version__
 from .analytics import analytics_json, analytics_report, compute_analytics
+from .audit import (AUDIT_KINDS, SEVERITIES, AuditError, audit_json,
+                    collect_audit, render_audit_markdown)
 from .backup import (BackupError, backup_json, create_backup,
                      default_backup_path, inspect_backup,
                      render_backup_markdown, restore_backup)
 from .batch import (BatchError, batch_apply, batch_json, build_packet_files,
                     packet_dir_for, render_batch_markdown)
+from .blocklist import (BlocklistError, add_block, blocklist_json,
+                        collect_blocklist, default_blocklist_path,
+                        is_blocked, load_blocklist, remove_block,
+                        render_blocklist_markdown, validate_block)
 from .calendar import build_calendar, calendar_json, render_ics
+from .company import (build_dossier, companies_json, company_json,
+                      list_companies, render_companies_markdown,
+                      render_company_markdown)
 from .contacts import (ContactError, collect_contacts, contacts_for,
                        contacts_json, render_contacts_markdown,
                        validate_contact)
@@ -117,10 +151,17 @@ from .interview import (InterviewError, collect_interviews,
                         render_interview_markdown, validate_interview)
 from .letter import draft_letter
 from .match import match_profile
+from .negotiate import (NegotiationError, build_negotiation, negotiate_json,
+                        render_negotiation_markdown)
 from .next import (NEXT_KINDS, NextError, collect_next, next_json,
                    render_next_markdown)
+from .notes import (NoteError, collect_notes, notes_for, notes_json,
+                    render_notes_markdown, validate_note)
 from .offer import (OfferError, compare_offers, offer_json,
                     render_offer_markdown, validate_offer)
+from .onboard import (ONBOARD_CATEGORIES, OnboardError, collect_onboard,
+                      onboard_json, render_onboard_markdown,
+                      validate_onboard_task)
 from .plan import build_plan, plan_json, render_plan_markdown
 from .posting import parse_posting
 from .prep import build_prep, prep_json, render_prep_markdown
@@ -134,8 +175,16 @@ from .rejections import (REJECTION_REASONS, RejectionError,
                          collect_rejections, rejections_json,
                          render_rejections_markdown, validate_rejection)
 from .report import match_json, match_report
+from .resume import (ResumeError, collect_resumes, render_resumes_markdown,
+                     resumes_json, validate_resume)
+from .review import (ReviewError, collect_review, render_review_markdown,
+                     review_json)
 from .salary import (analyze_salaries, render_salary_markdown, salary_json,
                      target_from_profile)
+from .schedule import (SCHEDULE_KINDS, ScheduleError, collect_schedule,
+                       render_schedule_markdown, schedule_json)
+from .search import (SearchError, render_search_markdown, search_entries,
+                     search_json)
 from .sources import (SOURCE_CHOICES, SourceError, collect_sources,
                       render_sources_markdown, sources_json,
                       validate_source)
@@ -143,10 +192,11 @@ from .tailor import build_tailor, render_tailor_markdown, tailor_json
 from .timeline import (KINDS, collect_timeline, render_timeline_markdown,
                        timeline_json)
 from .tracker import (STATUSES, TrackerError, add_application,
-                      find_application, read_log, record_contact,
-                      record_deadline, record_debrief, record_followup,
-                      record_interview, record_offer, record_rejection,
-                      record_source, set_status)
+                      complete_onboard_task, find_application, read_log,
+                      record_contact, record_deadline, record_debrief,
+                      record_followup, record_interview, record_note,
+                      record_offer, record_onboard_task, record_rejection,
+                      record_resume, record_source, set_status)
 
 DEFAULT_OUT_DIR = "applications"
 
@@ -267,8 +317,28 @@ def _cmd_apply(args):
             return 1
         source = cleaned["source"]
         referrer = cleaned["referrer"]
-    packet, files = _build_packet(profile, posting, match, args.out_dir)
+    resume = None
+    if args.resume is not None:
+        try:
+            resume = validate_resume(args.resume)
+        except ResumeError as exc:
+            print(f"error: cannot apply: {exc}", file=sys.stderr)
+            return 1
     log_path = args.log or str(Path(args.out_dir) / "applications.jsonl")
+    try:
+        blocked = load_blocklist(
+            args.blocklist or default_blocklist_path(log_path))
+    except BlocklistError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    record = is_blocked(blocked, posting.get("company"))
+    if record is not None:
+        reason = record["reason"] or "no reason given"
+        print(f"refusing to apply: {posting.get('company')!r} is on the "
+              f"blocklist ({reason}, blocked {record['blocked_on']})",
+              file=sys.stderr)
+        return 4
+    packet, files = _build_packet(profile, posting, match, args.out_dir)
     if args.dry_run:
         print(f"(dry run: would write packet to {packet}/)")
         for name in files:
@@ -298,6 +368,7 @@ def _cmd_apply(args):
             packet_dir=str(packet),
             deadline=deadline,
             referrer=referrer,
+            resume=resume,
             required_matched=match["required_matched"],
             required_missing=match["required_missing"],
             preferred_matched=match["preferred_matched"],
@@ -325,11 +396,19 @@ def _cmd_batch(args):
             return 1
     log_path = args.log or str(Path(args.out_dir) / "applications.jsonl")
     try:
+        blocked = load_blocklist(
+            args.blocklist or default_blocklist_path(log_path))
+    except BlocklistError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    try:
         result = batch_apply(
             profile, args.postings_dir, args.out_dir, log_path,
             min_score=args.min_score, limit=args.limit,
             source=args.source, referrer=args.referrer,
+            resume=args.resume,
             dry_run=args.dry_run, today=args.today,
+            blocklist=blocked["blocked"],
         )
     except BatchError as exc:
         print(f"error: {exc}", file=sys.stderr)
@@ -535,9 +614,16 @@ def _cmd_rank(args):
         print(f"error: {exc}", file=sys.stderr)
         return 2
     try:
+        blocked = load_blocklist(
+            args.blocklist or default_blocklist_path(args.log))
+    except BlocklistError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    try:
         data = rank_postings(profile, args.postings_dir, entries,
                              min_score=args.min_score,
-                             include_applied=args.include_applied)
+                             include_applied=args.include_applied,
+                             blocklist=blocked["blocked"])
     except ValueError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
@@ -940,6 +1026,92 @@ def _cmd_questions(args):
     return 0
 
 
+def _cmd_search(args):
+    try:
+        entries = read_log(args.log)
+    except TrackerError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    try:
+        data = search_entries(entries, args.query, status=args.status,
+                              source=args.source)
+    except SearchError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    text = search_json(data) if args.json else render_search_markdown(data)
+    if args.out:
+        Path(args.out).write_text(text, encoding="utf-8")
+        print(f"wrote {args.out}")
+    else:
+        print(text, end="")
+    return 0
+
+
+def _cmd_blocklist(args):
+    blocklist_path = args.blocklist or default_blocklist_path(args.log)
+    if args.record and args.remove:
+        print("error: --record and --remove cannot be combined",
+              file=sys.stderr)
+        return 1
+    if args.record:
+        if not args.company:
+            print("error: --record needs --company NAME",
+                  file=sys.stderr)
+            return 1
+        if not args.date:
+            print("error: --record needs --date YYYY-MM-DD",
+                  file=sys.stderr)
+            return 1
+        try:
+            validate_block(args.company, args.reason, args.date)
+        except BlocklistError as exc:
+            print(f"error: cannot record block: {exc}", file=sys.stderr)
+            return 1
+        try:
+            record, replaced = add_block(
+                blocklist_path, args.company, args.reason, args.date)
+        except BlocklistError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+        verb = "updated the block for" if replaced else "blocked"
+        reason = (f" ({record['reason']})" if record["reason"] else "")
+        print(f"{verb} {record['company']!r}{reason}")
+        return 0
+    if args.remove:
+        if not args.company:
+            print("error: --remove needs --company NAME",
+                  file=sys.stderr)
+            return 1
+        try:
+            removed = remove_block(blocklist_path, args.company)
+        except BlocklistError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+        if removed is not None:
+            print(f"removed {removed['company']!r} from the blocklist")
+        else:
+            print(f"{args.company.strip()!r} is not on the blocklist")
+        return 0
+    if args.company is not None or args.reason is not None \
+            or args.date is not None:
+        print("error: --company/--reason/--date need --record or --remove",
+              file=sys.stderr)
+        return 1
+    try:
+        data = collect_blocklist(load_blocklist(blocklist_path))
+    except BlocklistError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    text = (blocklist_json(data) if args.json
+            else render_blocklist_markdown(data))
+    if args.out:
+        Path(args.out).write_text(text, encoding="utf-8")
+        print(f"wrote {args.out}")
+    else:
+        print(text, end="")
+    return 0
+
+
 def _cmd_backup(args):
     if args.check:
         try:
@@ -1254,6 +1426,275 @@ def _cmd_sources(args):
     return 0
 
 
+def _cmd_resume(args):
+    if args.record:
+        if not args.id:
+            print("error: --record needs --id APP-001", file=sys.stderr)
+            return 1
+        try:
+            resume = validate_resume(args.file, args.note)
+        except ResumeError as exc:
+            print(f"error: cannot record resume: {exc}",
+                  file=sys.stderr)
+            return 1
+        try:
+            entry = record_resume(args.log, args.id, resume)
+        except TrackerError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 6
+        detail = f" ({resume['note']})" if resume["note"] else ""
+        print(f"recorded a resume for {entry['id']}: "
+              f"{entry['company']} — {entry['title']} "
+              f"({resume['path']}{detail})")
+        return 0
+    if args.file is not None or args.note is not None:
+        print("error: --file and --note need --record", file=sys.stderr)
+        return 1
+    if args.today is not None:
+        try:
+            today = datetime.date.fromisoformat(args.today)
+        except ValueError:
+            print(f"error: --today must be YYYY-MM-DD, got {args.today!r}",
+                  file=sys.stderr)
+            return 1
+    else:
+        today = datetime.date.today()
+    try:
+        entries = read_log(args.log)
+    except TrackerError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    data = collect_resumes(entries, today=today, resume=args.resume,
+                           missing_only=args.missing, app_id=args.id)
+    text = (resumes_json(data) if args.json
+            else render_resumes_markdown(data))
+    if args.out:
+        Path(args.out).write_text(text, encoding="utf-8")
+        print(f"wrote {args.out}")
+    else:
+        print(text, end="")
+    return 0
+
+
+def _cmd_notes(args):
+    if args.today is not None:
+        try:
+            today = datetime.date.fromisoformat(args.today)
+        except ValueError:
+            print(f"error: --today must be YYYY-MM-DD, got {args.today!r}",
+                  file=sys.stderr)
+            return 1
+    else:
+        today = datetime.date.today()
+    if args.record:
+        if not args.id:
+            print("error: --record needs --id APP-001", file=sys.stderr)
+            return 1
+        try:
+            note = validate_note({
+                "date": args.date,
+                "text": args.text,
+                "tag": args.tag,
+            }, today=today.isoformat())
+        except NoteError as exc:
+            print(f"error: cannot record note: {exc}", file=sys.stderr)
+            return 1
+        try:
+            entry = record_note(args.log, args.id, note,
+                                today=today.isoformat())
+        except TrackerError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 6
+        detail = f" [{note['tag']}]" if note["tag"] else ""
+        print(f"recorded a note for {entry['id']}: {entry['company']} — "
+              f"{entry['title']} ({note['date']}{detail})")
+        return 0
+    if args.date is not None or args.text is not None:
+        print("error: --date and --text need --record", file=sys.stderr)
+        return 1
+    try:
+        entries = read_log(args.log)
+    except TrackerError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    if args.id:
+        entry, _rows = notes_for(entries, args.id, today=today)
+        if entry is None:
+            print(f"error: no application with id {args.id!r}", file=sys.stderr)
+            return 1
+        data = collect_notes([entry], today=today, tag=args.tag)
+    else:
+        data = collect_notes(entries, today=today, tag=args.tag)
+    text = (notes_json(data) if args.json
+            else render_notes_markdown(data))
+    if args.out:
+        Path(args.out).write_text(text, encoding="utf-8")
+        print(f"wrote {args.out}")
+    else:
+        print(text, end="")
+    return 0
+
+
+def _cmd_onboard(args):
+    if args.today is not None:
+        try:
+            today = datetime.date.fromisoformat(args.today)
+        except ValueError:
+            print(f"error: --today must be YYYY-MM-DD, got {args.today!r}",
+                  file=sys.stderr)
+            return 1
+    else:
+        today = datetime.date.today()
+    if args.record and args.done:
+        print("error: --record and --done cannot be combined",
+              file=sys.stderr)
+        return 1
+    if args.record:
+        if not args.id:
+            print("error: --record needs --id APP-001", file=sys.stderr)
+            return 1
+        try:
+            task = validate_onboard_task({
+                "task": args.task,
+                "category": args.category,
+                "due": args.due,
+            }, today=today.isoformat())
+        except OnboardError as exc:
+            print(f"error: cannot record onboarding task: {exc}",
+                  file=sys.stderr)
+            return 1
+        try:
+            entry = record_onboard_task(args.log, args.id, task,
+                                        today=today.isoformat())
+        except TrackerError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 6
+        number = entry["onboarding"][-1]["number"]
+        detail = f" (due {task['due']})" if task["due"] else ""
+        print(f"recorded onboarding task #{number} for {entry['id']}: "
+              f"{entry['company']} — {entry['title']} "
+              f"({task['task']} [{task['category']}]"
+              f"{detail})")
+        return 0
+    if args.done:
+        if not args.id:
+            print("error: --done needs --id APP-001", file=sys.stderr)
+            return 1
+        if args.number is None:
+            print("error: --done needs --number N", file=sys.stderr)
+            return 1
+        try:
+            entry = complete_onboard_task(args.log, args.id, args.number,
+                                          today=today.isoformat())
+        except TrackerError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 6
+        task = next(t for t in entry["onboarding"]
+                    if t.get("number") == args.number)
+        print(f"completed onboarding task #{args.number} for "
+              f"{entry['id']}: {entry['company']} — {entry['title']} "
+              f"({task.get('task')})")
+        return 0
+    if (args.task is not None or args.category is not None
+            or args.due is not None):
+        print("error: --task, --category and --due need --record",
+              file=sys.stderr)
+        return 1
+    if args.number is not None:
+        print("error: --number needs --done", file=sys.stderr)
+        return 1
+    try:
+        entries = read_log(args.log)
+    except TrackerError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    if args.id and find_application(entries, args.id) is None:
+        print(f"error: no application with id {args.id!r}", file=sys.stderr)
+        return 1
+    data = collect_onboard(entries, today=today, app_id=args.id)
+    text = (onboard_json(data) if args.json
+            else render_onboard_markdown(data))
+    if args.out:
+        Path(args.out).write_text(text, encoding="utf-8")
+        print(f"wrote {args.out}")
+    else:
+        print(text, end="")
+    return 0
+
+
+def _cmd_company(args):
+    if args.today is not None:
+        try:
+            today = datetime.date.fromisoformat(args.today)
+        except ValueError:
+            print(f"error: --today must be YYYY-MM-DD, got {args.today!r}",
+                  file=sys.stderr)
+            return 1
+    else:
+        today = datetime.date.today()
+    if args.quiet_days is not None and args.quiet_days < 0:
+        print("error: --quiet-days must be 0 or more", file=sys.stderr)
+        return 1
+    try:
+        entries = read_log(args.log)
+    except TrackerError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    try:
+        blocked = load_blocklist(
+            args.blocklist or default_blocklist_path(args.log))
+    except BlocklistError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    if args.company:
+        data = build_dossier(entries, args.company, today=today,
+                             quiet_days=args.quiet_days,
+                             blocklist=blocked)
+        if not data["found"]:
+            print(f"error: no applications or blocklist entry for "
+                  f"{args.company.strip()!r}", file=sys.stderr)
+            return 1
+        text = (company_json(data) if args.json
+                else render_company_markdown(data))
+    else:
+        data = list_companies(entries, blocklist=blocked)
+        text = (companies_json(data) if args.json
+                else render_companies_markdown(data))
+    if args.out:
+        Path(args.out).write_text(text, encoding="utf-8")
+        print(f"wrote {args.out}")
+    else:
+        print(text, end="")
+    return 0
+
+
+def _cmd_review(args):
+    profile = _load_profile(args.profile)
+    if profile is None:
+        return 2
+    try:
+        entries = read_log(args.log)
+    except TrackerError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    try:
+        data = collect_review(entries, profile, args.postings_dir,
+                              only_id=args.id)
+    except ReviewError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    text = review_json(data) if args.json else render_review_markdown(data)
+    if args.out:
+        Path(args.out).write_text(text, encoding="utf-8")
+        print(f"wrote {args.out}")
+    else:
+        print(text, end="")
+    return 0
+
+
 def _cmd_next(args):
     if args.today is not None:
         try:
@@ -1300,6 +1741,142 @@ def _cmd_next(args):
         print(f"error: {exc}", file=sys.stderr)
         return 1
     text = next_json(data) if args.json else render_next_markdown(data)
+    if args.out:
+        Path(args.out).write_text(text, encoding="utf-8")
+        print(f"wrote {args.out}")
+    else:
+        print(text, end="")
+    return 0
+
+
+def _cmd_audit(args):
+    if args.today is not None:
+        try:
+            today = datetime.date.fromisoformat(args.today)
+        except ValueError:
+            print(f"error: --today must be YYYY-MM-DD, got {args.today!r}",
+                  file=sys.stderr)
+            return 1
+    else:
+        today = datetime.date.today()
+    if args.stale_days is not None and args.stale_days < 0:
+        print(f"error: --stale-days must be 0 or more, got {args.stale_days}",
+              file=sys.stderr)
+        return 1
+    if args.kind:
+        unknown = [kind for kind in args.kind if kind not in AUDIT_KINDS]
+        if unknown:
+            print(f"error: --kind must be one of "
+                  f"{', '.join(AUDIT_KINDS)}, got {', '.join(unknown)}",
+                  file=sys.stderr)
+            return 1
+    if args.severity is not None and args.severity not in SEVERITIES:
+        print(f"error: --severity must be one of "
+              f"{', '.join(SEVERITIES)}, got {args.severity!r}",
+              file=sys.stderr)
+        return 1
+    try:
+        entries = read_log(args.log)
+    except TrackerError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    if args.id and find_application(entries, args.id) is None:
+        print(f"error: no application with id {args.id!r}", file=sys.stderr)
+        return 1
+    try:
+        data = collect_audit(
+            entries, today=today,
+            stale_days=(args.stale_days
+                        if args.stale_days is not None else 14),
+            kinds=args.kind, severity=args.severity, app_id=args.id)
+    except AuditError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    text = audit_json(data) if args.json else render_audit_markdown(data)
+    if args.out:
+        Path(args.out).write_text(text, encoding="utf-8")
+        print(f"wrote {args.out}")
+    else:
+        print(text, end="")
+    return 0
+
+
+def _cmd_schedule(args):
+    if args.today is not None:
+        try:
+            today = datetime.date.fromisoformat(args.today)
+        except ValueError:
+            print(f"error: --today must be YYYY-MM-DD, got {args.today!r}",
+                  file=sys.stderr)
+            return 1
+    else:
+        today = datetime.date.today()
+    if args.days is not None and args.days < 0:
+        print(f"error: --days must be 0 or more, got {args.days}",
+              file=sys.stderr)
+        return 1
+    if args.kind:
+        unknown = [kind for kind in args.kind if kind not in SCHEDULE_KINDS]
+        if unknown:
+            print(f"error: --kind must be one of "
+                  f"{', '.join(SCHEDULE_KINDS)}, got {', '.join(unknown)}",
+                  file=sys.stderr)
+            return 1
+    try:
+        entries = read_log(args.log)
+    except TrackerError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    try:
+        data = collect_schedule(
+            entries, today=today,
+            days=(args.days if args.days is not None else 14),
+            kinds=args.kind)
+    except ScheduleError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    text = schedule_json(data) if args.json else render_schedule_markdown(data)
+    if args.out:
+        Path(args.out).write_text(text, encoding="utf-8")
+        print(f"wrote {args.out}")
+    else:
+        print(text, end="")
+    return 0
+
+
+def _cmd_negotiate(args):
+    if args.today is not None:
+        try:
+            today = datetime.date.fromisoformat(args.today)
+        except ValueError:
+            print(f"error: --today must be YYYY-MM-DD, got {args.today!r}",
+                  file=sys.stderr)
+            return 1
+    else:
+        today = datetime.date.today()
+    profile = _load_profile(args.profile)
+    if profile is None:
+        return 2
+    try:
+        entries = read_log(args.log)
+    except TrackerError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    entry = find_application(entries, args.id)
+    if entry is None:
+        print(f"error: no application with id {args.id!r}", file=sys.stderr)
+        return 1
+    try:
+        data = build_negotiation(entry, entries, profile=profile,
+                                 today=today,
+                                 postings_dir=args.postings_dir)
+    except NegotiationError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    text = negotiate_json(data) if args.json else render_negotiation_markdown(data)
     if args.out:
         Path(args.out).write_text(text, encoding="utf-8")
         print(f"wrote {args.out}")
@@ -1459,6 +2036,12 @@ def build_parser():
     p.add_argument("--deadline", default=None,
                    help="the posting's closing date YYYY-MM-DD, recorded "
                         "on the application")
+    p.add_argument("--resume", default=None,
+                   help="the resume file sent with the application, "
+                        "recorded on the log entry")
+    p.add_argument("--blocklist", default=None,
+                   help="blocked companies file (default: blocklist.json "
+                        "beside the log); apply refuses a blocked company")
     p.add_argument("--dry-run", action="store_true")
     p.set_defaults(func=_cmd_apply)
 
@@ -1485,6 +2068,12 @@ def build_parser():
     p.add_argument("--today", default=None,
                    help="date to log applications under, YYYY-MM-DD "
                         "(default: today)")
+    p.add_argument("--resume", default=None,
+                   help="the resume file sent with every application in "
+                        "the batch, recorded on each log entry")
+    p.add_argument("--blocklist", default=None,
+                   help="blocked companies file (default: blocklist.json "
+                        "beside the log); a blocked company is skipped")
     p.set_defaults(func=_cmd_batch)
 
     p = sub.add_parser("list", help="list logged applications")
@@ -1571,6 +2160,9 @@ def build_parser():
                    help="drop postings scoring below this (0-1)")
     p.add_argument("--include-applied", action="store_true",
                    help="also rank postings already in the log")
+    p.add_argument("--blocklist", default=None,
+                   help="blocked companies file (default: blocklist.json "
+                        "beside the log); a blocked company is skipped")
     p.add_argument("--json", action="store_true")
     p.add_argument("--out", default=None,
                    help="write the ranking to this file instead of stdout")
@@ -1724,7 +2316,8 @@ def build_parser():
                                           "everything recorded — "
                                           "applications, status moves, "
                                           "follow-ups, interviews, contacts, "
-                                          "offers, and debriefs — newest first")
+                                          "offers, debriefs, notes, and "
+                                          "onboarding tasks — newest first")
     p.add_argument("--log", default=f"{DEFAULT_OUT_DIR}/applications.jsonl")
     p.add_argument("--json", action="store_true")
     p.add_argument("--out", default=None,
@@ -1826,7 +2419,8 @@ def build_parser():
 
     p = sub.add_parser("next", help="one prioritised list of what to do: "
                                       "due follow-ups, upcoming interviews, "
-                                      "closing dates, offer deadlines, quiet "
+                                      "closing dates, offer deadlines, "
+                                      "onboarding tasks due, quiet "
                                       "contacts, stale applications, and "
                                       "rejections missing a reason")
     p.add_argument("--log", default=f"{DEFAULT_OUT_DIR}/applications.jsonl")
@@ -1850,6 +2444,64 @@ def build_parser():
                    help="days without movement before an application "
                         "counts as stale (default 14)")
     p.set_defaults(func=_cmd_next)
+
+    p = sub.add_parser("audit", help="one read-only pass over the log: "
+                                     "what is missing, stale, or "
+                                     "inconsistent, with the command that "
+                                     "fixes each issue")
+    p.add_argument("--log", default=f"{DEFAULT_OUT_DIR}/applications.jsonl")
+    p.add_argument("--json", action="store_true")
+    p.add_argument("--out", default=None,
+                   help="write the audit to this file instead of stdout")
+    p.add_argument("--today", default=None,
+                   help="reference date YYYY-MM-DD (default: today)")
+    p.add_argument("--id", default=None,
+                   help="audit one application only")
+    p.add_argument("--kind", action="append", default=None,
+                   help="only this kind of issue (repeatable): "
+                        + ", ".join(AUDIT_KINDS))
+    p.add_argument("--severity", default=None,
+                   help="only this level: error, warn, or info")
+    p.add_argument("--stale-days", type=int, default=14,
+                   help="days without activity before an application "
+                        "counts as stale (default 14)")
+    p.set_defaults(func=_cmd_audit)
+
+    p = sub.add_parser("schedule", help="the week ahead as a calendar: "
+                                        "interviews, offer deadlines and "
+                                        "closing dates, with clashes "
+                                        "flagged")
+    p.add_argument("--log", default=f"{DEFAULT_OUT_DIR}/applications.jsonl")
+    p.add_argument("--json", action="store_true")
+    p.add_argument("--out", default=None,
+                   help="write the schedule to this file instead of stdout")
+    p.add_argument("--today", default=None,
+                   help="reference date YYYY-MM-DD (default: today)")
+    p.add_argument("--days", type=int, default=14,
+                   help="how far ahead to look (default 14; 0 means today "
+                        "only)")
+    p.add_argument("--kind", action="append", default=None,
+                   help="only this kind of item (repeatable): "
+                        + ", ".join(SCHEDULE_KINDS))
+    p.set_defaults(func=_cmd_schedule)
+
+    p = sub.add_parser("negotiate", help="the brief for one recorded "
+                                         "offer: how it stands against "
+                                         "the target and the other offers, "
+                                         "what to cite, what not to claim")
+    p.add_argument("--id", required=True,
+                   help="application id, e.g. APP-001")
+    p.add_argument("--profile", required=True)
+    p.add_argument("--postings-dir", default=None,
+                   help="directory of .md / .txt postings, to check the "
+                        "posting's stated range")
+    p.add_argument("--log", default=f"{DEFAULT_OUT_DIR}/applications.jsonl")
+    p.add_argument("--json", action="store_true")
+    p.add_argument("--out", default=None,
+                   help="write the brief to this file instead of stdout")
+    p.add_argument("--today", default=None,
+                   help="reference date YYYY-MM-DD (default: today)")
+    p.set_defaults(func=_cmd_negotiate)
 
     p = sub.add_parser("export", help="the whole application log as one "
                                         "row per application: CSV for a "
@@ -1928,6 +2580,167 @@ def build_parser():
     p.add_argument("--unanswered", action="store_true",
                    help="list only questions with no prepared answer yet")
     p.set_defaults(func=_cmd_questions)
+
+    p = sub.add_parser("search", help="full-text search across the "
+                                      "application log: companies, people, "
+                                      "skills, notes, and questions asked")
+    p.add_argument("--log", default=f"{DEFAULT_OUT_DIR}/applications.jsonl")
+    p.add_argument("--query", required=True,
+                   help="the words to search for (every word must appear "
+                        "somewhere in the application)")
+    p.add_argument("--status", default=None,
+                   help="narrow to one status: "
+                        f"{', '.join(STATUSES)}")
+    p.add_argument("--source", default=None,
+                   help="narrow to one channel: "
+                        f"{', '.join(SOURCE_CHOICES)}")
+    p.add_argument("--json", action="store_true")
+    p.add_argument("--out", default=None,
+                   help="write the results to this file instead of stdout")
+    p.set_defaults(func=_cmd_search)
+
+    p = sub.add_parser("blocklist", help="the companies you will not "
+                                         "apply to again: list them, block "
+                                         "one, or take one off the list")
+    p.add_argument("--log", default=f"{DEFAULT_OUT_DIR}/applications.jsonl")
+    p.add_argument("--blocklist", default=None,
+                   help="blocked companies file (default: blocklist.json "
+                        "beside the log)")
+    p.add_argument("--json", action="store_true")
+    p.add_argument("--out", default=None,
+                   help="write the blocklist to this file instead of stdout")
+    p.add_argument("--record", action="store_true",
+                   help="block a company instead of listing")
+    p.add_argument("--remove", action="store_true",
+                   help="take a company off the blocklist instead of "
+                        "listing")
+    p.add_argument("--company", default=None,
+                   help="with --record or --remove: the company name")
+    p.add_argument("--reason", default=None,
+                   help="with --record: why, in your own words")
+    p.add_argument("--date", default=None,
+                   help="with --record: the day you decided, YYYY-MM-DD")
+    p.set_defaults(func=_cmd_blocklist)
+
+    p = sub.add_parser("resume", help="which resume file each application "
+                                      "was sent with: list them, or record "
+                                      "one with --record")
+    p.add_argument("--log", default=f"{DEFAULT_OUT_DIR}/applications.jsonl")
+    p.add_argument("--json", action="store_true")
+    p.add_argument("--out", default=None,
+                   help="write the resume list to this file instead of stdout")
+    p.add_argument("--today", default=None,
+                   help="reference date YYYY-MM-DD (default: today)")
+    p.add_argument("--record", action="store_true",
+                   help="record a resume instead of listing")
+    p.add_argument("--id", default=None,
+                   help="with --record: the application to record for; "
+                        "without it: show only this application's resume")
+    p.add_argument("--file", default=None,
+                   help="with --record: the resume file sent, e.g. "
+                        "resume-data-analyst-v3.pdf")
+    p.add_argument("--note", default=None,
+                   help="with --record: a note about this version, e.g. "
+                        "the one with the shorter summary")
+    p.add_argument("--resume", default=None,
+                   help="list only applications that got this resume version")
+    p.add_argument("--missing", action="store_true",
+                   help="list only applications with no resume recorded")
+    p.set_defaults(func=_cmd_resume)
+
+    p = sub.add_parser("notes", help="the notes you wrote down about each "
+                                      "application: list them, or record one "
+                                      "with --record")
+    p.add_argument("--log", default=f"{DEFAULT_OUT_DIR}/applications.jsonl")
+    p.add_argument("--json", action="store_true")
+    p.add_argument("--out", default=None,
+                   help="write the notes list to this file instead of stdout")
+    p.add_argument("--today", default=None,
+                   help="reference date YYYY-MM-DD (default: today)")
+    p.add_argument("--record", action="store_true",
+                   help="record a note instead of listing")
+    p.add_argument("--id", default=None,
+                   help="with --record: the application to record for; "
+                        "without it: show only this application's notes")
+    p.add_argument("--date", default=None,
+                   help="with --record: the date the note belongs to, "
+                        "YYYY-MM-DD (required, never defaulted)")
+    p.add_argument("--text", default=None,
+                   help="with --record: the note itself")
+    p.add_argument("--tag", default=None,
+                   help="with --record: a label for the note, e.g. "
+                        "'company'; without it: list only notes with "
+                        "this tag")
+    p.set_defaults(func=_cmd_notes)
+
+    p = sub.add_parser("onboard", help="the first weeks at the new job: "
+                                       "onboarding tasks on a hired "
+                                       "application, or record one / mark "
+                                       "one done")
+    p.add_argument("--log", default=f"{DEFAULT_OUT_DIR}/applications.jsonl")
+    p.add_argument("--json", action="store_true")
+    p.add_argument("--out", default=None,
+                   help="write the onboarding list to this file instead "
+                        "of stdout")
+    p.add_argument("--today", default=None,
+                   help="reference date YYYY-MM-DD (default: today)")
+    p.add_argument("--record", action="store_true",
+                   help="record an onboarding task instead of listing")
+    p.add_argument("--done", action="store_true",
+                   help="mark an onboarding task done instead of listing")
+    p.add_argument("--id", default=None,
+                   help="with --record or --done: the application to "
+                        "record for; without them: show only this "
+                        "application's tasks")
+    p.add_argument("--task", default=None,
+                   help="with --record: the thing to do")
+    p.add_argument("--category", default=None,
+                   choices=list(ONBOARD_CATEGORIES),
+                   help="with --record: what kind of task it is "
+                        "(default: other)")
+    p.add_argument("--due", default=None,
+                   help="with --record: the date it is due, YYYY-MM-DD "
+                        "(optional; a past date is flagged overdue)")
+    p.add_argument("--number", type=int, default=None,
+                   help="with --done: the task number to complete")
+    p.set_defaults(func=_cmd_onboard)
+
+    p = sub.add_parser("company", help="everything recorded about one "
+                                       "company, on one page; with no name, "
+                                       "list every company in the log")
+    p.add_argument("company", nargs="?", default=None,
+                   help="the company to show a dossier for; without it, "
+                        "list all companies")
+    p.add_argument("--log", default=f"{DEFAULT_OUT_DIR}/applications.jsonl")
+    p.add_argument("--blocklist", default=None,
+                   help="blocked companies file (default: blocklist.json "
+                        "beside the log)")
+    p.add_argument("--quiet-days", type=int, default=None,
+                   help="flag people not spoken to in this many days "
+                        "(default 14)")
+    p.add_argument("--json", action="store_true")
+    p.add_argument("--out", default=None,
+                   help="write the dossier or list to this file instead "
+                        "of stdout")
+    p.add_argument("--today", default=None,
+                   help="reference date YYYY-MM-DD (default: today)")
+    p.set_defaults(func=_cmd_company)
+
+    p = sub.add_parser("review", help="what the interviews actually tested: "
+                                      "which posting skills came up in the "
+                                      "debrief questions, and whether the "
+                                      "prep packet called them")
+    p.add_argument("--profile", required=True)
+    p.add_argument("--postings-dir", required=True,
+                   help="directory of .md / .txt postings the applications "
+                        "went to")
+    p.add_argument("--log", default=f"{DEFAULT_OUT_DIR}/applications.jsonl")
+    p.add_argument("--id", default=None,
+                   help="review one application only")
+    p.add_argument("--json", action="store_true")
+    p.add_argument("--out", default=None,
+                   help="write the review to this file instead of stdout")
+    p.set_defaults(func=_cmd_review)
 
     p = sub.add_parser("backup", help="pack the application log and the "
                                        "goals/questions settings into one "
