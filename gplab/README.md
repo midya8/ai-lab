@@ -202,3 +202,13 @@ from gplab import RBF, SVGP, kmeans_inducing
 gp = SVGP(RBF(0.9, 1.2), kmeans_inducing(X, 12), noise=0.1).fit(X, y, epochs=60, batch=40)
 mean, var = gp.predict(Xs)
 ```
+
+## v0.5: robust (Student-t) regression
+
+`RobustGP(kernel, noise, nu)` fits a Student-t likelihood by EM on its Gaussian scale-mixture form
+(per-point noise `noise / w_i`, closed-form weight updates, kernel hyper-parameters held fixed).
+`weights_` / `outliers()` expose which points were down-weighted. With 6 of 60 points shifted by 2-4
+units, the test suite requires the robust fit to have under 0.6x the function RMSE of a Gaussian GP
+at the same hyper-parameters, and the corrupted points' weights to sit far below the clean median
+(`tests/test_robust.py`). Hyper-parameters are not learned; the EM objective can have poor local modes
+if `noise` is set far too small.

@@ -360,6 +360,7 @@
 - gplab v0.1 (NEW, 2026-11-16): Gaussian processes from scratch in NumPy — RBF/Matern/Periodic/Linear kernels with analytic log-param gradients (sum/product rules), ExactGP (lml + analytic gradient, L-BFGS multi-restart, closed-form LOO, posterior samples), SparseGP VFE/FITC/DTC in one collapsed O(nm^2) form with greedy pivoted-Cholesky and k-means inducing points, RFF (RBF + Matern spectral sampling, orthogonal) / Nystrom / FeatureGP; studies: signal variance poorly identified even at n=300 while noise/lengthscale converge, VFE conservative vs FITC under-estimated noise at small M (all agree by M~24), k-means beats greedy inducing placement, RFF predictive variance starved (0.31 at D=10) while Nystrom exact by D=50, coverage 0.936 vs nominal 0.95 for every kernel and Matern-5/2 identified at 0.15 (chance 0.33), periodic kernels recover period 1.000 and extrapolate (RMSE 0.14 vs 1.5 for RBF), cost scaling (62 tests, synthetic)
 - gplab v0.2 (2026-11-16): Laplace GP classification (logistic likelihood, stable Newton, approx LML, probit predictive vs quadrature, hyper-parameter fit, log-loss/ECE; 68 tests)
 - gplab v0.3 (2026-11-16): SpectralMixture kernel with analytic gradients, frequency recovery and extrapolation tests (73 tests)
+- gplab v0.5 (2026-11-17): RobustGP Student-t regression via EM scale mixture, outlier weights (4 tests)
 
 
 ## Next
