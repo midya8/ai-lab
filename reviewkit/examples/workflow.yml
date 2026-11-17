@@ -12,7 +12,7 @@ jobs:
         with:
           fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha }}
-      - uses: midya8/ai-lab/reviewkit@main
+      - uses: midya8/ml-from-scratch/reviewkit@main
         with:
           fail-on: high
           # optional model pass (any OpenAI-compatible endpoint):

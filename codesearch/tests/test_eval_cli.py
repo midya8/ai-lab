@@ -120,7 +120,7 @@ def test_shipped_query_files_are_well_formed():
         assert meta["include"] and all(c.relevant for c in cases)
 
 
-@pytest.mark.skipif(not os.environ.get("CODESEARCH_MONOREPO"), reason="needs the full ai-lab checkout; set CODESEARCH_MONOREPO=1")
+@pytest.mark.skipif(not os.environ.get("CODESEARCH_MONOREPO"), reason="needs the full ml-from-scratch checkout; set CODESEARCH_MONOREPO=1")
 def test_shipped_labels_resolve_in_the_monorepo():
     from pathlib import Path
     bench = Path(__file__).resolve().parent.parent / "bench"

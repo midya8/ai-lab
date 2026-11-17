@@ -6,7 +6,7 @@
   "docqa",
   "guardkit",
   "llm-router",
-  "promptlab",
+  "prompt-regression",
   "ragkit",
   "reviewkit"
  ],
@@ -33,13 +33,13 @@
   {
    "query": "exact p-value for paired binary outcomes",
    "relevant": [
-    "promptlab/promptlab/stats.py::mcnemar_exact"
+    "prompt-regression/promptreg/stats.py::mcnemar_exact"
    ]
   },
   {
    "query": "confidence interval for a proportion with small samples",
    "relevant": [
-    "promptlab/promptlab/stats.py::wilson"
+    "prompt-regression/promptreg/stats.py::wilson"
    ]
   },
   {
@@ -70,7 +70,7 @@
   {
    "query": "turn a grader model reply into a score and reason, rejecting malformed output",
    "relevant": [
-    "promptlab/promptlab/judge.py::parse_judge_reply"
+    "prompt-regression/promptreg/judge.py::parse_judge_reply"
    ]
   },
   {
@@ -122,7 +122,7 @@
   {
    "query": "correlation between two rankings",
    "relevant": [
-    "promptlab/promptlab/stats.py::spearman"
+    "prompt-regression/promptreg/stats.py::spearman"
    ]
   },
   {
@@ -134,7 +134,7 @@
   {
    "query": "stable hash of a prompt template that ignores trailing whitespace",
    "relevant": [
-    "promptlab/promptlab/template.py::Template.digest"
+    "prompt-regression/promptreg/template.py::Template.digest"
    ]
   },
   {
@@ -160,7 +160,7 @@
   {
    "query": "ask the grader several times and take the conservative middle score",
    "relevant": [
-    "promptlab/promptlab/judge.py::judge_score"
+    "prompt-regression/promptreg/judge.py::judge_score"
    ]
   },
   {
@@ -172,8 +172,8 @@
   {
    "query": "neutralise untrusted text so it cannot close the prompt section",
    "relevant": [
-    "promptlab/promptlab/judge.py::_defang",
-    "promptlab/promptlab/pairwise.py::_defang",
+    "prompt-regression/promptreg/judge.py::_defang",
+    "prompt-regression/promptreg/pairwise.py::_defang",
     "reviewkit/src/reviewkit/llm.py::neutralize"
    ]
   }

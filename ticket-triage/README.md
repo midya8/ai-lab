@@ -1,40 +1,26 @@
 # ticket-triage
-Support-ticket triage classifier built from scratch in NumPy: unigram+bigram TF-IDF, softmax regression trained by gradient descent, confidence-based human escalation, confusion matrix and macro-F1.
 
-```
+A support-ticket classifier in NumPy: unigram + bigram TF-IDF into softmax regression, with low-confidence tickets escalated to a human. It kept growing into a small triage system around that.
+
+```bash
+cd ticket-triage
 pip install -r requirements.txt
 PYTHONPATH=src python -m triage.cli "I was charged twice for my plan"
-python -m pytest
+PYTHONPATH=src python -m triage.cli "..." --tags      # category + urgency + tags -> queue and SLA
+PYTHONPATH=src python -m triage.sla_sim               # staffing simulation
+python -m pytest -q
 ```
-Data is a deterministic synthetic generator (`triage.data`), so results are reproducible. k-fold CV, ECE and temperature-scaling calibration (`--cv 5`) in `triage.calibration`. Urgency head (`triage.urgency`): class-weighted logistic regression, recall-targeted threshold tuning, and `Triage.route()` combining category + urgency into a queue like `bug:urgent`.
 
-Active learning (`triage.active`, `--active`): uncertainty sampling (least-confidence, margin, entropy) vs random picks the tickets a human should label next; `review_queue()` returns the ranked queue and `compare()` replays labeling budgets. `--active` output (5 seeds, accuracy at 8 -> 32 labels): random 0.507 -> 0.834 vs uncertainty strategies 0.904-0.927. Synthetic data, so treat as illustrative.
+The data comes from a deterministic synthetic generator, so everything is reproducible but also easier than real tickets.
 
-Multi-label tags (`triage.tags`, `--tags`): one-vs-rest logistic regression with balanced per-tag weights and per-tag F1-tuned thresholds on a validation split (mobile / performance / security / enterprise, orthogonal to category). Reports micro/macro F1, Hamming loss and exact-match. On the synthetic generator it scores micro-F1 ~0.99 (the tags are phrase-based, so this is an easy, illustrative task).
+What's in it:
 
-Tag-aware routing (`triage.routing`): `TaggedTriage.route()` merges category, urgency and tags into a queue, priority (low/normal/high/critical) and SLA hours via ordered, overridable rules (security -> `security-response`/critical, enterprise -> high, urgent + escalating tag stacks one level). `python -m triage.cli "..." --tags` prints the tagged route.
+- Calibration with k-fold CV, ECE and temperature scaling.
+- An urgency head with recall-targeted thresholds, and routing like `bug:urgent`.
+- Active learning. Uncertainty sampling reaches 0.90-0.93 accuracy at 32 labels where random picks get 0.83.
+- Multi-label tags (mobile, performance, security, enterprise) and rule-based priority and SLA routing.
+- A discrete-event SLA simulation to find the fewest agents that meet a breach target.
+- A label audit using confident learning from [`datadoctor`](../datadoctor). On 500 tickets with 10% flipped labels it finds them with 0.78 precision and 0.87 recall.
+- Near-duplicate clustering, a drift monitor (PSI, out-of-vocabulary rate, confidence drop), and conformal prediction sets that decide between auto-route, review and escalate.
 
-
-SLA-breach simulation (`triage.sla_sim`): discrete-event, priority-first queues with N agents per routed queue and Poisson arrivals; reports breach rate, mean and p95 wait, plus `staffing_sweep` and `smallest_staffing` to find the fewest agents meeting a breach target. Run `PYTHONPATH=src python -m triage.sla_sim`. Numbers are synthetic and illustrate staffing effects only.
-
-## Label audit (datadoctor integration)
-
-`triage.label_audit.audit_labels(texts, labels)` runs confident learning (from the sibling `datadoctor` project) over out-of-fold TF-IDF probabilities and returns tickets whose category looks wrong, with a suggested fix, most suspicious first.
-
-Measured on synthetic tickets (500 tickets, uniform label flips, mean of 3 seeds; templates are easy, so real data will be harder):
-
-| flip rate | precision | recall |
-|---|---|---|
-| 5% | 0.88 | 0.84 |
-| 10% | 0.78 | 0.87 |
-| 20% | 0.73 | 0.88 |
-
-Duplicate detection (`triage.dedupe`): TF-IDF cosine pairs via `find_duplicates(texts, threshold)` and union-find `cluster()` that groups transitive near-duplicates (O(n^2), fine for thousands of tickets; not tuned on real data).
-
-## Drift monitor
-
-`triage.drift.drift_report(clf, reference_texts, new_texts)` compares an incoming batch with a reference batch without labels: PSI of the predicted-category mix (<0.1 stable, 0.1-0.25 moderate, >0.25 major), out-of-vocabulary rate, and mean-confidence drop, plus an `alert` flag. Tested on synthetic data only: same-distribution batches stay quiet, an unseen-vocabulary batch and a billing-only batch both alert. The alert thresholds are conventional defaults, not tuned.
-
-## Conformal prediction sets (`triage.conformal`)
-
-`ConformalTriage(model, alpha=0.1).calibrate(cal_texts, cal_labels)` returns category *sets* with >= 90% marginal coverage (split conformal, LAC score; calibrate on tickets not used for training). `route(text)` gives `auto` (one category), `review` (short candidate list for a human) or `escalate` (empty set). The test injects 30% label noise and checks mean coverage over 8 seeds is within 0.03 of 0.90. On the clean synthetic data the task is nearly separable, so sets are almost always singletons there.
+Everything is measured on synthetic data, so take the numbers as illustrative.

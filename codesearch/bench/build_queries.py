@@ -11,10 +11,10 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "src"))
 from codesearch.store import sync  # noqa: E402
 
-INCLUDE = ["agentflow", "agentkit", "docqa", "guardkit", "llm-router", "promptlab", "ragkit", "reviewkit"]
+INCLUDE = ["agentflow", "agentkit", "docqa", "guardkit", "llm-router", "prompt-regression", "ragkit", "reviewkit"]
 AF = "agentflow/agentflow/"
 LR = "llm-router/llmrouter/"
-PL = "promptlab/promptlab/"
+PL = "prompt-regression/promptreg/"
 GK = "guardkit/guardkit/"
 DQ = "docqa/docqa/"
 AK = "agentkit/agentkit/"

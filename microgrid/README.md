@@ -1,6 +1,6 @@
 # microgrid
 
-A from-scratch reverse-mode autodiff engine on numpy (~200 lines): broadcasting-aware gradients, matmul (incl. batched/vector cases), reductions, activations, a numerically stable `log_softmax`, SGD+momentum, Adam, small MLP, and a finite-difference `gradcheck` used to verify every op.
+A small reverse-mode autodiff engine on NumPy (~200 lines for the core) that I kept extending until it could train a transformer: broadcasting-aware gradients, matmul, conv2d and max-pool, LayerNorm, causal attention, a `MiniGPT`, SGD/Adam/AdamW, and a finite-difference `gradcheck` that every op is tested against.
 
 ```python
 from microgrid import Tensor, MLP, Adam, mse_loss
@@ -8,53 +8,18 @@ m = MLP([2, 8, 1]); opt = Adam(m.parameters(), lr=0.05)
 loss = mse_loss(m(Tensor(X)), y); loss.backward(); opt.step()
 ```
 
-`conv2d` (stride, zero padding, bias) and `max_pool2d` are gradient-checked too; `backward()` is an iterative topological sort (a 5000-node chain works).
+```bash
+cd microgrid
+PYTHONPATH=src python -m pytest -q          # 72 tests
+python experiments/train_heldout.py         # char LM on stdlib source, ~30 s
+```
 
-Transformer blocks (`attn.py`): `transpose`, `softmax`, `gelu`, `take_rows` (embedding), `masked_fill`, `LayerNorm`, `CausalSelfAttention`, `Block` (pre-LN) and `MiniGPT`, all gradient-checked; a causality test confirms later tokens never affect earlier outputs, and MiniGPT memorises a cyclic sequence (a smoke test of learning, not a language-modelling result).
+## Things I tried with it
 
-Char-level LM training (`lm.py`, `experiments/train_corpus.py`): trains MiniGPT (d=32, 4 heads, 2 layers, ctx=32) on tiny-transformer's corpus with Adam. In a 400-step run (~10 s, CPU) val loss went 3.76 -> 0.19 (uniform baseline 3.61). Honest reading: the corpus is 2.6 KB and repetitive, so the 'held-out' tail overlaps the training text and the model largely memorises it (generation reproduces the passage); this shows the hand-written autodiff trains a transformer end to end, not generalisation. Parity with tiny-transformer (`parity.py`, `tests/test_parity.py`): weights of a tinygpt.GPT (float64, randomised so biases/LN are non-trivial) are copied into MiniGPT; logits, loss and all 30 parameter gradients agree (logits/loss to <1e-9, grads to <1e-8) between hand-written backprop and tape autodiff. Covers the plain config only (learned positions, MHA, untied head, no dropout).
+- **Parity with tiny-transformer.** Copying weights from the hand-written-backprop GPT in [`tiny-transformer`](../tiny-transformer) gives the same logits, loss and all 30 gradients to <1e-8.
+- **A real held-out run.** Trained on 60k chars of Python stdlib source and validated on different files, held-out loss goes 5.35 to 2.47 (uniform is 4.53). The samples are code-flavoured gibberish, which is about right for a model this size.
+- **KV cache.** Matches the full forward to 1e-9. 12x faster at ctx 64 and 33x at 256, though some of that is just skipping the autodiff tape. An int8 KV cache cost nothing measurable in perplexity.
+- **Weight quantization.** 8-bit is free. 4-bit per-channel costs +0.022 nats, and per-tensor costs about 3x more. GPTQ-style error compensation roughly halves the 3-bit loss (+0.181 to +0.096), and the sequential version gets it to +0.080. 2-bit stays unusable whatever I do.
+- **Weight decay** had no measurable effect across 3 seeds at this scale.
 
-Test: `PYTHONPATH=src python -m pytest -q` (26 tests incl. LM training/generation smoke tests; 24 earlier: the original 16: gradient checks for each op incl. conv/pool, conv vs naive loop, XOR via MLP, a 2-blob classifier, a tiny CNN on synthetic row-vs-column stripes).
-
-Limits: float64 CPU only, conv is einsum/strided-view based (fine for small images, not fast), no graph freeing. Educational, not a framework.
-
-## Optimiser extras
-
-`AdamW` (decoupled weight decay), `clip_grad_norm`, and `cosine_warmup` are in `microgrid.optim`; `lm.train` accepts `weight_decay`, `clip`, `warmup`, `schedule`. Tests check the exact decay step, AdamW==Adam at wd=0, clip norm, and schedule shape; no quality claim is made for them on the toy corpus.
-
-## Leak-free held-out run
-
-`experiments/train_heldout.py` trains on Python stdlib source (even-indexed files, 60k chars) and validates on disjoint files (odd-indexed, 12k chars) via `make_data_split` (vocab from train only). One 600-step run (d=48, 2 layers, ctx=48, clip+warmup+cosine, ~30 s CPU, single seed): held-out loss 5.35 -> 2.47 (uniform 4.53), train ~2.03. Samples are code-flavoured gibberish (indentation, quotes, common words); a tiny model on 60k chars, so this shows real generalisation to unseen files but not quality. Train loss is a single noisy batch.
-
-## KV-cache inference (`kvcache.py`)
-
-Pure-numpy forward with per-layer key/value caches (`prefill`, `step`, `generate_cached`). Tests check it matches the autodiff forward to 1e-9 at every position, chunked prefill equals single prefill, and `generate_cached` reproduces `lm.generate` token for token, including after the window slides past ctx (absolute positions force a re-prefill there). `experiments/bench_kvcache.py` (d=64, 4 layers, CPU): ctx=64 12x faster (0.33s -> 0.03s), ctx=256 33x (4.14s -> 0.12s). Caveat: the baseline also pays autodiff tape overhead that the cached path skips, so the speedup mixes both effects; it is not caching alone. Also: `QuantKVCache` (int8 values + one float32 scale per head/token vector; ~3.6x smaller than float64 at dh=16, outputs within 0.05 logits of exact in tests, so generation is no longer guaranteed token-identical to `lm.generate`), and `top_k` / `top_p` sampling in `generate_cached` (defaults leave the sampling stream unchanged). Tests use small random models; no quality (perplexity) evaluation of the int8 cache was run. 52 tests.
-
-## Multi-seed + weight-decay ablation (`experiments/seeds_heldout.py`)
-
-Same leak-free split, 400 steps, 3 seeds (seed varies init and batch sampling). Held-out loss: wd=0.0 -> 2.568 +- 0.018 (runs 2.576/2.544/2.585); wd=0.1 -> 2.558 +- 0.017 (2.566/2.534/2.574). Uniform baseline 4.533. wd=0.1 is lower by ~0.01 in every paired seed, but that is well inside the seed-to-seed spread and 3 seeds is few, so this is a null result: weight decay has no demonstrable effect at this scale. The single-run 2.47 above (600 steps) was a more favourable draw/longer run, not comparable.
-
-## int8 KV cache perplexity (`experiments/kv_perplexity.py`)
-
-`cached_nll` teacher-forces a sequence one token at a time through a cache (windows of ctx), so every attention read uses what the cache stored; with the exact cache it matches the autodiff loss to 1e-9 (tested). On 3000 held-out stdlib characters, 400-step models, 3 seeds: exact vs int8 NLL differ by -0.00006 / +0.00016 / +0.00002 nats (perplexity ~15.65-15.70 either way). Reading: int8 per-vector quantisation of K/V costs nothing measurable here, but these are tiny models (dh=12, ctx 48) with short caches, so this does not predict behaviour at scale. 53 tests.
-
-## Weight-only quantisation (`wquant.py`, `experiments/weight_quant.py`)
-
-`quantize_model(model, bits, per_channel)` returns a copy whose linear weights (per output column) and embeddings (per row) are rounded to a symmetric b-bit grid and stored back as float64 (simulated quantisation: accuracy is real, no packed kernels, no speedup). `weight_bytes` estimates packed storage (codes + float32 scales). Held-out stdlib source, 3 seeds, 400-step models, mean NLL delta vs fp64 (nats): 8-bit +0.0003, 6-bit -0.0003 (noise), 4-bit per-channel +0.022 (0.004 to 0.038), 4-bit per-tensor +0.075, 3-bit +0.18, 2-bit +1.55. Packed size 543,720 B -> 76,668 B (8-bit) / 43,404 B (4-bit); estimate counts float32 scales and unquantised LN/bias. Per-channel scales matter at 4 bits (about 3x less loss than per-tensor). Caveats: tiny models (d=48), round-to-nearest only (no GPTQ/AWQ), the ~0.02-nat 4-bit spread across seeds is as large as some effects; results do not extrapolate to large LLMs. Raw output in `experiments/weight_quant_results.txt`. 60 tests.
-
-## GPTQ-style rounding (`gptq.py`, `experiments/gptq_vs_rtn.py`)
-
-`gptq_model(model, windows, bits)` rounds each linear's input rows one at a time and spreads the rounding error over the not-yet-rounded rows via the inverse of H = X^T X (damped, Cholesky form), where X are that layer's inputs on calibration windows. The per-channel grid is identical to RTN's, so only rounding decisions differ. Tests: lower layer-output error than RTN on correlated inputs, values stay on the grid, diagonal H reduces to RTN, dead inputs are safe. Held-out stdlib source, 3 seeds, 400-step models, 64 train-split calibration windows, mean NLL delta vs fp64 (nats): 4-bit RTN +0.022 vs GPTQ +0.014 (seed 0 went the wrong way: +0.004 vs +0.011); 3-bit +0.181 vs +0.096 (better in all seeds); 2-bit +1.55 vs +1.28 (still unusable). Reading: error compensation roughly halves the 3-bit loss; at 4 bits the gain is within seed noise. Simplifications: Hessians come from one fp64 pass (not re-collected after earlier layers are quantised), embeddings use RTN, tiny models, no packed kernels. Raw output in `experiments/gptq_vs_rtn_results.txt`. 65 tests.
-
-## Group-wise scales (`fake_quant_grouped`, `quantize_model(..., group=g)`, `experiments/weight_quant_groups.py`)
-
-One scale per `g` consecutive input rows within each output column (g = full height equals per-channel). Same setup as above, mean NLL delta (nats): 4-bit per-channel +0.022, g16 +0.023, g8 +0.021 (no gain, within seed noise); 3-bit +0.181 -> g16 +0.128 -> g8 +0.106; 2-bit +1.55 -> g8 +0.95 (still unusable). Reading: finer groups only pay off once the grid is coarse (3 bits and below); extra float32 scales cost storage (see `weight_bytes(..., group=g)`). Tiny models, RTN only. Raw output in `experiments/weight_quant_groups_results.txt`. 69 tests.
-
-
-## Sequential GPTQ (`gptq_model(..., sequential=True)`)
-
-Hessians are re-collected before each linear, in forward order, from the partly quantised copy (embeddings quantised first), so each layer compensates for upstream rounding error. Same setup as above (`experiments/gptq_seq.py`, 3 seeds, mean NLL delta vs fp64, nats): 4-bit RTN +0.022, one-shot GPTQ +0.014, sequential +0.011; 3-bit +0.181 / +0.096 / +0.080; 2-bit +1.55 / +1.28 / +0.95. Sequential beat one-shot in 8 of 9 seed/bit cells (seed 0 at 4 bits tied); 2-bit remains far from usable. Costs one forward pass per linear. Tiny models, 3 seeds, simulated quantisation. Output in `experiments/gptq_seq_results.txt`. 72 tests.
-
-## MSE-optimal clipping
-
-`wquant.fake_quant_mse(w, bits, axis)` searches a clip ratio per channel (0.5-1.0 of max|w|) to minimise weight squared error. On synthetic Student-t(3) weights (256x64) mean squared error vs RTN: 2-bit 1.93 -> 1.35, 3-bit 0.77 -> 0.45, 4-bit 0.216 -> 0.166, 6-bit 0.0131 -> 0.0128. This is weight error on synthetic heavy-tailed data, not measured perplexity on the trained model.
+Float64 on CPU, no graph freeing, conv via strided views. It's for learning, not a framework. The quantization is simulated (real accuracy, no packed kernels).

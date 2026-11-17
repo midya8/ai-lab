@@ -6,7 +6,7 @@
   "docqa",
   "guardkit",
   "llm-router",
-  "promptlab",
+  "prompt-regression",
   "ragkit",
   "reviewkit"
  ],
@@ -36,13 +36,13 @@
   {
    "query": "agreement statistic between two raters that corrects for chance",
    "relevant": [
-    "promptlab/promptlab/stats.py::cohen_kappa"
+    "prompt-regression/promptreg/stats.py::cohen_kappa"
    ]
   },
   {
    "query": "bootstrap resampling of paired differences",
    "relevant": [
-    "promptlab/promptlab/stats.py::paired_bootstrap"
+    "prompt-regression/promptreg/stats.py::paired_bootstrap"
    ]
   },
   {
@@ -75,7 +75,7 @@
   {
    "query": "markdown summary of the regression gate for a CI job page",
    "relevant": [
-    "promptlab/promptlab/compare.py::render_check_markdown"
+    "prompt-regression/promptreg/compare.py::render_check_markdown"
    ]
   },
   {
@@ -131,7 +131,7 @@
   {
    "query": "substitute variables in a template and fail when one is missing",
    "relevant": [
-    "promptlab/promptlab/template.py::Template.render"
+    "prompt-regression/promptreg/template.py::Template.render"
    ]
   },
   {
@@ -175,17 +175,17 @@
   {
    "query": "read a jsonl file of labelled items skipping comment lines",
    "relevant": [
-    "promptlab/promptlab/runner.py::load_cases",
-    "promptlab/promptlab/judge.py::load_calibration_items",
-    "promptlab/promptlab/pairwise.py::load_pair_items",
+    "prompt-regression/promptreg/runner.py::load_cases",
+    "prompt-regression/promptreg/judge.py::load_calibration_items",
+    "prompt-regression/promptreg/pairwise.py::load_pair_items",
     "guardkit/guardkit/eval.py::load_cases"
    ]
   },
   {
    "query": "attach a label to a stored prompt version and look it up later",
    "relevant": [
-    "promptlab/promptlab/registry.py::Registry.tag",
-    "promptlab/promptlab/registry.py::Registry.resolve"
+    "prompt-regression/promptreg/registry.py::Registry.tag",
+    "prompt-regression/promptreg/registry.py::Registry.resolve"
    ]
   }
  ]

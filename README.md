@@ -1,60 +1,70 @@
-# Ai portfolio
+# ml-from-scratch
 
-Small AI implementations, experiments and tools I can run locally.
+Where I build ML ideas myself to understand them. Mostly NumPy or plain Python, small enough to run on a laptop CPU, and each folder has its own README, tests and a few experiments. A second group is practical LLM tooling: evals, RAG, agents, routing, guardrails.
 
-| Project | Pitch |
+Every project runs on its own. The usual pattern is:
+
+```bash
+cd <project>
+pip install -r requirements.txt     # if there is one (usually just numpy + pytest)
+PYTHONPATH=src python -m pytest -q
+```
+
+## Models and training
+
+| project | what it is |
 |---|---|
-| [PartsLab](https://github.com/midya8/nonnegative-matrix) | Manual NMF, exact fixed-basis objective bounds and [one-pixel fixed-face NNLS response](https://midya8.github.io/nonnegative-matrix/face.html). Fraction/BigInt affine KKT intervals, endpoint ties, singleton and nonuniqueness controls; 38 Python/eleven Node tests, 200 tiny face oracles, 54 native/Worker witnesses and 10,368 pixel checks. Ten modules/ten commands, original six fits/data/scores unchanged. Stronger signed PCA/SVD controls still win; joint fits still exhaust their stationarity budget. Not unique semantic parts, a full path, robustness or joint-NMF optimality. |
-| [MixtureLab](https://github.com/midya8/gmm-em) | Manual constrained Gaussian-mixture EM and [frozen observed-coordinate conditionals](https://midya8.github.io/gmm-em/conditional.html). Marginal evidence, Schur complements and within/between covariance. 45 Python/eleven Node tests; 5,696 original cases, 160 native/scalar-JS references and 160 UI cases. Mean-in-a-gap and increasing-variance controls. Twelve modules/nine commands; original fits/scores unchanged. Analytical masks, not real missingness, causal inference or calibrated intervals. |
-| [DenoiseLab](https://github.com/midya8/digit-denoising) | Manual denoising, neural/PCA response, scalar paths and [two-pixel exact retrieval cells](https://midya8.github.io/digit-denoising/plane.html). Fraction/BigInt area/edge/point/empty witnesses and source-matched supporting-halfplane/infeasibility proofs. 52 Python/fourteen Node tests; 238 independently enumerated cells, 2,110 oracle queries, 160 browser queries and 30,720 canvas colors; ten modules/nine commands. Original winning controls/models/scores unchanged. Fixed two-coordinate slice, not general robustness, causal recourse, uncertainty, new accuracy or binary64 tie equivalence. |
-| [TagLab](https://github.com/midya8/linear-chain-crf) | Manual CRF learning and 327-state optimization replay; fixed-score label events, auditable joint sampling and [nonlocal exact-count inference](https://midya8.github.io/linear-chain-crf/counts.html). Count-state witnesses and an independent-node control distinguish exact counts from expectations. 43 Python/20 Node tests; 5,895 browser states/queries; eleven modules/nine commands. Selected chain wins NLL but loses Viterbi token errors (66/164 versus same-feature control 56/164). Synthetic illustration, not NLP validation, causal intervention or calibrated confidence. Original fits/budgets unchanged; finite-precision, PRNG and tie limits explicit. |
-| [SpectralLab](https://github.com/midya8/spectral-clustering) | Manual normalized graph clustering, complete degree-response derivatives and basis-invariant projector sensitivity. 33 Python/nine Node tests; 1,728 original point states plus 168 sensitivity states. [Graph inspector](https://midya8.github.io/spectral-clustering/), [finite-refit sensitivity](https://midya8.github.io/spectral-clustering/sensitivity.html). Tied rounding and refused boundaries stay visible. Original synthetic full-data illustration, not prediction, a label gradient or exact discrete optimization. |
-| [ForestLab](https://github.com/midya8/random-forests) | Manual CART forests, exact Gini ordering, bootstrap/OOB and joint permutation witnesses. New [leaf-collision geometry](https://midya8.github.io/random-forests/proximity.html): exact Gram sums of squares, jointly-OOB denominators and undefined pairs, an exact negative OOB quadratic control. 39 Python/12 Node-Chrome tests, 512 independent partition controls and 13,824 heatmap colors; ten-module/ten-command reproduction. Original stronger 5NN and all scores stay unchanged. Model geometry, not semantic similarity, calibrated confidence or causal influence. |
-| [RatingLab](https://github.com/midya8/rating-factors) | Observed-only ALS with a stronger winning bias control. New [joint batch inspector](https://midya8.github.io/rating-factors/batch.html): additive target edits, coupled Schur deletion, separate-original-baseline contrast, saved-versus-re-solved states and numerical refusal without jitter. 37 Python/14 Node-Chrome tests, 320 rational direct-system oracles, 128 real least-squares cases, 320 complete cross-language references plus 4 controls; ten-module reproduction. Original models/scores unchanged. Frozen-block algebra, not full retraining, cross-validation, unlearning, causal influence or uncertainty. |
-| [MarginLab](https://github.com/midya8/svm-from-scratch) | Manual SVM and repaired exact training-objective proofs, now [exact input boxes](https://midya8.github.io/svm-from-scratch/box.html): attained score bounds, both corners, tie-aware labels and source consistency.36Python/15Node-Chrome tests,120exhaustive corner cases,256direct dual endpoint sums,128full responses,11modules. Synthetic boxes, not clinical tolerances, plausible interventions, RBF, floating-inference safety or authentication. |
-| [rag-evals](rag-evals) | From-scratch BM25, LSA and RRF-hybrid RAG retrieval with chunking and Recall/MRR/nDCG evaluation harness |
-| [agentkit](agentkit) | Dependency-free LLM agent runner: tool-calling loop, bounded steps, loop detection, dry-run, JSON trace (46 tests) |
-| [ragkit](ragkit) | Local RAG over your own docs: chunking, TF-IDF/BM25 retrieval, answers with citations, eval (59 tests) |
-| [evalkit](evalkit) | LLM eval harness: golden sets, scorers, regression compare, Markdown/JSON reports (36 tests) |
-| [guardkit](guardkit) | Runtime guardrails for LLM pipelines: injection scoring, PII/secret redaction, policy file, audit log, adversarial eval (62 tests) |
-| [tiny-transformer](tiny-transformer) | GPT from scratch in pure NumPy with hand-written backprop (gradient-checked), trainer and sampler; RoPE option vs learned positions, grouped-query/multi-query attention with a compact KV cache, RoPE context extension via position interpolation / NTK scaling (131 tests) |
-| [llm-eval-harness](llm-eval-harness) | Pluggable LLM eval harness with scorers, prompt suites and a CI regression gate |
-| [agentflow](agentflow) | Multi-agent orchestration framework: tool-using agents, task DAG, parallel runs, retries, supervisor routing, shared memory, circuit breakers, run on llm-router with per-agent cost reports, crash-safe run log with fingerprint-based resume. Asyncio orchestrator with timeouts and streaming (61 tests) |
-| [logsentry](logsentry) | Log anomaly detection: template mining, robust volume spikes, error bursts, new-pattern alerts, per-template spikes, streaming mode, Prometheus exporter, webhook alerts |
-| [ticket-triage](ticket-triage) | Support-ticket triage classifier from scratch: TF-IDF + softmax regression with confidence-based escalation |
-| [lora-lab](lora-lab) | LoRA from scratch in NumPy: manual backprop, gradcheck, merge/unmerge, rank sweep, plus adapters on the tiny-transformer GPT attention (3.7% of weights cuts new-domain NLL 5.69 → 1.50), plus an adapter hub that swaps, blends, routes and SVD-composes adapters, plus QLoRA-style adapters on an int8/NF4/int4-quantized frozen base (4.3x smaller model, same adapter quality), plus LoftQ-style init where the adapter starts by repairing the quantization error (~20% lower weight error than plain 4-bit), plus QLoRA double quantization (int8 block scales: 4.5 → 4.13 bits/weight at identical error, with a block-size frontier; 86 tests) |
-| [visionlab](visionlab) | CNN from scratch in NumPy (im2col conv, hand-written backprop, gradient-checked): Grad-CAM / SmoothGrad / occlusion with a deletion-curve faithfulness test, FGSM/PGD attacks and adversarial training that doubles robust accuracy (0.33 -> 0.72 at eps 0.05); BatchNorm + global-average-pool head keeps 0.96 accuracy at 3 px shift where the dense head falls to 0.56 (at a contrast-robustness cost, reported); **certified robustness** by interval bound propagation: standard nets certify 0 %, IBP-trained proves 56 % of images safe at eps 0.03, on a procedural shapes dataset (64 tests) |
-| [reviewkit](reviewkit) | PR code-review bot: diff parser with line tracking, 21 AST/tokenizer-aware rules (eval, shell=True, SQL injection, secrets that are never echoed, `torch.load`, mutable defaults, missing timeouts...), optional LLM pass whose replies are validated against the diff (no hallucinated lines, no pings, severity capped), idempotent inline posting, GitHub Action; scored on a dev set (1.00/1.00) and a held-out set (first run precision 0.76 / recall 0.67, reported) (73 tests) |
-| [codesearch](codesearch) | Semantic code search for Python repos: AST chunking, identifier-aware terms, BM25F over name/doc/signature/body/path fields, NumPy LSA, exact-symbol pinning, incremental SHA-256 index, query-by-example and duplicate-function finder; scored on two labelled query sets (BM25F MRR 0.70 dev / 0.59 held-out vs 0.25 / 0.12 for grep-like name matching; LSA and hybrid fusion did not help, reported); `watch` mode keeps the index fresh (65 tests) |
-| [datadoctor](datadoctor) | Dataset doctor: confident-learning label-error detection (confident joint, noise matrix, 5 pruning rules, quality scores) on cross-validated probabilities from any model, plus exact/near/conflicting duplicates, train-test leakage, MinHash text near-dupes and per-class outliers; Markdown/JSON audit CLI with a CI gate. Benchmarked on injected noise (structured noise: pruning lifts test accuracy 0.72 -> 0.87; in-sample loss is a strong baseline on easy data, reported); redundant/collinear feature finder (144 tests) |
-| [vecdb](vecdb) | Vector search from scratch: exact, IVF-Flat, IVF-PQ (residual PQ + ADC + exact re-rank) HNSW and SQ8 scalar quantisation, plus a Collection with metadata filters pushed into the search, upsert/delete and persistence; benchmarked for recall, latency and memory on 20k vectors (HNSW wins on distance evals but not Python wall-clock, PQ-only recall plateaus at 0.74, selective filters break graph walks, all reported) (89 tests); HNSW tombstone repair |
-| [microgrid](microgrid) | From-scratch reverse-mode autodiff on numpy: broadcasting, matmul, conv, SGD/Adam, gradcheck, plus transformer blocks (LayerNorm, causal attention, MiniGPT), AdamW, parity vs tiny-transformer, KV-cache inference (44 tests) |
-| [specdec](specdec) | Speculative sampling from scratch: exact-distribution draft/verify decoding with acceptance and speedup analysis |
-| [voicekit](voicekit) | Offline voice-command pipeline from scratch on NumPy: streaming VAD with an adaptive noise floor (chunk-size invariant), MFCC + spectral subtraction, hand-backpropped MLP vs DTW word classifiers with open-set rejection, and an order-tolerant command grammar. On synthetic formant speech: 96-98% end-to-end at 10-30 dB, 0 false alarms in 15 min of noise, but the VAD loses 43% of words at 0 dB and spectral subtraction gave no gain (reported); not real speech (81 tests) |
-| [bpekit](bpekit) | Byte-level BPE tokenizer trained from scratch: deterministic merges, lossless Unicode, special tokens, save/load, 15x faster incremental trainer, GPT-2-style vocab/merges export, BPE-dropout, vocab-size sweep, token offsets + token-budget chunking (35 tests) |
-| [rlgrid](rlgrid) | Tabular RL from scratch: Q-learning, SARSA, Dyna-Q, REINFORCE, eligibility traces, n-step vs value-iteration ground truth on a slippery gridworld. |
-| [mctslab](mctslab) | UCT Monte-Carlo tree search from scratch, checked against exact minimax on tic-tac-toe / Connect-N; PUCT with pluggable prior/value ; AlphaZero-lite self-play net (30 tests) |
-| [bpelab](bpelab) | Byte-level BPE tokenizer trainer in pure Python: lossless unicode round-trip, incremental pair counting verified against a naive recount, special tokens, save/load, plus a unigram-LM tokenizer (EM + Viterbi) compared against BPE, with subword-regularisation sampling, tokenizer stats: fertility + Renyi efficiency (29 tests) |
-| [interplab](interplab) | Mechanistic interpretability from scratch: hooked NumPy forward of a trained microgrid transformer, head ablation, exact logit attribution, activation patching, composition scores and a causal copy test; finds no textbook induction head, the lookup is in layer 0 + MLPs; v0.2 MLP layer+neuron ablation (22 tests) |
-| [diffusionlab](diffusionlab) | Diffusion from scratch in NumPy (DDPM, DDIM, classifier-free guidance; hand-written backprop, gradient-checked) on Gaussian-mixture data whose noised score is exact: measures the trained net's excess error against the Bayes-optimal noise predictor, separates sampler discretisation error from learning error with an oracle sampler, and shows guidance trading diversity for accuracy until the net stops tracking the oracle at high scale (23 tests) |
-| [conformlab](conformlab) | Conformal prediction from scratch in NumPy: split/normalised/CQR intervals, LAC/APS/Mondrian sets, adaptive conformal for drift; verifies the exact Beta coverage law and shows marginal 90% hiding 77% / 74% conditional coverage until fixed (13 tests) |
-| [boptlab](boptlab) | Bayesian optimisation from scratch in NumPy: ARD GP with analytic likelihood gradients (finite-difference verified), EI/PI/UCB/Thompson, constant-liar batches, noisy objectives; cuts median regret vs random search by roughly 3x to 100x+ across 6 benchmarks (best method per function), with honest kernel/acquisition/batch/noise studies, tail-stable log-EI (45 tests) |
-| [flashlab](flashlab) | FlashAttention / FlashDecoding / PagedAttention from scratch in NumPy, exact vs a naive reference: online-softmax tiling with O(1) tile skipping (causal, sliding window, ALiBi, GQA), FlashAttention-2 backward from the log-sum-exp (checked against finite differences), split-KV decode, and a paged KV cache with forking and copy-on-write, optionally holding bit-packed int8/int4/int2 keys and values (error vs real bytes per token); measures I/O, memory and flops, including where tiling does *not* help (100 tests) |
-| [gnnlab](gnnlab) | Graph neural networks from scratch in NumPy: GCN, GraphSAGE and multi-head GAT with hand-written backprop (finite-difference checked, permutation-equivariance tested), PairNorm/residuals; measures when graphs help (GCN +41 pts over an MLP at 0.9 edge homophily, -21 pts at 0.2; GraphSAGE's separate self weights stay at MLP level) and where depth oversmooths (plain GCN collapses by 16 layers; residual/PairNorm fix it); v0.2 adds APPNP/SGC/JKNet and label propagation: a linear SGC also collapses by K=32, so oversmoothing is real, and only teleportation (APPNP a=0.1) or jumping knowledge avoids it (55 tests) |
-| [moelab](moelab) | Sparse Mixture-of-Experts routing from scratch in NumPy: top-k token-choice and expert-choice routing, capacity limits with token dropping, Switch load-balance + z-loss, all finite-difference checked; top-1 routing collapses without the balance loss (~4 of 8 experts dead, 40% tokens dropped; aux 0.1 cuts error 4.7x), top-2 MoE beats a compute-matched dense FFN 1.6-2.1x but only ties a parameter-matched one; v0.2 adds DeepSeek-style aux-loss-free bias balancing (top-2 load CV 0.06, 0% drops, keeps routing specialisation on skewed data better than the balance loss) and shared/fine-grained experts (38 tests) |
-| [saelab](saelab) | Sparse autoencoders from scratch in NumPy on synthetic superposition with known ground-truth features: ReLU+L1, TopK, BatchTopK, JumpReLU and Gated (finite-difference checked), scored on whether the true features were recovered; BatchTopK halves reconstruction error vs fixed TopK at the same sparsity, L1 needs ~2.4x the active latents and shrinks magnitudes, recovery is perfect up to 8x superposition at L0<=6 but collapses at L0 12-24 even while reconstruction stays good; JumpReLU ties BatchTopK on FVU, Gated beats L1, and feature absorption in a parent/child hierarchy rises with sparsity pressure in every architecture (36 tests) |
-| [flowlab](flowlab) | Normalizing flows from scratch in NumPy: RealNVP affine and NICE additive couplings, ActNorm, hand-written backprop checked against finite differences (and a test proving the check catches a broken logdet); scored as a KL gap to *exact* densities (8-Gaussian ring, checkerboard): the gap falls 1.20 -> 0.40 nats from 2 to 16 couplings but 8% of samples still land between the modes; additive vs affine depth study with mixed results, reported (25 tests) |
-| [ssmlab](ssmlab) | Mamba-style selective state-space model from scratch in NumPy with hand-written backprop through the scan (reverse-time adjoint scan, finite-difference checked on every parameter, plus a test that the check catches a corrupted backward); selective copying shows what input-dependent dynamics buy: 100% per-token accuracy at every noise length and 99%+ on sequences twice as long as trained on, vs 81-91% for a fixed-convolution (LTI) block that collapses to 52-62% off-distribution, still true when the LTI model is widened to more parameters; constant-size recurrent decoding matches the full forward; a delta probe finds the step-size gate is only partly how it works (seed-dependent) (37 tests) |
-| [hoplab](hoplab) | Hopfield networks from scratch in NumPy: Hebbian/pseudoinverse/Storkey storage, binary dense associative memories (polynomial and exponential) and continuous modern Hopfield whose update is verified equal to softmax attention; energy Lyapunov tests, capacity/basin/correlation studies and the beta phase transition between averaging and retrieval (34 tests) |
-| [ntklab](ntklab) | Neural Tangent Kernel from scratch: hand-backpropped ReLU MLP, empirical vs analytic infinite-width NTK/NNGP, exact kernel-regression GD solution, studies of lazy training, spectral bias, alpha-scaling and depth (38 tests) |
-| [gplab](gplab) | Gaussian processes from scratch (NumPy only): kernels with analytic gradients, exact GP with marginal-likelihood fitting and closed-form LOO, VFE/FITC/DTC sparse GPs, random-Fourier and Nystrom features; studies of hyper-parameter identifiability, sparse-method failure modes, feature variance starvation, calibration and extrapolation (62 tests) |
-| [llm-router](llm-router) | Cost/latency-aware LLM router: complexity scoring, 4 strategies, fallback chains, circuit breakers, exact + semantic cache, budget guardrails, per-model rate limits, cascade, outage simulator (73 tests) |
-| [promptlab](promptlab) | Prompt versioning + paired A/B testing (exact McNemar, Wilson/bootstrap CIs) + baseline regression gate + GitHub Action for CI + LLM-as-judge checks with judge calibration (agreement, Cohen's kappa, Spearman, leniency bias) + pairwise judging with a position-swap bias audit + multi-judge majority ensembles with Fleiss' kappa (106 tests) |
-| [docqa](docqa) | Grounded document Q&A: verbatim cited sentences, coverage-based abstention ("I don't know"), synonym-aware paraphrase matching, corpus-grounded typo correction, HTTP service with answer cache + Prometheus metrics (64 tests) |
-| [autojob](autojob) | Agentic job-application assistant: profile validation, posting parse, transparent match scoring, facts-only cover-letter drafts, review notes, JSONL application tracker, funnel analytics, interview-prep packets, follow-up reminders, tailored resume sections, salary analysis, offer comparison, interview rounds, calendar export, contacts log, activity timeline, posting closing dates, weekly goals, rejection analysis, sources & referrals, next actions, batch apply, data export, interview debriefs, interview question bank, backup & restore, full-text search, blocklist, resume versions, application notes, company dossier, interview review, log audit, interview schedule, negotiation brief, onboarding checklist. Never submits, drafts only (890 tests) |
+| [tiny-transformer](tiny-transformer) | GPT in NumPy with hand-written backprop, RoPE, GQA, KV cache |
+| [microgrid](microgrid) | small autodiff engine that grew into a trainable MiniGPT, plus weight quantization and GPTQ |
+| [lora](lora) | LoRA, QLoRA-style quantized bases, LoftQ init and an adapter hub on the tiny GPT |
+| [flash-attention](flash-attention) | FlashAttention, split-KV decoding and a paged KV cache, exact vs naive |
+| [mixture-of-experts](mixture-of-experts) | MoE routing, load balancing and when sparsity beats dense |
+| [mamba-numpy](mamba-numpy) | selective state-space model with backprop through the scan |
+| [specdec](specdec) | speculative decoding experiments, n-gram and tiny transformer pairs |
+| [bpe-tokenizer](bpe-tokenizer) | byte-level BPE vs a unigram LM tokenizer |
+| [bpekit](bpekit) | the practical BPE tokenizer: offsets, chunking, packing, export |
+| [diffusion-2d](diffusion-2d) | DDPM/DDIM on 2-D data where the optimal model is known |
+| [normalizing-flows](normalizing-flows) | RealNVP/NICE flows scored against exact densities |
+| [gnn](gnn) | GCN, GraphSAGE, GAT, APPNP and when graphs help |
+| [cnn-explain](cnn-explain) | small CNN, saliency maps, attacks and certified robustness |
+| [voicekit](voicekit) | offline voice-command pipeline on synthetic speech |
+| [rlgrid](rlgrid) | tabular RL and a NumPy DQN on a gridworld |
+| [mcts](mcts) | MCTS for tic-tac-toe/Connect-N, plus a tiny AlphaZero |
 
-Notes on overlap: `rag-evals` is retrieval-only evaluation; `ragkit` adds answering with citations on top of retrieval. `evalkit` is a general prompt/model eval harness; `rag-evals` is RAG-specific, and `llm-eval-harness` is the pluggable-backend variant. `guardkit` is runtime input/output guardrails; `promptguard` (separate repo) is the static file linter for prompt files.
+## Understanding models
 
-Each project is self-contained with its own README, tests, and CI. All run offline with no API keys. A stub provider is used for demos and tests; a real LLM is opt-in via an environment variable.
+| project | what it is |
+|---|---|
+| [mech-interp](mech-interp) | took apart a tiny copying transformer and didn't find an induction head |
+| [sparse-autoencoders](sparse-autoencoders) | five SAE variants scored on features I know the truth for |
+| [hopfield](hopfield) | classical vs modern Hopfield nets, and attention as retrieval |
+| [ntk](ntk) | neural tangent kernel, and when wide nets act like kernel regression |
+| [gaussian-processes](gaussian-processes) | GPs, sparse approximations and where they mislead |
+| [bayes-opt](bayes-opt) | Bayesian optimisation on the standard test functions |
+| [conformal](conformal) | conformal prediction, and when 90% coverage is misleading |
+| [datadoctor](datadoctor) | finding label errors, duplicates, leakage and drift in tabular data |
 
-See [ROADMAP.md](ROADMAP.md) for what's next.
+## LLM tooling
+
+| project | what it is |
+|---|---|
+| [evalkit](evalkit) | golden-set regression checks for prompts and models |
+| [llm-eval-harness](llm-eval-harness) | eval harness with pluggable backends and a CI action |
+| [prompt-regression](prompt-regression) | versioned prompts, paired A/B stats, judge calibration |
+| [rag-evals](rag-evals) | BM25, LSA and hybrid retrieval with recall/MRR/nDCG |
+| [ragkit](ragkit) | local RAG with line-level citations, standard library only |
+| [docqa](docqa) | extractive Q&A that says "I don't know" |
+| [vecdb](vecdb) | IVF, PQ and HNSW vector search with filters |
+| [codesearch](codesearch) | search a Python repo for functions in plain English |
+| [agentkit](agentkit) | minimal agent runner with real guardrails |
+| [agentflow](agentflow) | multi-agent DAGs with retries, resume and tool journaling |
+| [llm-router](llm-router) | cost-aware routing, fallbacks, caching and budgets |
+| [guardkit](guardkit) | runtime prompt-injection and PII guardrails |
+| [reviewkit](reviewkit) | PR review bot that checks the LLM's comments against the diff |
+| [ticket-triage](ticket-triage) | support-ticket classifier and routing |
+| [logsentry](logsentry) | log anomaly detection with streaming and Prometheus |
+| [autojob](autojob) | job-search helper that won't make things up about you |
+
+A few of these overlap on purpose. `rag-evals` only does retrieval and `ragkit` adds answers on top. `evalkit` and `llm-eval-harness` are two takes on the same idea.
+
+Nothing needs an API key. Where a real model is optional, it's opt-in through an environment variable. [ROADMAP.md](ROADMAP.md) has what I want to try next.

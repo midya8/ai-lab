@@ -1,43 +1,20 @@
 # logsentry
 
-Dependency-light anomaly detection for DevOps logs. Parses raw log lines, mines message templates (masking IPs, UUIDs, hex, numbers, paths), buckets events into time windows, and flags:
+Anomaly detection for application logs. It parses raw lines, mines message templates (masking IPs, UUIDs, numbers, paths), buckets events into time windows, and flags volume spikes and drops (robust z-score against a rolling median/MAD baseline), error bursts, per-template spikes, and message shapes it has never seen before.
 
-- **volume_spike / volume_drop**: robust z-score (median/MAD) against a rolling baseline
-- **error_burst**: windows where the ERROR/FATAL ratio jumps
-- **new_template**: log message shapes never seen before
-
-## Try it
-```
+```bash
+cd logsentry
 pip install -r requirements.txt
 PYTHONPATH=src python -m logsentry.cli --demo
 PYTHONPATH=src python -m logsentry.cli app.log --window 60 --z 4 --json
-python -m pytest
+tail -f app.log | PYTHONPATH=src python -m logsentry.cli --follow --metrics-port 9108
+python -m pytest -q
 ```
-Demo output finds the injected 8x traffic spike at 12:20 and the DB error burst at 12:25 (with its new template).
 
-## Next
-Per-template rate detectors, streaming mode, Prometheus exporter.
+The demo finds the injected 8x traffic spike at 12:20 and the DB error burst at 12:25, along with its new template.
 
-## Per-template spikes (v0.2)
-`--per-template` tracks each template's count per window and flags `template_spike` when one surges (robust z) even if total volume looks flat.
+Streaming mode emits anomalies as each window closes and gives the same output as batch mode. On top of that there's a Prometheus `/metrics` endpoint, a Grafana dashboard generator (`python src/logsentry/grafana.py dashboard.json`), Slack-style webhooks with a cooldown, and `--incidents` to group a burst of anomalies into one incident.
 
-## Streaming (v0.3)
-`StreamDetector` (src/logsentry/stream.py) ingests events one at a time and emits anomalies as soon as each window closes, with bounded memory (`history=`). Output is tested identical to batch `detect`. CLI: `tail -f app.log | PYTHONPATH=src python -m logsentry.cli --follow`, or `--follow --demo`.
+There's also a seasonal detector that compares each window to the same phase in previous cycles. On a synthetic daily cycle the plain detector raises false alarms and the seasonal one doesn't, while still catching a 3x surge at the peak.
 
-## Prometheus exporter (v0.4)
-`--follow --metrics-port 9108` serves `/metrics` in Prometheus text format: `logsentry_events_total{level}`, `logsentry_anomalies_total{kind}`, `logsentry_windows_closed_total`, and the latest anomalous window timestamp. Zero dependencies (`metrics.py`).
-
-## Alert webhooks (v0.5)
-`--follow --webhook URL [--cooldown 300]` POSTs each anomaly as Slack-compatible JSON (`text` plus structured fields). Identical (kind, detail) alerts are suppressed within the cooldown; delivery failures never crash the stream (`alerts.py`).
-
-## Grafana dashboard (v0.6)
-`python src/logsentry/grafana.py dashboard.json` writes an importable Grafana dashboard (events/sec by level, anomalies by kind, window and anomaly stats) over the v0.4 metrics; a test checks every query only references exported metrics.
-
-## Seasonality-aware volume detection (v0.7)
-`seasonal.py` / `detect_seasonal(events, window=60, period=24)` compares each window only to windows at the same phase of the cycle (e.g. same time on previous days) using median/MAD with a Poisson noise floor (scale >= sqrt(median)), so regular daily peaks are not flagged. Tests on a synthetic sinusoidal workload: the plain rolling detector raises volume false alarms on the clean cycle, the seasonal one raises none, and an injected 3x surge at the cycle peak (or a near-total drop) is found. The first `min_cycles` cycles are warm-up. Synthetic data only; the Poisson floor was added after a first version false-alarmed on the clean series.
-
-## Incident grouping (v0.8)
-`group_incidents(anomalies, window=60, gap=2)` in `incidents.py` chains anomalies whose windows are within `gap` windows into one `Incident` (start/end, per-kind counts, peak |score|, `summary()`), so one outage yields one page rather than a burst of alerts. The `low/medium/high` severity is a hand-set heuristic (kind diversity and peak score), not calibrated. 6 tests.
-
-## Incidents in the CLI (v0.9)
-`python -m logsentry.cli --demo --incidents [--gap N] [--json]` prints one line per incident instead of one per anomalous window (batch mode). 3 tests; the demo's incident count is whatever the grouping yields, no tuning.
+Only tested on synthetic logs. The incident severity is a hand-set heuristic.
