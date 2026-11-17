@@ -212,3 +212,12 @@ units, the test suite requires the robust fit to have under 0.6x the function RM
 at the same hyper-parameters, and the corrupted points' weights to sit far below the clean median
 (`tests/test_robust.py`). Hyper-parameters are not learned; the EM objective can have poor local modes
 if `noise` is set far too small.
+
+## v0.6: heteroscedastic regression
+
+`HeteroGP(kernel_f, kernel_g)` is the most-likely heteroscedastic GP (Kersting et al. 2007) with fixed
+kernels: it alternates a GP on the mean with per-point noise `exp(g)` and a GP on the log of squared
+leave-one-out residuals (closed-form LOO, bias-corrected by E[log chi2_1]) to estimate `g`. Tests on
+a sine with noise sd rising from 0.05 to 0.45 require log-noise correlation > 0.8 with the truth, lower
+held-out NLPD than a homoscedastic GP, and 95% coverage between 0.88 and 0.99. With constant noise the
+estimated noise stays roughly flat. Hyper-parameters are not learned; this is a point estimate of g, not a full posterior.

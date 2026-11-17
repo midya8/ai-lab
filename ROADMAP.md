@@ -361,6 +361,7 @@
 - gplab v0.2 (2026-11-16): Laplace GP classification (logistic likelihood, stable Newton, approx LML, probit predictive vs quadrature, hyper-parameter fit, log-loss/ECE; 68 tests)
 - gplab v0.3 (2026-11-16): SpectralMixture kernel with analytic gradients, frequency recovery and extrapolation tests (73 tests)
 - gplab v0.5 (2026-11-17): RobustGP Student-t regression via EM scale mixture, outlier weights (4 tests)
+- gplab v0.6 (2026-11-17): HeteroGP most-likely heteroscedastic regression with LOO residual noise GP (3 tests)
 
 
 ## Next
